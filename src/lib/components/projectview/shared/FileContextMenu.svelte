@@ -3,17 +3,14 @@
   import { createEventDispatcher } from 'svelte';
   import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
 
-
   export let item = null; // File object { name, path, relativePath, file_type, media_xml_identifier? }
   export let x = 0;
   export let y = 0;
   export let isVisible = false;
   export let revealLabel = 'Reveal in File System'; // New prop with default
-  export let id = "file-context-menu"; // Allow an optional id for targeted outside-click handling
+  export let id = 'file-context-menu'; // Allow an optional id for targeted outside-click handling
 
   const dispatch = createEventDispatcher();
-
-
 
   function isMedia(fileItem) {
     if (!fileItem || !fileItem.name) return false;
@@ -40,24 +37,48 @@
   >
     <ul>
       <li>
-        <button on:click={() => emitAction('open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Open</button>
+        <button
+          on:click={() => emitAction('open')}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >Open</button
+        >
       </li>
       <li>
-        <button on:click={() => emitAction('addToGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Add to Group...</button>
+        <button
+          on:click={() => emitAction('addToGroup')}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >Add to Group...</button
+        >
       </li>
       <li>
-        <button on:click={() => emitAction('removeFromGroup')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Remove from this Group</button>
+        <button
+          on:click={() => emitAction('removeFromGroup')}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >Remove from this Group</button
+        >
       </li>
       <hr class="my-1 border-gray-200 dark:border-gray-700" />
       <li>
-        <button on:click={() => emitAction('reveal')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">{revealLabel}</button>
+        <button
+          on:click={() => emitAction('reveal')}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >{revealLabel}</button
+        >
       </li>
       <hr class="my-1 border-gray-200 dark:border-gray-700" />
       <li>
-        <button on:click={() => emitAction('rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">Rename...</button>
+        <button
+          on:click={() => emitAction('rename')}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+          >Rename...</button
+        >
       </li>
       <li>
-        <button on:click={() => emitAction('delete')} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete...</button>
+        <button
+          on:click={() => emitAction('delete')}
+          class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500"
+          >Delete...</button
+        >
       </li>
     </ul>
   </div>

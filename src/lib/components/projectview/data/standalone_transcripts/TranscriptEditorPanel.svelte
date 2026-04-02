@@ -1,824 +1,996 @@
 <!-- src/lib/components/projectview/notes/standalone_transcripts/TranscriptEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-    import { get } from 'svelte/store';
-    import {
-        project,
-        setStandaloneTranscriptEditorContent,
-        markStandaloneTranscriptAsSaved,
-        markStandaloneTranscriptChangesDiscarded,
-        setActiveStandaloneTranscriptEditorRef,
-        clearActiveStandaloneTranscriptEditorRef,
-        setLoadedStandaloneTranscriptData,
-        setStandaloneTranscriptLoadFailed,
-        setStandaloneTranscriptHighlights,
-        highlightsLastUpdated
-    } from '$lib/stores/projectStore.js';
-    import { invoke } from '@tauri-apps/api/core';
-    import { confirm, message } from '@tauri-apps/plugin-dialog';
-    import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
-    import { activeLayout } from '$lib/stores/layoutStore.js';
-    import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+  import { get } from 'svelte/store';
+  import {
+    project,
+    setStandaloneTranscriptEditorContent,
+    markStandaloneTranscriptAsSaved,
+    markStandaloneTranscriptChangesDiscarded,
+    setActiveStandaloneTranscriptEditorRef,
+    clearActiveStandaloneTranscriptEditorRef,
+    setLoadedStandaloneTranscriptData,
+    setStandaloneTranscriptLoadFailed,
+    setStandaloneTranscriptHighlights,
+    highlightsLastUpdated
+  } from '$lib/stores/projectStore.js';
+  import { invoke } from '@tauri-apps/api/core';
+  import { confirm, message } from '@tauri-apps/plugin-dialog';
+  import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+  import { activeLayout } from '$lib/stores/layoutStore.js';
+  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
 
+  import { createHeadlessEditor } from '@lexical/headless';
+  import {
+    $getRoot as lexicalGetRoot,
+    $createParagraphNode as lexicalCreateParagraphNode,
+    $createTextNode as lexicalCreateTextNode,
+    $isElementNode as lexicalIsElementNode,
+    TextNode,
+    ParagraphNode,
+    RootNode,
+    LineBreakNode,
+    ElementNode
+  } from 'lexical';
+  import {
+    $generateNodesFromDOM as lexicalGenerateNodesFromDOM
+    // $generateHtmlFromNodes is no longer needed here
+  } from '@lexical/html';
+  import {
+    $createTableNode as lexicalCreateTableNode,
+    $createTableRowNode as lexicalCreateTableRowNode,
+    $createTableCellNode as lexicalCreateTableCellNode,
+    $isTableNode as lexicalIsTableNode,
+    TableNode,
+    TableRowNode,
+    TableCellNode
+  } from '@lexical/table';
+  import { HeadingNode, QuoteNode, registerRichText } from '@lexical/rich-text';
+  import { ListNode, ListItemNode, registerList } from '@lexical/list';
+  import { LinkNode } from '@lexical/link';
+  import {
+    ExtendedTextNode,
+    $createExtendedTextNode as lexicalCreateExtendedTextNode
+  } from '$lib/nodes/ExtendedTextNode.js';
 
-    import { createHeadlessEditor } from '@lexical/headless';
-    import {
-        $getRoot as lexicalGetRoot,
-        $createParagraphNode as lexicalCreateParagraphNode,
-        $createTextNode as lexicalCreateTextNode,
-        $isElementNode as lexicalIsElementNode,
-        TextNode, ParagraphNode, RootNode, LineBreakNode, ElementNode
-    } from 'lexical';
-    import {
-        $generateNodesFromDOM as lexicalGenerateNodesFromDOM,
-        // $generateHtmlFromNodes is no longer needed here
-    } from '@lexical/html';
-    import {
-      $createTableNode as lexicalCreateTableNode,
-      $createTableRowNode as lexicalCreateTableRowNode,
-      $createTableCellNode as lexicalCreateTableCellNode,
-      $isTableNode as lexicalIsTableNode,
-      TableNode, TableRowNode, TableCellNode
-    } from '@lexical/table';
-    import { HeadingNode, QuoteNode, registerRichText } from '@lexical/rich-text';
-    import { ListNode, ListItemNode, registerList } from '@lexical/list';
-    import { LinkNode } from '@lexical/link';
-    import { ExtendedTextNode, $createExtendedTextNode as lexicalCreateExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+  const LEXICAL_NODES = [
+    TableNode,
+    TableRowNode,
+    TableCellNode,
+    HeadingNode,
+    QuoteNode,
+    ListNode,
+    ListItemNode,
+    LinkNode,
+    ExtendedTextNode
+  ];
 
-    const LEXICAL_NODES = [
-      TableNode,
-      TableRowNode,
-      TableCellNode,
-      HeadingNode,
-      QuoteNode,
-      ListNode,
-      ListItemNode,
-      LinkNode,
-      ExtendedTextNode
-    ];
+  const dispatch = createEventDispatcher();
 
-    const dispatch = createEventDispatcher();
+  export let itemPath = null;
+  export let isPrimary = true;
+  export let enableSegmentPlayback = false;
+  export let highlightedRowIndex = -1;
 
-    export let itemPath = null;
-    export let isPrimary = true;
-    export let enableSegmentPlayback = false;
-    export let highlightedRowIndex = -1;
+  let editorRef;
+  let editorJsonState = ''; // Holds the current Lexical JSON string
 
-    let editorRef;
-    let editorJsonState = ''; // Holds the current Lexical JSON string
+  let localCurrentLexicalJson = null;
+  let localInitialLexicalJson = null;
+  let localIsDirty = false;
+  let localIsLoading = true;
+  let localErrorMessage = null;
+  let localCurrentHighlights = [];
+  let localInitialHighlights = [];
+  let localIsMetadataDirty = false;
 
-    let localCurrentLexicalJson = null;
-    let localInitialLexicalJson = null;
-    let localIsDirty = false;
-    let localIsLoading = true;
-    let localErrorMessage = null;
-    let localCurrentHighlights = [];
-    let localInitialHighlights = [];
-    let localIsMetadataDirty = false;
+  // --- Derived state from local or store ---
+  $: currentLexicalJson = isPrimary
+    ? $project.currentStandaloneTranscriptLexicalJson
+    : localCurrentLexicalJson;
+  $: initialLexicalJson = isPrimary
+    ? $project.initialStandaloneTranscriptLexicalJson
+    : localInitialLexicalJson;
+  $: isDirty = isPrimary ? $project.isStandaloneTranscriptDirty : localIsDirty;
+  $: isLoading = isPrimary ? $project.isStandaloneTranscriptLoading : localIsLoading;
+  $: errorMessage = isPrimary ? $project.standaloneTranscriptError : localErrorMessage;
 
-    // --- Derived state from local or store ---
-    $: currentLexicalJson = isPrimary ? $project.currentStandaloneTranscriptLexicalJson : localCurrentLexicalJson;
-    $: initialLexicalJson = isPrimary ? $project.initialStandaloneTranscriptLexicalJson : localInitialLexicalJson;
-    $: isDirty = isPrimary ? $project.isStandaloneTranscriptDirty : localIsDirty;
-    $: isLoading = isPrimary ? $project.isStandaloneTranscriptLoading : localIsLoading;
-    $: errorMessage = isPrimary ? $project.standaloneTranscriptError : localErrorMessage;
-    
-    $: currentHighlights = isPrimary ? $project.currentStandaloneTranscriptHighlights : localCurrentHighlights;
-    $: isMetadataDirty = isPrimary ? $project.isStandaloneTranscriptMetadataDirty : localIsMetadataDirty;
+  $: currentHighlights = isPrimary
+    ? $project.currentStandaloneTranscriptHighlights
+    : localCurrentHighlights;
+  $: isMetadataDirty = isPrimary
+    ? $project.isStandaloneTranscriptMetadataDirty
+    : localIsMetadataDirty;
 
-    // New state for highlights
-    let initialHighlightsFromBackend = [];
+  // New state for highlights
+  let initialHighlightsFromBackend = [];
 
-    const ALL_CONVERSION_NODES = [
-        RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
-        HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
-        TableNode, TableRowNode, TableCellNode
-    ];
+  const ALL_CONVERSION_NODES = [
+    RootNode,
+    ParagraphNode,
+    TextNode,
+    ExtendedTextNode,
+    LineBreakNode,
+    HeadingNode,
+    QuoteNode,
+    ListNode,
+    ListItemNode,
+    LinkNode,
+    TableNode,
+    TableRowNode,
+    TableCellNode
+  ];
 
-    let changeDebounceTimeout;
+  let changeDebounceTimeout;
 
-    // --- Store Subscription (Updated to only sync if primary and matching path) ---
-    $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
-    $: if (isPrimary && $project.currentStandaloneTranscriptPath === itemPath) {
-        if (editorRef && currentLexicalJson !== editorJsonState) {
-            console.log("[TranscriptEditorPanel Store Sync] Updating editorRef state from store.");
-            editorRef.resetEditorState(currentLexicalJson);
-            editorJsonState = currentLexicalJson;
+  // --- Store Subscription (Updated to only sync if primary and matching path) ---
+  $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
+  $: if (isPrimary && $project.currentStandaloneTranscriptPath === itemPath) {
+    if (editorRef && currentLexicalJson !== editorJsonState) {
+      console.log('[TranscriptEditorPanel Store Sync] Updating editorRef state from store.');
+      editorRef.resetEditorState(currentLexicalJson);
+      editorJsonState = currentLexicalJson;
+    }
+  }
+
+  // --- Path Change Reaction (REFACTORED) ---
+  let prevPath = itemPath;
+  $: if (itemPath && itemPath !== prevPath) {
+    console.log(
+      `[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`
+    );
+    prevPath = itemPath;
+    loadAndConvertTranscript(itemPath);
+    loadHighlightsForTranscript(itemPath);
+  }
+
+  async function loadHighlightsForTranscript(path) {
+    console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
+    if (!path) {
+      if (isPrimary) setStandaloneTranscriptHighlights([], false);
+      else {
+        localCurrentHighlights = [];
+        localInitialHighlights = [];
+        localIsMetadataDirty = false;
+      }
+      return;
+    }
+    try {
+      const projectId = get(project).id;
+      if (!projectId) {
+        console.error('[TranscriptEditorPanel] Cannot load highlights, project ID is missing.');
+        return;
+      }
+      console.log(
+        `[TranscriptEditorPanel] Invoking 'load_lexical_highlights' with projectId: ${projectId}, documentPath: ${path}`
+      );
+      const rawHighlights = await invoke('load_lexical_highlights', {
+        args: {
+          projectId: projectId,
+          documentPath: path
         }
+      });
+      console.log(`[TranscriptEditorPanel] Received from backend:`, rawHighlights);
+
+      const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
+      console.log(
+        `[TranscriptEditorPanel] Parsed ${highlights.length} highlights. Updating store/local.`
+      );
+
+      if (isPrimary) {
+        initialHighlightsFromBackend = highlights;
+        setStandaloneTranscriptHighlights(highlights, false);
+      } else {
+        localInitialHighlights = JSON.parse(JSON.stringify(highlights));
+        localCurrentHighlights = JSON.parse(JSON.stringify(highlights));
+        localIsMetadataDirty = false;
+      }
+
+      console.log(`[TranscriptEditorPanel] highlights updated.`);
+    } catch (e) {
+      console.error('[TranscriptEditorPanel] Error loading lexical highlights for transcript:', e);
+      if (isPrimary) setStandaloneTranscriptHighlights([], false);
+      else {
+        localCurrentHighlights = [];
+        localInitialHighlights = [];
+        localIsMetadataDirty = false;
+      }
+    }
+  }
+
+  // --- MODIFIED Load Function ---
+  async function loadAndConvertTranscript(filePath) {
+    if (!filePath) {
+      if (isPrimary) setLoadedStandaloneTranscriptData(null, null);
+      else {
+        localCurrentLexicalJson = null;
+        localInitialLexicalJson = null;
+        localIsLoading = false;
+      }
+      return;
+    }
+    editorJsonState = '';
+    if (isPrimary) {
+      project.update((p) => ({
+        ...p,
+        currentStandaloneTranscriptPath: filePath,
+        isStandaloneTranscriptLoading: true,
+        standaloneTranscriptError: null,
+        currentStandaloneTranscriptLexicalJson: null,
+        initialStandaloneTranscriptLexicalJson: null,
+        isStandaloneTranscriptDirty: false,
+        selectedDocumentPath: null,
+        currentDocumentJson: null,
+        initialDocumentJson: null,
+        isDocumentDirty: false,
+        isDocumentLoading: false,
+        documentError: null,
+        activeDocumentEditorRef: null
+      }));
+    } else {
+      localIsLoading = true;
+      localErrorMessage = null;
+      localCurrentLexicalJson = null;
+      localInitialLexicalJson = null;
+      localIsDirty = false;
     }
 
-    // --- Path Change Reaction (REFACTORED) ---
-    let prevPath = itemPath;
-    $: if (itemPath && itemPath !== prevPath) {
-        console.log(`[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`);
-        prevPath = itemPath;
-        loadAndConvertTranscript(itemPath);
-        loadHighlightsForTranscript(itemPath);
-    }
+    if (editorRef) editorRef.resetEditorState('');
 
-    async function loadHighlightsForTranscript(path) {
-        console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
-        if (!path) {
-            if (isPrimary) setStandaloneTranscriptHighlights([], false);
-            else {
-                localCurrentHighlights = [];
-                localInitialHighlights = [];
-                localIsMetadataDirty = false;
-            }
-            return;
+    try {
+      const rawJsonString = await invoke('read_file_content', { path: filePath });
+      let lexicalTableJsonToLoad = null;
+
+      if (!rawJsonString || rawJsonString.trim() === '') {
+        // If the file is truly empty, create a basic table structure.
+        console.warn(
+          `[TranscriptEditorPanel] Loaded transcript content is empty for ${filePath}. Creating basic table structure.`
+        );
+        lexicalTableJsonToLoad = await segmentsToLexicalTable([]);
+        if (!isValidLexicalState(lexicalTableJsonToLoad)) {
+          throw new Error('Failed to create a valid empty table structure from empty segments.');
         }
+      } else {
+        // Try parsing as JSON first
+        let parsedData;
+        let isLexicalFormat = false;
         try {
-            const projectId = get(project).id;
-            if (!projectId) {
-                console.error("[TranscriptEditorPanel] Cannot load highlights, project ID is missing.");
-                return;
-            }
-            console.log(`[TranscriptEditorPanel] Invoking 'load_lexical_highlights' with projectId: ${projectId}, documentPath: ${path}`);
-            const rawHighlights = await invoke('load_lexical_highlights', {
-                args: {
-                    projectId: projectId,
-                    documentPath: path,
-                }
-            });
-            console.log(`[TranscriptEditorPanel] Received from backend:`, rawHighlights);
-
-            const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
-            console.log(`[TranscriptEditorPanel] Parsed ${highlights.length} highlights. Updating store/local.`);
-
-            if (isPrimary) {
-                initialHighlightsFromBackend = highlights;
-                setStandaloneTranscriptHighlights(highlights, false);
+          parsedData = JSON.parse(rawJsonString);
+          // Check if it looks like a Lexical state (has a root object)
+          if (parsedData && typeof parsedData === 'object' && parsedData.root) {
+            // Further check if it's a valid table state using our helper
+            if (isValidLexicalState(rawJsonString)) {
+              isLexicalFormat = true;
+              console.log(
+                `[TranscriptEditorPanel] Loaded content for ${filePath} is already in valid Lexical Table format.`
+              );
+              lexicalTableJsonToLoad = rawJsonString;
             } else {
-                localInitialHighlights = JSON.parse(JSON.stringify(highlights));
-                localCurrentHighlights = JSON.parse(JSON.stringify(highlights));
-                localIsMetadataDirty = false;
+              console.warn(
+                `[TranscriptEditorPanel] Loaded content for ${filePath} looks like Lexical but failed validation. Attempting segment conversion.`
+              );
             }
-
-            console.log(`[TranscriptEditorPanel] highlights updated.`);
+          }
         } catch (e) {
-            console.error("[TranscriptEditorPanel] Error loading lexical highlights for transcript:", e);
-            if (isPrimary) setStandaloneTranscriptHighlights([], false);
-            else {
-                localCurrentHighlights = [];
-                localInitialHighlights = [];
-                localIsMetadataDirty = false;
-            }
+          // Ignore parsing error, assume it's the simple segment array
+          console.log(
+            `[TranscriptEditorPanel] Failed to parse loaded content as JSON for ${filePath}, assuming segment array format.`
+          );
         }
-    }
 
-    // --- MODIFIED Load Function ---
-    async function loadAndConvertTranscript(filePath) {
-        if (!filePath) {
-            if (isPrimary) setLoadedStandaloneTranscriptData(null, null);
-            else {
-                localCurrentLexicalJson = null;
-                localInitialLexicalJson = null;
-                localIsLoading = false;
+        // If it wasn't already a valid Lexical Table format, treat as segment array
+        if (!isLexicalFormat) {
+          console.log(
+            `[TranscriptEditorPanel] Attempting conversion from segment array for ${filePath}...`
+          );
+          let segments;
+          try {
+            // Re-parse if the initial parse failed or it wasn't Lexical format
+            if (!parsedData) parsedData = JSON.parse(rawJsonString);
+            if (!Array.isArray(parsedData)) {
+              throw new Error('Loaded data is not a valid JSON array (segments).');
             }
-            return;
+            segments = parsedData;
+          } catch (parseError) {
+            throw new Error(`Failed to parse transcript JSON as segments: ${parseError.message}`);
+          }
+
+          lexicalTableJsonToLoad = await segmentsToLexicalTable(segments);
+          if (!isValidLexicalState(lexicalTableJsonToLoad)) {
+            console.error(
+              '[TranscriptEditorPanel] Failed isValidLexicalState check after segment conversion. Generated JSON:',
+              lexicalTableJsonToLoad.substring(0, 500) + '...'
+            );
+            throw new Error(
+              'Conversion from segments to Lexical table resulted in an invalid state.'
+            );
+          }
+          console.log(`[TranscriptEditorPanel] Conversion from segments successful.`);
         }
-        editorJsonState = '';
+      }
+
+      // --- Loading the final Lexical JSON into the editor ---
+      if (lexicalTableJsonToLoad) {
+        editorJsonState = lexicalTableJsonToLoad;
+        await tick();
+        if (editorRef) {
+          editorRef.resetEditorState(lexicalTableJsonToLoad);
+        } else {
+          console.warn(
+            '[TranscriptEditorPanel] Editor ref not available immediately after tick in loadAndConvert.'
+          );
+        }
+
         if (isPrimary) {
-            project.update(p => ({...p,
-                currentStandaloneTranscriptPath: filePath,
-                isStandaloneTranscriptLoading: true,
-                standaloneTranscriptError: null,
-                currentStandaloneTranscriptLexicalJson: null,
-                initialStandaloneTranscriptLexicalJson: null,
-                isStandaloneTranscriptDirty: false,
-                selectedDocumentPath: null,
-                currentDocumentJson: null,
-                initialDocumentJson: null,
-                isDocumentDirty: false,
-                isDocumentLoading: false,
-                documentError: null,
-                activeDocumentEditorRef: null,
-            }));
+          setLoadedStandaloneTranscriptData(filePath, lexicalTableJsonToLoad);
         } else {
-            localIsLoading = true;
-            localErrorMessage = null;
-            localCurrentLexicalJson = null;
-            localInitialLexicalJson = null;
-            localIsDirty = false;
+          localCurrentLexicalJson = lexicalTableJsonToLoad;
+          localInitialLexicalJson = lexicalTableJsonToLoad;
+          localIsLoading = false;
+          localIsDirty = false;
         }
-        
-        if(editorRef) editorRef.resetEditorState('');
-
-        try {
-            const rawJsonString = await invoke('read_file_content', { path: filePath });
-            let lexicalTableJsonToLoad = null;
-
-            if (!rawJsonString || rawJsonString.trim() === '') {
-                 // If the file is truly empty, create a basic table structure.
-                 console.warn(`[TranscriptEditorPanel] Loaded transcript content is empty for ${filePath}. Creating basic table structure.`);
-                 lexicalTableJsonToLoad = await segmentsToLexicalTable([]);
-                 if (!isValidLexicalState(lexicalTableJsonToLoad)) {
-                    throw new Error("Failed to create a valid empty table structure from empty segments.");
-                 }
-            } else {
-                // Try parsing as JSON first
-                let parsedData;
-                let isLexicalFormat = false;
-                try {
-                    parsedData = JSON.parse(rawJsonString);
-                    // Check if it looks like a Lexical state (has a root object)
-                    if (parsedData && typeof parsedData === 'object' && parsedData.root) {
-                        // Further check if it's a valid table state using our helper
-                         if (isValidLexicalState(rawJsonString)) {
-                             isLexicalFormat = true;
-                             console.log(`[TranscriptEditorPanel] Loaded content for ${filePath} is already in valid Lexical Table format.`);
-                             lexicalTableJsonToLoad = rawJsonString;
-                         } else {
-                             console.warn(`[TranscriptEditorPanel] Loaded content for ${filePath} looks like Lexical but failed validation. Attempting segment conversion.`);
-                         }
-                    }
-                } catch (e) {
-                    // Ignore parsing error, assume it's the simple segment array
-                     console.log(`[TranscriptEditorPanel] Failed to parse loaded content as JSON for ${filePath}, assuming segment array format.`);
-                }
-
-                // If it wasn't already a valid Lexical Table format, treat as segment array
-                if (!isLexicalFormat) {
-                    console.log(`[TranscriptEditorPanel] Attempting conversion from segment array for ${filePath}...`);
-                    let segments;
-                    try {
-                        // Re-parse if the initial parse failed or it wasn't Lexical format
-                        if(!parsedData) parsedData = JSON.parse(rawJsonString);
-                        if (!Array.isArray(parsedData)) {
-                            throw new Error("Loaded data is not a valid JSON array (segments).");
-                        }
-                        segments = parsedData;
-                    } catch (parseError) {
-                        throw new Error(`Failed to parse transcript JSON as segments: ${parseError.message}`);
-                    }
-
-                    lexicalTableJsonToLoad = await segmentsToLexicalTable(segments);
-                    if (!isValidLexicalState(lexicalTableJsonToLoad)) {
-                         console.error("[TranscriptEditorPanel] Failed isValidLexicalState check after segment conversion. Generated JSON:", lexicalTableJsonToLoad.substring(0, 500) + "...");
-                         throw new Error("Conversion from segments to Lexical table resulted in an invalid state.");
-                    }
-                    console.log(`[TranscriptEditorPanel] Conversion from segments successful.`);
-                }
-            }
-
-            // --- Loading the final Lexical JSON into the editor ---
-            if (lexicalTableJsonToLoad) {
-                editorJsonState = lexicalTableJsonToLoad;
-                await tick();
-                if (editorRef) {
-                    editorRef.resetEditorState(lexicalTableJsonToLoad);
-                } else {
-                     console.warn("[TranscriptEditorPanel] Editor ref not available immediately after tick in loadAndConvert.");
-                }
-                
-                if (isPrimary) {
-                    setLoadedStandaloneTranscriptData(filePath, lexicalTableJsonToLoad);
-                } else {
-                    localCurrentLexicalJson = lexicalTableJsonToLoad;
-                    localInitialLexicalJson = lexicalTableJsonToLoad;
-                    localIsLoading = false;
-                    localIsDirty = false;
-                }
-                console.log(`[TranscriptEditorPanel] Editor state updated successfully for ${filePath}.`);
-            } else {
-                 throw new Error("Failed to prepare Lexical JSON for loading.");
-            }
-
-        } catch (e) {
-            console.error(`[TranscriptEditorPanel] Error loading or converting transcript ${filePath}:`, e);
-            const loadErrorMsg = `Failed to load/parse transcript: ${e.message}`;
-            if (editorRef) editorRef.resetEditorState(''); // Reset editor on error
-            if (isPrimary) {
-                setStandaloneTranscriptLoadFailed(filePath, loadErrorMsg);
-            } else {
-                localErrorMessage = loadErrorMsg;
-                localIsLoading = false;
-            }
-        } finally {
-             // Ensure loading state is always turned off
-             if (isPrimary) {
-                project.update(p => p.currentStandaloneTranscriptPath === filePath ? { ...p, isStandaloneTranscriptLoading: false } : p);
-             } else {
-                localIsLoading = false;
-             }
-        }
+        console.log(`[TranscriptEditorPanel] Editor state updated successfully for ${filePath}.`);
+      } else {
+        throw new Error('Failed to prepare Lexical JSON for loading.');
+      }
+    } catch (e) {
+      console.error(
+        `[TranscriptEditorPanel] Error loading or converting transcript ${filePath}:`,
+        e
+      );
+      const loadErrorMsg = `Failed to load/parse transcript: ${e.message}`;
+      if (editorRef) editorRef.resetEditorState(''); // Reset editor on error
+      if (isPrimary) {
+        setStandaloneTranscriptLoadFailed(filePath, loadErrorMsg);
+      } else {
+        localErrorMessage = loadErrorMsg;
+        localIsLoading = false;
+      }
+    } finally {
+      // Ensure loading state is always turned off
+      if (isPrimary) {
+        project.update((p) =>
+          p.currentStandaloneTranscriptPath === filePath
+            ? { ...p, isStandaloneTranscriptLoading: false }
+            : p
+        );
+      } else {
+        localIsLoading = false;
+      }
     }
+  }
 
-    // --- isValidLexicalState (Unchanged) ---
-    function isValidLexicalState(jsonString) {
-        if (!jsonString || typeof jsonString !== 'string') {
-            // console.warn("[isValidLexicalState] Input is not a non-empty string.");
-            return false;
-        }
-        try {
-            const state = JSON.parse(jsonString);
-            if (!state || typeof state !== 'object' || !state.root) {
-                 // console.warn("[isValidLexicalState] Parsed JSON is not object or missing root.");
-                return false;
-            }
-            if (!state.root.children || !Array.isArray(state.root.children)) {
-                // console.warn("[isValidLexicalState] Root children missing or not an array.");
-                return false;
-            }
-             // Allow empty root (e.g., just created empty table)
-             if (state.root.children.length > 0 && state.root.children[0]?.type !== 'table') {
-                 console.warn("[isValidLexicalState] Root's first child is not a table node. Actual type:", state.root.children[0]?.type);
-                 return false;
-             }
-            return true;
-        } catch (e) {
-            // console.warn("[isValidLexicalState] JSON parsing failed:", e);
-            return false;
-        }
+  // --- isValidLexicalState (Unchanged) ---
+  function isValidLexicalState(jsonString) {
+    if (!jsonString || typeof jsonString !== 'string') {
+      // console.warn("[isValidLexicalState] Input is not a non-empty string.");
+      return false;
     }
-
-    // --- segmentsToLexicalTable (Only needed for INITIAL load) ---
-    async function segmentsToLexicalTable(segments) {
-        // (This function remains largely the same as your last correct version for initial conversion)
-        const conversionEditor = createHeadlessEditor({
-            nodes: ALL_CONVERSION_NODES,
-            namespace: `transcript-converter-to-lexical-${Math.random()}`,
-            onError: (e) => console.error('[TranscriptEditorPanel] Segments to Lexical conversion editor error:', e)
-        });
-
-        let finalJsonString = "";
-
-        try {
-            await conversionEditor.update(() => {
-                const root = lexicalGetRoot();
-                root.clear();
-                const tableNode = lexicalCreateTableNode();
-                root.append(tableNode);
-
-                const headerRow = lexicalCreateTableRowNode();
-                ["#", "Time", "Speaker", "Text"].forEach(headerText => {
-                    const cell = lexicalCreateTableCellNode({ headerState: 'column' });
-                    cell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(headerText)));
-                    headerRow.append(cell);
-                });
-                tableNode.append(headerRow);
-
-                if (segments && segments.length > 0) {
-                    segments.forEach((segment, index) => {
-                        const dataRow = lexicalCreateTableRowNode();
-
-                        const indexCell = lexicalCreateTableCellNode();
-                        indexCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(String(index + 1))));
-                        dataRow.append(indexCell);
-
-                        const timeCell = lexicalCreateTableCellNode();
-                        const startTimeStr = formatTime(segment.start_time);
-                        const endTimeStr = formatTime(segment.end_time);
-                        timeCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(`${startTimeStr} - ${endTimeStr}`)));
-                        dataRow.append(timeCell);
-
-                        const speakerCell = lexicalCreateTableCellNode();
-                        let speakerName = segment.speaker || 'N/A';
-                        if (speakerName !== 'N/A' && !speakerName.endsWith(':')) {
-                            speakerName += ':';
-                        }
-                        speakerCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(speakerName)));
-                        dataRow.append(speakerCell);
-
-                        const textCell = lexicalCreateTableCellNode();
-                         if (segment.text && typeof segment.text === 'string' && segment.text.trim()) {
-                            try {
-                                const domParser = new DOMParser();
-                                const isHtmlContent = /<[a-z][\s\S]*>/i.test(segment.text);
-                                const htmlToParse = isHtmlContent ? segment.text : `<p>${segment.text.replace(/\n/g, '<br/>')}</p>`;
-
-                                const dom = domParser.parseFromString(htmlToParse, 'text/html');
-
-                                if (dom.body && dom.body.innerHTML.trim()) {
-                                    const lexicalNodesForCell = lexicalGenerateNodesFromDOM(conversionEditor, dom);
-
-                                    if (lexicalNodesForCell && lexicalNodesForCell.length > 0) {
-                                        lexicalNodesForCell.forEach(node => {
-                                            if (lexicalIsElementNode(node) && !node.isInline()) {
-                                                textCell.append(node);
-                                            } else if (node) {
-                                                textCell.append(lexicalCreateParagraphNode().append(node));
-                                            }
-                                        });
-                                        if (textCell.isEmpty()) {
-                                            textCell.append(lexicalCreateParagraphNode());
-                                        }
-                                    } else {
-                                        textCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text)));
-                                    }
-                                } else {
-                                     textCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text)));
-                                }
-                            } catch (e) {
-                                console.warn(`[TranscriptEditorPanel segmentsToLexicalTable] Error parsing HTML/text for segment ${index}:`, e, ". Falling back to plain text.");
-                                textCell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text)));
-                            }
-                        } else {
-                            textCell.append(lexicalCreateParagraphNode());
-                        }
-                        dataRow.append(textCell);
-                        tableNode.append(dataRow);
-                    });
-                }
-            });
-            finalJsonString = JSON.stringify(conversionEditor.getEditorState().toJSON());
-        } catch (error) {
-             console.error("[TranscriptEditorPanel] Error during Lexical state generation in segmentsToLexicalTable:", error);
-             const errorEditor = createHeadlessEditor({ nodes: [RootNode, ParagraphNode, TextNode]});
-             errorEditor.update(() => {
-                 lexicalGetRoot().clear().append(
-                     lexicalCreateParagraphNode().append(lexicalCreateTextNode("Error converting transcript."))
-                 );
-             });
-             finalJsonString = JSON.stringify(errorEditor.getEditorState().toJSON());
-        }
-
-        console.log("[TranscriptEditorPanel segmentsToLexicalTable] Generated JSON (first 500 chars):", finalJsonString.substring(0, 500) + "...");
-        return finalJsonString;
+    try {
+      const state = JSON.parse(jsonString);
+      if (!state || typeof state !== 'object' || !state.root) {
+        // console.warn("[isValidLexicalState] Parsed JSON is not object or missing root.");
+        return false;
+      }
+      if (!state.root.children || !Array.isArray(state.root.children)) {
+        // console.warn("[isValidLexicalState] Root children missing or not an array.");
+        return false;
+      }
+      // Allow empty root (e.g., just created empty table)
+      if (state.root.children.length > 0 && state.root.children[0]?.type !== 'table') {
+        console.warn(
+          "[isValidLexicalState] Root's first child is not a table node. Actual type:",
+          state.root.children[0]?.type
+        );
+        return false;
+      }
+      return true;
+    } catch (e) {
+      // console.warn("[isValidLexicalState] JSON parsing failed:", e);
+      return false;
     }
+  }
 
-
-    // --- Time Formatting/Parsing (Unchanged) ---
-    function formatTime(seconds) {
-        if (typeof seconds !== 'number' || isNaN(seconds)) return '00:00:00.000';
-        const totalMs = Math.round(seconds * 1000);
-        const ms = String(totalMs % 1000).padStart(3, '0');
-        const s = String(Math.floor(totalMs / 1000) % 60).padStart(2, '0');
-        const m = String(Math.floor(totalMs / (1000 * 60)) % 60).padStart(2, '0');
-        const h = String(Math.floor(totalMs / (1000 * 60 * 60))).padStart(2, '0');
-        return `${h}:${m}:${s}.${ms}`;
-    }
-    function parseTimeRange(timeRangeStr) {
-        const parts = timeRangeStr.split(/\s*-\s*/);
-        if (parts.length !== 2) return { start_time: 0, end_time: 0 };
-        return {
-            start_time: parseTime(parts[0]),
-            end_time: parseTime(parts[1])
-        };
-    }
-    function parseTime(timeStr) {
-        const mainParts = timeStr.split('.');
-        const hms = mainParts[0].split(':');
-        const ms = mainParts.length > 1 ? parseInt(mainParts[1], 10) || 0 : 0;
-        if (hms.length !== 3) return 0;
-        const h = parseInt(hms[0], 10) || 0;
-        const m = parseInt(hms[1], 10) || 0;
-        const s = parseInt(hms[2], 10) || 0;
-        return h * 3600 + m * 60 + s + ms / 1000;
-    }
-
-    // --- REMOVED lexicalTableToSegments function ---
-    // It is no longer needed for saving
-
-    function handleHighlightsChange(event) {
-        const { highlights } = event.detail;
-        if (isPrimary) {
-            setStandaloneTranscriptHighlights(highlights);
-        } else {
-            localCurrentHighlights = highlights;
-            localIsMetadataDirty = JSON.stringify(localInitialHighlights) !== JSON.stringify(highlights);
-        }
-    }
-
-    // --- Editor Change Handler (Unchanged) ---
-    function handleEditorChange(event) {
-        clearTimeout(changeDebounceTimeout);
-        changeDebounceTimeout = setTimeout(() => {
-            console.log("[TranscriptEditorPanel handleEditorChange] Debounced event fired.");
-            const newLexicalJson = event.detail.jsonString;
-            if (editorJsonState !== newLexicalJson) {
-                editorJsonState = newLexicalJson;
-                
-                const rowCount = getRowCount(newLexicalJson);
-                dispatch('rowcountupdated', { rowCount });
-
-                if (!isLoading && !errorMessage) {
-                    if (isPrimary) {
-                        setStandaloneTranscriptEditorContent(itemPath, newLexicalJson);
-                    } else {
-                        localCurrentLexicalJson = newLexicalJson;
-                        localIsDirty = localInitialLexicalJson !== newLexicalJson;
-                    }
-                } else {
-                     console.warn("[TranscriptEditorPanel handleEditorChange] Skipped store update due to loading/error state.");
-                }
-            }
-        }, 300);
-	}
-
-    function getRowCount(jsonString) {
-        if (!jsonString) return 0;
-        try {
-            const parsed = JSON.parse(jsonString);
-            const table = parsed.root.children.find(c => c.type === 'table');
-            return table?.children?.length || 0;
-        } catch (e) {
-            return 0;
-        }
-    }
-
-    // --- MODIFIED Save Handler ---
-    async function handleSave() {
-        if (!itemPath) {
-            console.error("[TranscriptEditorPanel] Save Error: No transcript path provided.");
-            return;
-        }
-
-        if (!isDirty && !isMetadataDirty) {
-            console.log("[TranscriptEditorPanel] handleSave: Content and metadata not dirty. Save skipped.");
-            return;
-        }
-
-        console.log("[TranscriptEditorPanel] handleSave: Attempting to save transcript (and/or metadata) via service:", itemPath);
-        try {
-            const { saveStandaloneTranscriptContent } = await import('$lib/services/projectService.js');
-            
-            // Prepare highlights JSON if not primary
-            const hJson = isPrimary ? null : JSON.stringify(currentHighlights);
-
-            await saveStandaloneTranscriptContent(itemPath, editorJsonState, hJson);
-            
-            if (!isPrimary) {
-                localInitialLexicalJson = editorJsonState;
-                localIsDirty = false;
-                localInitialHighlights = JSON.parse(JSON.stringify(localCurrentHighlights));
-                localIsMetadataDirty = false;
-            }
-            console.log("[TranscriptEditorPanel] Transcript (and/or metadata) save successful via service.");
-        } catch (error) {
-            console.error("[TranscriptEditorPanel] Save operation failed:", error);
-            throw error;
-        }
-    }
-
-    // --- Discard Handler (Unchanged) ---
-    async function handleDiscard() {
-        if (isDirty) {
-            const userConfirmed = await confirm('Discard unsaved changes to this transcript?', { type: 'warning', title: 'Discard Changes' });
-            if (userConfirmed) {
-                if (isPrimary) {
-                    markStandaloneTranscriptChangesDiscarded(itemPath);
-                } else {
-                    localCurrentLexicalJson = localInitialLexicalJson;
-                    localIsDirty = false;
-                }
-                
-                if(editorRef && initialLexicalJson != null && isValidLexicalState(initialLexicalJson)) {
-                    editorRef.resetEditorState(initialLexicalJson);
-                    editorJsonState = initialLexicalJson;
-                    dispatch('rowcountupdated', { rowCount: getRowCount(initialLexicalJson) });
-                } else if(editorRef) {
-                    console.warn("[TranscriptEditorPanel Discard] Reverted state is invalid or null, resetting editor to empty.");
-                    editorRef.resetEditorState('');
-                    editorJsonState = '';
-                    dispatch('rowcountupdated', { rowCount: 0 });
-                }
-                 console.log('[TranscriptEditorPanel] Changes discarded.');
-            }
-        } else {
-            console.log('[TranscriptEditorPanel] Discard skipped: No changes detected in store for this item.');
-        }
-    }
-
-    // --- Mount/Destroy and Exported Functions (MODIFIED) ---
-    onMount(() => {
-        console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath, 'isPrimary:', isPrimary);
-        if (isPrimary) {
-            setActiveStandaloneTranscriptEditorRef({ ref: self });
-        }
-        if (itemPath) {
-            loadAndConvertTranscript(itemPath);
-            loadHighlightsForTranscript(itemPath);
-        } else {
-            isLoading = false;
-        }
+  // --- segmentsToLexicalTable (Only needed for INITIAL load) ---
+  async function segmentsToLexicalTable(segments) {
+    // (This function remains largely the same as your last correct version for initial conversion)
+    const conversionEditor = createHeadlessEditor({
+      nodes: ALL_CONVERSION_NODES,
+      namespace: `transcript-converter-to-lexical-${Math.random()}`,
+      onError: (e) =>
+        console.error('[TranscriptEditorPanel] Segments to Lexical conversion editor error:', e)
     });
 
-	onDestroy(() => {
-        console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
-        clearTimeout(changeDebounceTimeout);
-        if (isPrimary) {
-            const activeRef = get(project).activeStandaloneTranscriptEditorRef;
-            if (activeRef && activeRef.getItemPath && activeRef.getItemPath() === itemPath) {
-                 clearActiveStandaloneTranscriptEditorRef();
+    let finalJsonString = '';
+
+    try {
+      await conversionEditor.update(() => {
+        const root = lexicalGetRoot();
+        root.clear();
+        const tableNode = lexicalCreateTableNode();
+        root.append(tableNode);
+
+        const headerRow = lexicalCreateTableRowNode();
+        ['#', 'Time', 'Speaker', 'Text'].forEach((headerText) => {
+          const cell = lexicalCreateTableCellNode({ headerState: 'column' });
+          cell.append(lexicalCreateParagraphNode().append(lexicalCreateTextNode(headerText)));
+          headerRow.append(cell);
+        });
+        tableNode.append(headerRow);
+
+        if (segments && segments.length > 0) {
+          segments.forEach((segment, index) => {
+            const dataRow = lexicalCreateTableRowNode();
+
+            const indexCell = lexicalCreateTableCellNode();
+            indexCell.append(
+              lexicalCreateParagraphNode().append(lexicalCreateTextNode(String(index + 1)))
+            );
+            dataRow.append(indexCell);
+
+            const timeCell = lexicalCreateTableCellNode();
+            const startTimeStr = formatTime(segment.start_time);
+            const endTimeStr = formatTime(segment.end_time);
+            timeCell.append(
+              lexicalCreateParagraphNode().append(
+                lexicalCreateTextNode(`${startTimeStr} - ${endTimeStr}`)
+              )
+            );
+            dataRow.append(timeCell);
+
+            const speakerCell = lexicalCreateTableCellNode();
+            let speakerName = segment.speaker || 'N/A';
+            if (speakerName !== 'N/A' && !speakerName.endsWith(':')) {
+              speakerName += ':';
             }
+            speakerCell.append(
+              lexicalCreateParagraphNode().append(lexicalCreateTextNode(speakerName))
+            );
+            dataRow.append(speakerCell);
+
+            const textCell = lexicalCreateTableCellNode();
+            if (segment.text && typeof segment.text === 'string' && segment.text.trim()) {
+              try {
+                const domParser = new DOMParser();
+                const isHtmlContent = /<[a-z][\s\S]*>/i.test(segment.text);
+                const htmlToParse = isHtmlContent
+                  ? segment.text
+                  : `<p>${segment.text.replace(/\n/g, '<br/>')}</p>`;
+
+                const dom = domParser.parseFromString(htmlToParse, 'text/html');
+
+                if (dom.body && dom.body.innerHTML.trim()) {
+                  const lexicalNodesForCell = lexicalGenerateNodesFromDOM(conversionEditor, dom);
+
+                  if (lexicalNodesForCell && lexicalNodesForCell.length > 0) {
+                    lexicalNodesForCell.forEach((node) => {
+                      if (lexicalIsElementNode(node) && !node.isInline()) {
+                        textCell.append(node);
+                      } else if (node) {
+                        textCell.append(lexicalCreateParagraphNode().append(node));
+                      }
+                    });
+                    if (textCell.isEmpty()) {
+                      textCell.append(lexicalCreateParagraphNode());
+                    }
+                  } else {
+                    textCell.append(
+                      lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text))
+                    );
+                  }
+                } else {
+                  textCell.append(
+                    lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text))
+                  );
+                }
+              } catch (e) {
+                console.warn(
+                  `[TranscriptEditorPanel segmentsToLexicalTable] Error parsing HTML/text for segment ${index}:`,
+                  e,
+                  '. Falling back to plain text.'
+                );
+                textCell.append(
+                  lexicalCreateParagraphNode().append(lexicalCreateTextNode(segment.text))
+                );
+              }
+            } else {
+              textCell.append(lexicalCreateParagraphNode());
+            }
+            dataRow.append(textCell);
+            tableNode.append(dataRow);
+          });
         }
-	});
+      });
+      finalJsonString = JSON.stringify(conversionEditor.getEditorState().toJSON());
+    } catch (error) {
+      console.error(
+        '[TranscriptEditorPanel] Error during Lexical state generation in segmentsToLexicalTable:',
+        error
+      );
+      const errorEditor = createHeadlessEditor({ nodes: [RootNode, ParagraphNode, TextNode] });
+      errorEditor.update(() => {
+        lexicalGetRoot()
+          .clear()
+          .append(
+            lexicalCreateParagraphNode().append(
+              lexicalCreateTextNode('Error converting transcript.')
+            )
+          );
+      });
+      finalJsonString = JSON.stringify(errorEditor.getEditorState().toJSON());
+    }
 
-    export function save() {
-        console.log('[TranscriptEditorPanel] External save() called for path:', itemPath);
-        return handleSave();
+    console.log(
+      '[TranscriptEditorPanel segmentsToLexicalTable] Generated JSON (first 500 chars):',
+      finalJsonString.substring(0, 500) + '...'
+    );
+    return finalJsonString;
+  }
+
+  // --- Time Formatting/Parsing (Unchanged) ---
+  function formatTime(seconds) {
+    if (typeof seconds !== 'number' || isNaN(seconds)) return '00:00:00.000';
+    const totalMs = Math.round(seconds * 1000);
+    const ms = String(totalMs % 1000).padStart(3, '0');
+    const s = String(Math.floor(totalMs / 1000) % 60).padStart(2, '0');
+    const m = String(Math.floor(totalMs / (1000 * 60)) % 60).padStart(2, '0');
+    const h = String(Math.floor(totalMs / (1000 * 60 * 60))).padStart(2, '0');
+    return `${h}:${m}:${s}.${ms}`;
+  }
+  function parseTimeRange(timeRangeStr) {
+    const parts = timeRangeStr.split(/\s*-\s*/);
+    if (parts.length !== 2) return { start_time: 0, end_time: 0 };
+    return {
+      start_time: parseTime(parts[0]),
+      end_time: parseTime(parts[1])
+    };
+  }
+  function parseTime(timeStr) {
+    const mainParts = timeStr.split('.');
+    const hms = mainParts[0].split(':');
+    const ms = mainParts.length > 1 ? parseInt(mainParts[1], 10) || 0 : 0;
+    if (hms.length !== 3) return 0;
+    const h = parseInt(hms[0], 10) || 0;
+    const m = parseInt(hms[1], 10) || 0;
+    const s = parseInt(hms[2], 10) || 0;
+    return h * 3600 + m * 60 + s + ms / 1000;
+  }
+
+  // --- REMOVED lexicalTableToSegments function ---
+  // It is no longer needed for saving
+
+  function handleHighlightsChange(event) {
+    const { highlights } = event.detail;
+    if (isPrimary) {
+      setStandaloneTranscriptHighlights(highlights);
+    } else {
+      localCurrentHighlights = highlights;
+      localIsMetadataDirty = JSON.stringify(localInitialHighlights) !== JSON.stringify(highlights);
     }
-    export function discard() {
-        console.log('[TranscriptEditorPanel] External discard() called for path:', itemPath);
-        return handleDiscard();
-    }
-    export function resetEditorState(lexicalJsonString) {
-        if (editorRef) {
-             console.log('[TranscriptEditorPanel] External resetEditorState called for path:', itemPath);
-             if (isValidLexicalState(lexicalJsonString)) {
-                 editorRef.resetEditorState(lexicalJsonString);
-                 editorJsonState = lexicalJsonString || '';
-                 dispatch('rowcountupdated', { rowCount: getRowCount(lexicalJsonString) });
-             } else {
-                 console.error("[TranscriptEditorPanel resetEditorState] Received invalid JSON string, resetting to empty.");
-                 editorRef.resetEditorState('');
-                 editorJsonState = '';
-                 dispatch('rowcountupdated', { rowCount: 0 });
-             }
+  }
+
+  // --- Editor Change Handler (Unchanged) ---
+  function handleEditorChange(event) {
+    clearTimeout(changeDebounceTimeout);
+    changeDebounceTimeout = setTimeout(() => {
+      console.log('[TranscriptEditorPanel handleEditorChange] Debounced event fired.');
+      const newLexicalJson = event.detail.jsonString;
+      if (editorJsonState !== newLexicalJson) {
+        editorJsonState = newLexicalJson;
+
+        const rowCount = getRowCount(newLexicalJson);
+        dispatch('rowcountupdated', { rowCount });
+
+        if (!isLoading && !errorMessage) {
+          if (isPrimary) {
+            setStandaloneTranscriptEditorContent(itemPath, newLexicalJson);
+          } else {
+            localCurrentLexicalJson = newLexicalJson;
+            localIsDirty = localInitialLexicalJson !== newLexicalJson;
+          }
+        } else {
+          console.warn(
+            '[TranscriptEditorPanel handleEditorChange] Skipped store update due to loading/error state.'
+          );
         }
+      }
+    }, 300);
+  }
+
+  function getRowCount(jsonString) {
+    if (!jsonString) return 0;
+    try {
+      const parsed = JSON.parse(jsonString);
+      const table = parsed.root.children.find((c) => c.type === 'table');
+      return table?.children?.length || 0;
+    } catch (e) {
+      return 0;
     }
-    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps = false) {
-        if (editorRef) {
-            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps);
+  }
+
+  // --- MODIFIED Save Handler ---
+  async function handleSave() {
+    if (!itemPath) {
+      console.error('[TranscriptEditorPanel] Save Error: No transcript path provided.');
+      return;
+    }
+
+    if (!isDirty && !isMetadataDirty) {
+      console.log(
+        '[TranscriptEditorPanel] handleSave: Content and metadata not dirty. Save skipped.'
+      );
+      return;
+    }
+
+    console.log(
+      '[TranscriptEditorPanel] handleSave: Attempting to save transcript (and/or metadata) via service:',
+      itemPath
+    );
+    try {
+      const { saveStandaloneTranscriptContent } = await import('$lib/services/projectService.js');
+
+      // Prepare highlights JSON if not primary
+      const hJson = isPrimary ? null : JSON.stringify(currentHighlights);
+
+      await saveStandaloneTranscriptContent(itemPath, editorJsonState, hJson);
+
+      if (!isPrimary) {
+        localInitialLexicalJson = editorJsonState;
+        localIsDirty = false;
+        localInitialHighlights = JSON.parse(JSON.stringify(localCurrentHighlights));
+        localIsMetadataDirty = false;
+      }
+      console.log(
+        '[TranscriptEditorPanel] Transcript (and/or metadata) save successful via service.'
+      );
+    } catch (error) {
+      console.error('[TranscriptEditorPanel] Save operation failed:', error);
+      throw error;
+    }
+  }
+
+  // --- Discard Handler (Unchanged) ---
+  async function handleDiscard() {
+    if (isDirty) {
+      const userConfirmed = await confirm('Discard unsaved changes to this transcript?', {
+        type: 'warning',
+        title: 'Discard Changes'
+      });
+      if (userConfirmed) {
+        if (isPrimary) {
+          markStandaloneTranscriptChangesDiscarded(itemPath);
+        } else {
+          localCurrentLexicalJson = localInitialLexicalJson;
+          localIsDirty = false;
         }
-    }
-    export function getItemPath() {
-        return itemPath;
-    }
 
-    export function getScrollElement() {
-        return editorRef?.getScrollElement();
+        if (editorRef && initialLexicalJson != null && isValidLexicalState(initialLexicalJson)) {
+          editorRef.resetEditorState(initialLexicalJson);
+          editorJsonState = initialLexicalJson;
+          dispatch('rowcountupdated', { rowCount: getRowCount(initialLexicalJson) });
+        } else if (editorRef) {
+          console.warn(
+            '[TranscriptEditorPanel Discard] Reverted state is invalid or null, resetting editor to empty.'
+          );
+          editorRef.resetEditorState('');
+          editorJsonState = '';
+          dispatch('rowcountupdated', { rowCount: 0 });
+        }
+        console.log('[TranscriptEditorPanel] Changes discarded.');
+      }
+    } else {
+      console.log(
+        '[TranscriptEditorPanel] Discard skipped: No changes detected in store for this item.'
+      );
     }
+  }
 
-    export function getTopVisibleRowInfo() {
-        return editorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 };
+  // --- Mount/Destroy and Exported Functions (MODIFIED) ---
+  onMount(() => {
+    console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath, 'isPrimary:', isPrimary);
+    if (isPrimary) {
+      setActiveStandaloneTranscriptEditorRef({ ref: self });
     }
-
-    export function getCursorRowInfo() {
-        return editorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false };
+    if (itemPath) {
+      loadAndConvertTranscript(itemPath);
+      loadHighlightsForTranscript(itemPath);
+    } else {
+      isLoading = false;
     }
+  });
 
-    export function scrollToRow(index, offset) {
-        editorRef?.scrollToRow(index, offset);
+  onDestroy(() => {
+    console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
+    clearTimeout(changeDebounceTimeout);
+    if (isPrimary) {
+      const activeRef = get(project).activeStandaloneTranscriptEditorRef;
+      if (activeRef && activeRef.getItemPath && activeRef.getItemPath() === itemPath) {
+        clearActiveStandaloneTranscriptEditorRef();
+      }
     }
+  });
 
-    const self = { save, discard, resetEditorState, getItemPath, getScrollElement, getTopVisibleRowInfo, getCursorRowInfo, scrollToRow };
+  export function save() {
+    console.log('[TranscriptEditorPanel] External save() called for path:', itemPath);
+    return handleSave();
+  }
+  export function discard() {
+    console.log('[TranscriptEditorPanel] External discard() called for path:', itemPath);
+    return handleDiscard();
+  }
+  export function resetEditorState(lexicalJsonString) {
+    if (editorRef) {
+      console.log('[TranscriptEditorPanel] External resetEditorState called for path:', itemPath);
+      if (isValidLexicalState(lexicalJsonString)) {
+        editorRef.resetEditorState(lexicalJsonString);
+        editorJsonState = lexicalJsonString || '';
+        dispatch('rowcountupdated', { rowCount: getRowCount(lexicalJsonString) });
+      } else {
+        console.error(
+          '[TranscriptEditorPanel resetEditorState] Received invalid JSON string, resetting to empty.'
+        );
+        editorRef.resetEditorState('');
+        editorJsonState = '';
+        dispatch('rowcountupdated', { rowCount: 0 });
+      }
+    }
+  }
+  export function updateLiveTranscriptionText(
+    text,
+    isFinal,
+    startTime,
+    endTime,
+    addTimestamps = false
+  ) {
+    if (editorRef) {
+      editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime, addTimestamps);
+    }
+  }
+  export function getItemPath() {
+    return itemPath;
+  }
 
+  export function getScrollElement() {
+    return editorRef?.getScrollElement();
+  }
+
+  export function getTopVisibleRowInfo() {
+    return editorRef?.getTopVisibleRowInfo() || { index: -1, offset: 0 };
+  }
+
+  export function getCursorRowInfo() {
+    return editorRef?.getCursorRowInfo() || { index: -1, offset: 0, visible: false };
+  }
+
+  export function scrollToRow(index, offset) {
+    editorRef?.scrollToRow(index, offset);
+  }
+
+  const self = {
+    save,
+    discard,
+    resetEditorState,
+    getItemPath,
+    getScrollElement,
+    getTopVisibleRowInfo,
+    getCursorRowInfo,
+    scrollToRow
+  };
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel">
-    {#if isLoading}
-        <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">Loading transcript...</div>
-    {:else if errorMessage}
-         <div class="flex-grow flex flex-col items-center justify-center text-red-500 p-4 text-center">
-             <p class="font-semibold">Error Loading Transcript</p>
-             <p class="text-xs mt-1">{errorMessage}</p>
-             <p class="text-xs mt-2">The original file could not be loaded or converted correctly.</p>
-         </div>
-    {:else if !itemPath}
-         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">No transcript selected or loaded.</div>
-    {:else}
-        <div class="flex-grow min-h-0 overflow-hidden">
-            {#key itemPath}
-                 <LexicalEditor
-                     bind:this={editorRef}
-                     nodes={LEXICAL_NODES}
-                     initialJson={currentLexicalJson}
-                     editable={$isLexicalEditMode}
-                     allowReadModeHighlights={true}
-                     enableTableCellResize={false}
-                     placeholder="Transcript content will appear here as a table..."
-                     externalHighlightedRowIndex={highlightedRowIndex}
-                     on:change={handleEditorChange}
-                     on:textcountchange={(e) => { if (isPrimary) project.update(p => ({...p, documentTextCount: e.detail})) }}
-                     on:highlightschange={handleHighlightsChange}
-                     on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
-                     on:playsegment
-                     on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
-                     enableSegmentPlayback={enableSegmentPlayback}
-                     toolbarConfig={{
-                        undo: true, redo: true, blockType: false,
-                        bold: true, italic: true, underline: true, strikethrough: true,
-                                link: true, indent: true, outdent: true, align: true,
-                        textColor: true, highlight: true, clearFormatting: true,
-                        search: true
-                     }}
-                     enableSearch={true}
-                     documentPath={itemPath}
-                     initialHighlights={isPrimary ? initialHighlightsFromBackend : localInitialHighlights}
-                     documentHighlights={currentHighlights}
-                     activeLayout={$activeLayout}
-                 />
-            {/key}
-        </div>
-    {/if}
+<div
+  class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-editor-panel"
+>
+  {#if isLoading}
+    <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">
+      Loading transcript...
+    </div>
+  {:else if errorMessage}
+    <div class="flex-grow flex flex-col items-center justify-center text-red-500 p-4 text-center">
+      <p class="font-semibold">Error Loading Transcript</p>
+      <p class="text-xs mt-1">{errorMessage}</p>
+      <p class="text-xs mt-2">The original file could not be loaded or converted correctly.</p>
+    </div>
+  {:else if !itemPath}
+    <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400">
+      No transcript selected or loaded.
+    </div>
+  {:else}
+    <div class="flex-grow min-h-0 overflow-hidden">
+      {#key itemPath}
+        <LexicalEditor
+          bind:this={editorRef}
+          nodes={LEXICAL_NODES}
+          initialJson={currentLexicalJson}
+          editable={$isLexicalEditMode}
+          allowReadModeHighlights={true}
+          enableTableCellResize={false}
+          placeholder="Transcript content will appear here as a table..."
+          externalHighlightedRowIndex={highlightedRowIndex}
+          on:change={handleEditorChange}
+          on:textcountchange={(e) => {
+            if (isPrimary) project.update((p) => ({ ...p, documentTextCount: e.detail }));
+          }}
+          on:highlightschange={handleHighlightsChange}
+          on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
+          on:playsegment
+          on:cursorrowchange={(e) => dispatch('cursorrowchange', e.detail)}
+          {enableSegmentPlayback}
+          toolbarConfig={{
+            undo: true,
+            redo: true,
+            blockType: false,
+            bold: true,
+            italic: true,
+            underline: true,
+            strikethrough: true,
+            link: true,
+            indent: true,
+            outdent: true,
+            align: true,
+            textColor: true,
+            highlight: true,
+            clearFormatting: true,
+            search: true
+          }}
+          enableSearch={true}
+          documentPath={itemPath}
+          initialHighlights={isPrimary ? initialHighlightsFromBackend : localInitialHighlights}
+          documentHighlights={currentHighlights}
+          activeLayout={$activeLayout}
+        />
+      {/key}
+    </div>
+  {/if}
 </div>
 
 <!-- Style Section (Modified) -->
 <style lang="postcss">
-    .imported-transcript-editor-panel :global(.lexical-content) {
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 12pt;
-        line-height: 1.5;
-    }
-    .imported-transcript-editor-panel :global(.lexical-wrapper) {
-        @apply p-3 m-0;
-        flex-grow: 1;
-        overflow-y: auto;
-    }
-    .imported-transcript-editor-panel :global(.lexical-wrapper > .lexical-editor-root > *) {
-        @apply mt-0 mb-0;
-    }
-    .imported-transcript-editor-panel :global(.lexical-content table table) {
-        @apply m-0 border-none;
-    }
-    .imported-transcript-editor-panel :global(.lexical-content table) {
-        border-collapse: collapse;
-        border-spacing: 0;
-        width: 100%;
-        border: 1px solid #ccc;
-        margin-bottom: 1rem;
-        table-layout: fixed;
-    }
-    .imported-transcript-editor-panel :global(.lexical-content th),
-    .imported-transcript-editor-panel :global(.lexical-content td) {
-        /* Border handled by Lexical theme classes */
-        padding: 0.2rem 5.75pt;
-        text-align: left;
-        vertical-align: top;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 12pt;
-        line-height: 1.5;
-        word-break: break-word;
-    }
-    /* Removed specific th background overrides to let Lexical theme control it */
-    .imported-transcript-editor-panel :global(.lexical-content th p),
-    .imported-transcript-editor-panel :global(.lexical-content td p) {
-        @apply mt-0 mb-0;
-    }
+  .imported-transcript-editor-panel :global(.lexical-content) {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+  .imported-transcript-editor-panel :global(.lexical-wrapper) {
+    @apply p-3 m-0;
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+  .imported-transcript-editor-panel :global(.lexical-wrapper > .lexical-editor-root > *) {
+    @apply mt-0 mb-0;
+  }
+  .imported-transcript-editor-panel :global(.lexical-content table table) {
+    @apply m-0 border-none;
+  }
+  .imported-transcript-editor-panel :global(.lexical-content table) {
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 100%;
+    border: 1px solid #ccc;
+    margin-bottom: 1rem;
+    table-layout: fixed;
+  }
+  .imported-transcript-editor-panel :global(.lexical-content th),
+  .imported-transcript-editor-panel :global(.lexical-content td) {
+    /* Border handled by Lexical theme classes */
+    padding: 0.2rem 5.75pt;
+    text-align: left;
+    vertical-align: top;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  /* Removed specific th background overrides to let Lexical theme control it */
+  .imported-transcript-editor-panel :global(.lexical-content th p),
+  .imported-transcript-editor-panel :global(.lexical-content td p) {
+    @apply mt-0 mb-0;
+  }
 
+  /* Layout 1: Detailed Table */
+  :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table),
+  :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table) {
+    table-layout: fixed !important;
+    width: 100% !important;
+  }
 
-    /* Layout 1: Detailed Table */
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content table),
-    :global(.imported-transcript-editor-panel.layout-Layout1 .lexical-content .editor-table) {
-        table-layout: fixed !important;
-        width: 100% !important;
-    }
+  /* Layout 2: Segment Block (Simulated via CSS) */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content table),
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tbody),
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table) {
+    display: block !important;
+    width: 100% !important;
+    border: none !important;
+  }
+  /* Hide header row */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr:first-child) {
+    display: none !important;
+  }
+  /* Style rows as cards */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row) {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+    padding: 0.5rem !important;
+    border: 1px solid #e5e7eb !important; /* gray-200 */
+    border-radius: 0.5rem !important;
+    background-color: transparent !important;
+  }
+  :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
+  :global(
+    html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row
+  ) {
+    border-color: #374151 !important; /* gray-700 */
+  }
+  /* Hide Index Column (1) */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(1)),
+  :global(
+    .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(1)
+  ) {
+    display: none !important;
+  }
+  /* Time (2) and Speaker (3) as a metadata row */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)),
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)),
+  :global(
+    .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(2)
+  ),
+  :global(
+    .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(3)
+  ) {
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 0.5rem 0.25rem 0 !important;
+    font-size: 0.85em !important;
+    color: #6b7280 !important; /* gray-500 */
+    border: none !important;
+    background: transparent !important;
+  }
+  :global(
+    html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)
+  ),
+  :global(
+    html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)
+  ),
+  :global(
+    html.dark
+      .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(2)
+  ),
+  :global(
+    html.dark
+      .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(3)
+  ) {
+    color: #9ca3af !important; /* gray-400 */
+  }
+  /* Text (4) as main content */
+  :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(4)),
+  :global(
+    .imported-transcript-editor-panel.layout-Layout2
+      .lexical-content
+      .editor-table-cell:nth-child(4)
+  ) {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-top: 0.25rem !important;
+    border: none !important;
+  }
 
-    /* Layout 2: Segment Block (Simulated via CSS) */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content table),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tbody),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table) {
-        display: block !important;
-        width: 100% !important;
-        border: none !important;
-    }
-    /* Hide header row */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr:first-child) {
-        display: none !important;
-    }
-    /* Style rows as cards */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row) {
-        display: flex !important;
-        flex-direction: column !important;
-        width: 100% !important;
-        margin-bottom: 1rem !important;
-        padding: 0.5rem !important;
-        border: 1px solid #e5e7eb !important; /* gray-200 */
-        border-radius: 0.5rem !important;
-        background-color: transparent !important;
-    }
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content tr),
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-row) {
-        border-color: #374151 !important; /* gray-700 */
-    }
-    /* Hide Index Column (1) */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(1)),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(1)) {
-        display: none !important;
-    }
-    /* Time (2) and Speaker (3) as a metadata row */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(2)),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(3)) {
-        display: inline-block !important;
-        width: auto !important;
-        min-width: 0 !important;
-        padding: 0 0.5rem 0.25rem 0 !important;
-        font-size: 0.85em !important;
-        color: #6b7280 !important; /* gray-500 */
-        border: none !important;
-        background: transparent !important;
-    }
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(2)),
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(3)),
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(2)),
-    :global(html.dark .imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(3)) {
-        color: #9ca3af !important; /* gray-400 */
-    }
-    /* Text (4) as main content */
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content td:nth-child(4)),
-    :global(.imported-transcript-editor-panel.layout-Layout2 .lexical-content .editor-table-cell:nth-child(4)) {
-        display: block !important;
-        width: 100% !important;
-        min-width: 0 !important;
-        padding-top: 0.25rem !important;
-        border: none !important;
-    }
-
-    .flex-grow.min-h-0 { min-height: 0; }
+  .flex-grow.min-h-0 {
+    min-height: 0;
+  }
 </style>

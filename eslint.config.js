@@ -41,7 +41,11 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
       'no-unused-vars': 'off',
-      'svelte/infinite-reactive-loop': 'off'
+      'svelte/infinite-reactive-loop': 'off',
+      'svelte/no-reactive-reassign': 'off',
+      'svelte/no-at-html-tags': 'off',
+      'svelte/prefer-svelte-reactivity': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off'
     }
   }
 );

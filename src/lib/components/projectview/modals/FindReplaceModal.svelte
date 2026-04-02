@@ -1,15 +1,18 @@
 <!-- src/lib/components/projectview/modals/FindReplaceModal.svelte -->
 <script>
   import { createEventDispatcher, onMount, tick, onDestroy } from 'svelte';
-  import { CaseSensitive, Regex, WholeWord, X, Search, Replace, ReplaceAll, ChevronDown, ChevronUp } from '@lucide/svelte';
-  import { 
-    Button, 
-    Label, 
-    Input, 
-    Helper,
-    Badge,
-    Tooltip
-  } from 'flowbite-svelte';
+  import {
+    CaseSensitive,
+    Regex,
+    WholeWord,
+    X,
+    Search,
+    Replace,
+    ReplaceAll,
+    ChevronDown,
+    ChevronUp
+  } from '@lucide/svelte';
+  import { Button, Label, Input, Helper, Badge, Tooltip } from 'flowbite-svelte';
 
   export let showModal = false;
   export let initialSearchTerm = '';
@@ -19,7 +22,7 @@
   let modalElement;
   let findInputElement;
   let replaceInputElement;
-  
+
   let findTerm = '';
   let replaceTerm = '';
   let isCaseSensitive = false;
@@ -39,20 +42,20 @@
   $: if (showModal && !lastShowModal) {
     findTerm = initialSearchTerm || '';
     prevInitialSearchTerm = initialSearchTerm || '';
-    replaceTerm = ''; 
+    replaceTerm = '';
     // Reset position when opening
     x = 0;
     y = 0;
-    
+
     // Sync parent state with what's in modal now
     handleFindChange();
 
     setTimeout(() => {
       tick().then(() => {
         if (findTerm && replaceInputElement) {
-            replaceInputElement.focus();
+          replaceInputElement.focus();
         } else if (findInputElement) {
-            findInputElement.focus();
+          findInputElement.focus();
         }
       });
     }, 0);
@@ -61,8 +64,8 @@
 
   // Sync if initialSearchTerm changes externally while modal is open
   $: if (showModal && initialSearchTerm !== prevInitialSearchTerm) {
-      findTerm = initialSearchTerm || '';
-      prevInitialSearchTerm = initialSearchTerm;
+    findTerm = initialSearchTerm || '';
+    prevInitialSearchTerm = initialSearchTerm;
   }
 
   const dispatch = createEventDispatcher();
@@ -76,7 +79,7 @@
   }
 
   function handleFindChange() {
-      dispatch('findchange', { term: findTerm, isCaseSensitive, isRegex, isWholeWord });
+    dispatch('findchange', { term: findTerm, isCaseSensitive, isRegex, isWholeWord });
   }
 
   function toggleCaseSensitive() {
@@ -148,21 +151,21 @@
       role="document"
     >
       <!-- Header / Drag Handle -->
-      <div 
+      <div
         class="drag-handle cursor-move px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50 select-none"
         on:pointerdown={handlePointerDown}
         on:pointermove={handlePointerMove}
         on:pointerup={handlePointerUp}
       >
         <div class="flex items-center space-x-3">
-            <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Search size={18} class="text-blue-600 dark:text-blue-400" />
-            </div>
-            <h3 id="find-replace-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
-                Find & Replace
-            </h3>
+          <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+            <Search size={18} class="text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 id="find-replace-modal-title" class="text-lg font-bold text-gray-900 dark:text-white">
+            Find & Replace
+          </h3>
         </div>
-        <button 
+        <button
           on:click={closeModal}
           class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all"
           title="Close"
@@ -174,105 +177,123 @@
       <div class="p-6 space-y-5">
         <!-- Find Section -->
         <div class="space-y-2">
-            <div class="flex justify-between items-center">
-                <Label for="find-term-input">Find</Label>
-                {#if findTerm}
-                    <Badge color={totalMatches > 0 ? 'blue' : 'red'} size="xs" class="font-mono">
-                        {#if totalMatches > 0}
-                            {currentMatchIndex + 1} / {totalMatches}
-                        {:else}
-                            No matches
-                        {/if}
-                    </Badge>
+          <div class="flex justify-between items-center">
+            <Label for="find-term-input">Find</Label>
+            {#if findTerm}
+              <Badge color={totalMatches > 0 ? 'blue' : 'red'} size="xs" class="font-mono">
+                {#if totalMatches > 0}
+                  {currentMatchIndex + 1} / {totalMatches}
+                {:else}
+                  No matches
                 {/if}
+              </Badge>
+            {/if}
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-grow">
+              <Input
+                id="find-term-input"
+                type="text"
+                bind:value={findTerm}
+                on:input={handleFindChange}
+                placeholder="Search text..."
+                autocomplete="off"
+                autocorrect="off"
+              >
+                <svelte:fragment slot="left">
+                  <Search class="w-4 h-4 text-gray-400" />
+                </svelte:fragment>
+              </Input>
+              <!-- Internal binding hack for focus since Flowbite doesn't easily expose the input ref -->
+              <input type="hidden" bind:this={findInputElement} />
             </div>
-            <div class="flex gap-2">
-                <div class="flex-grow">
-                    <Input
-                        id="find-term-input"
-                        type="text"
-                        bind:value={findTerm}
-                        on:input={handleFindChange}
-                        placeholder="Search text..."
-                        autocomplete="off"
-                        autocorrect="off"
-                    >
-                        <svelte:fragment slot="left">
-                            <Search class="w-4 h-4 text-gray-400" />
-                        </svelte:fragment>
-                    </Input>
-                    <!-- Internal binding hack for focus since Flowbite doesn't easily expose the input ref -->
-                    <input type="hidden" bind:this={findInputElement} />
-                </div>
-                <div class="flex gap-1">
-                    <Button color="alternative" size="xs" class="px-2" on:click={() => dispatch('findprev')} disabled={totalMatches === 0} title="Previous match">
-                        <ChevronUp size={16} />
-                    </Button>
-                    <Button color="alternative" size="xs" class="px-2" on:click={() => dispatch('findnext')} disabled={totalMatches === 0} title="Next match">
-                        <ChevronDown size={16} />
-                    </Button>
-                </div>
+            <div class="flex gap-1">
+              <Button
+                color="alternative"
+                size="xs"
+                class="px-2"
+                on:click={() => dispatch('findprev')}
+                disabled={totalMatches === 0}
+                title="Previous match"
+              >
+                <ChevronUp size={16} />
+              </Button>
+              <Button
+                color="alternative"
+                size="xs"
+                class="px-2"
+                on:click={() => dispatch('findnext')}
+                disabled={totalMatches === 0}
+                title="Next match"
+              >
+                <ChevronDown size={16} />
+              </Button>
             </div>
-            
-            <!-- Search Options Toggles -->
-            <div class="flex gap-2 pt-1">
-                <button
-                    type="button"
-                    class="toggle-btn {isCaseSensitive ? 'active' : ''}"
-                    on:click={toggleCaseSensitive}
-                    id="case-sensitive-toggle"
-                >
-                    <CaseSensitive size={16} />
-                    <Tooltip triggeredBy="#case-sensitive-toggle">Match Case</Tooltip>
-                </button>
-                <button
-                    type="button"
-                    class="toggle-btn {isRegex ? 'active' : ''}"
-                    on:click={toggleRegex}
-                    id="regex-toggle"
-                >
-                    <Regex size={16} />
-                    <Tooltip triggeredBy="#regex-toggle">Use Regular Expression</Tooltip>
-                </button>
-                <button
-                    type="button"
-                    class="toggle-btn {isWholeWord ? 'active' : ''}"
-                    on:click={toggleWholeWord}
-                    id="whole-word-toggle"
-                >
-                    <WholeWord size={16} />
-                    <Tooltip triggeredBy="#whole-word-toggle">Match Whole Word</Tooltip>
-                </button>
-            </div>
+          </div>
+
+          <!-- Search Options Toggles -->
+          <div class="flex gap-2 pt-1">
+            <button
+              type="button"
+              class="toggle-btn {isCaseSensitive ? 'active' : ''}"
+              on:click={toggleCaseSensitive}
+              id="case-sensitive-toggle"
+            >
+              <CaseSensitive size={16} />
+              <Tooltip triggeredBy="#case-sensitive-toggle">Match Case</Tooltip>
+            </button>
+            <button
+              type="button"
+              class="toggle-btn {isRegex ? 'active' : ''}"
+              on:click={toggleRegex}
+              id="regex-toggle"
+            >
+              <Regex size={16} />
+              <Tooltip triggeredBy="#regex-toggle">Use Regular Expression</Tooltip>
+            </button>
+            <button
+              type="button"
+              class="toggle-btn {isWholeWord ? 'active' : ''}"
+              on:click={toggleWholeWord}
+              id="whole-word-toggle"
+            >
+              <WholeWord size={16} />
+              <Tooltip triggeredBy="#whole-word-toggle">Match Whole Word</Tooltip>
+            </button>
+          </div>
         </div>
 
         <!-- Replace Section -->
-        <div class="space-y-2 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-            <Label for="replace-term-input">Replace with</Label>
-            <Input
-                id="replace-term-input"
-                type="text"
-                bind:value={replaceTerm}
-                placeholder="Replacement text..."
-                on:keydown={(e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (e.shiftKey) handleReplaceAll();
-                        else handleReplace();
-                    }
-                }}
-                autocomplete="off"
-            />
-            <input type="hidden" bind:this={replaceInputElement} />
-            <Helper class="text-[10px] italic">Press Enter to replace, Shift+Enter for Replace All</Helper>
+        <div
+          class="space-y-2 bg-gray-50 dark:bg-gray-800/40 p-4 rounded-xl border border-gray-100 dark:border-gray-800"
+        >
+          <Label for="replace-term-input">Replace with</Label>
+          <Input
+            id="replace-term-input"
+            type="text"
+            bind:value={replaceTerm}
+            placeholder="Replacement text..."
+            on:keydown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) handleReplaceAll();
+                else handleReplace();
+              }
+            }}
+            autocomplete="off"
+          />
+          <input type="hidden" bind:this={replaceInputElement} />
+          <Helper class="text-[10px] italic"
+            >Press Enter to replace, Shift+Enter for Replace All</Helper
+          >
         </div>
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md">
-        <Button color="alternative" on:click={closeModal} title="Close search">
-          Close
-        </Button>
+      <div
+        class="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-md"
+      >
+        <Button color="alternative" on:click={closeModal} title="Close search">Close</Button>
         <Button
           color="blue"
           on:click={handleReplace}

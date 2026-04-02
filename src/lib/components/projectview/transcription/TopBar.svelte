@@ -1,876 +1,784 @@
 <!-- src/lib/components/projectview/transcription/TopBar.svelte -->
 <script>
-	import { Button, Dropdown, DropdownItem } from "flowbite-svelte";
-	import {
-		MessageSquareText,
-		Share,
-		Languages,
-		Users,
-		LayoutDashboard,
-		SquareSplitHorizontal,
-		SquareSplitVertical,
-		Sun,
-		Moon,
-		Monitor,
-		AudioLines,
-		Rows2,
-		ChevronDown,
-	} from "@lucide/svelte";
-	// --- Svelte/Store Imports ---
-	import { createEventDispatcher, onMount } from "svelte";
-	import { get } from "svelte/store";
-	import panelStateStore from "$lib/stores/panelStateStore.js";
-	import { project } from "$lib/stores/projectStore.js"; // For project-level state like isLoading, files, isTranscribing
-	import {
-		transcriptStore,
-		setSelectedModel,
-		setSelectedLanguage,
-		updateSpeakerConfig,
-		selectMedia,
-		setTranslateToEnglish,
-		toggleTranslateModal,
-		toggleDualMode,
-		setDualTranscriptModal,
-		deactivateDualMode,
-	} from "$lib/stores/transcriptStore.js";
-	import {
-		themePreference,
-		cycleThemePreference,
-	} from "$lib/stores/themeStore.js";
-	import waveformLayoutStore from "$lib/stores/waveformLayoutStore.js";
-	import {
-		configStatus,
-		updateConfigStatus,
-	} from "$lib/stores/configStatusStore.js";
-	import { isLexicalEditMode } from "$lib/stores/mediaEditorStore.js";
-	import { Pencil, PencilOff } from "@lucide/svelte";
+  import { Button, Dropdown, DropdownItem } from 'flowbite-svelte';
+  import {
+    MessageSquareText,
+    Share,
+    Languages,
+    Users,
+    LayoutDashboard,
+    SquareSplitHorizontal,
+    SquareSplitVertical,
+    Sun,
+    Moon,
+    Monitor,
+    AudioLines,
+    Rows2,
+    ChevronDown
+  } from '@lucide/svelte';
+  // --- Svelte/Store Imports ---
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
+  import {
+    transcriptStore,
+    setSelectedModel,
+    setSelectedLanguage,
+    updateSpeakerConfig,
+    selectMedia,
+    setTranslateToEnglish,
+    toggleTranslateModal,
+    toggleDualMode,
+    setDualTranscriptModal,
+    deactivateDualMode
+  } from '$lib/stores/transcriptStore.js';
+  import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
+  import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
+  import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { Pencil, PencilOff } from '@lucide/svelte';
 
-	// --- Service Imports ---
-	import {
-		requestTranscription,
-		requestTranslation,
-	} from "$lib/services/projectService.js";
-	import {
-		getDownloadedModels,
-		exportTranscript,
-	} from "$lib/services/configureActions.js";
+  // --- Service Imports ---
+  import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
+  import { getDownloadedModels, exportTranscript } from '$lib/services/configureActions.js';
 
-	// --- Tauri Imports ---
-	import { message } from "@tauri-apps/plugin-dialog";
+  // --- Tauri Imports ---
+  import { message } from '@tauri-apps/plugin-dialog';
 
-	// --- Child Component Imports ---
+  // --- Child Component Imports ---
 
-	import SpeakersModal from "../modals/SpeakersModal.svelte";
-	import ExportModal from "../modals/ExportModal.svelte";
-	import DualTranscriptModal from "../modals/DualTranscriptModal.svelte";
-	import { activeLayout } from "$lib/stores/layoutStore.js";
-	import { languageOptions } from "$lib/constants/transcriptionOptions.js";
-	import { DOCX_LAYOUT_OPTIONS } from "$lib/constants/exportLayouts.js";
-	// import Dropdown from '$lib/components/shared/Dropdown.svelte';
-	import TranslateModal from "../modals/TranslateModal.svelte";
+  import SpeakersModal from '../modals/SpeakersModal.svelte';
+  import ExportModal from '../modals/ExportModal.svelte';
+  import DualTranscriptModal from '../modals/DualTranscriptModal.svelte';
+  import { activeLayout } from '$lib/stores/layoutStore.js';
+  import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+  import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
+  // import Dropdown from '$lib/components/shared/Dropdown.svelte';
+  import TranslateModal from '../modals/TranslateModal.svelte';
 
-	// --- Local state ---
-	const dispatch = createEventDispatcher();
-	let downloadedModelsList = [];
+  // --- Local state ---
+  const dispatch = createEventDispatcher();
+  let downloadedModelsList = [];
 
-	let isLoadingModels = true;
-	let isManageModalOpen = false;
-	let isSpeakersModalOpen = false;
-	let isExportModalOpen = false;
-	let transcriptsForModal = [];
-	let isLayoutDropdownOpen = false;
+  let isLoadingModels = true;
+  let isManageModalOpen = false;
+  let isSpeakersModalOpen = false;
+  let isExportModalOpen = false;
+  let transcriptsForModal = [];
+  let isLayoutDropdownOpen = false;
 
-	export function openTranslateModal() {
-		if ($transcriptStore.isTranslating) {
-			toggleTranslateModal(true);
-			return;
-		}
-		const selectedMedia = $transcriptStore.selectedMediaFile;
+  export function openTranslateModal() {
+    if ($transcriptStore.isTranslating) {
+      toggleTranslateModal(true);
+      return;
+    }
+    const selectedMedia = $transcriptStore.selectedMediaFile;
 
-		if (!selectedMedia?.relative_path) {
-			transcriptsForModal = [];
-			toggleTranslateModal(true);
-			return;
-		}
+    if (!selectedMedia?.relative_path) {
+      transcriptsForModal = [];
+      toggleTranslateModal(true);
+      return;
+    }
 
-		let foundFile = null;
-		function findFileByRelativePath(nodes, relativePath) {
-			for (const node of nodes) {
-				if (node.relative_path === relativePath) {
-					foundFile = node;
-					return;
-				}
-				if (node.children) {
-					findFileByRelativePath(node.children, relativePath);
-				}
-				if (foundFile) return;
-			}
-		}
+    let foundFile = null;
+    function findFileByRelativePath(nodes, relativePath) {
+      for (const node of nodes) {
+        if (node.relative_path === relativePath) {
+          foundFile = node;
+          return;
+        }
+        if (node.children) {
+          findFileByRelativePath(node.children, relativePath);
+        }
+        if (foundFile) return;
+      }
+    }
 
-		findFileByRelativePath(
-			$project.files || [],
-			selectedMedia.relative_path,
-		);
+    findFileByRelativePath($project.files || [], selectedMedia.relative_path);
 
-		if (foundFile && foundFile.associated_transcripts) {
-			transcriptsForModal = foundFile.associated_transcripts;
-			console.log("DEBUG: Transcripts for modal:", transcriptsForModal);
-		} else {
-			console.warn(
-				"DEBUG: No transcripts found for modal or foundFile missing:",
-				foundFile,
-			);
-			transcriptsForModal = [];
-		}
-		toggleTranslateModal(true);
-	}
+    if (foundFile && foundFile.associated_transcripts) {
+      transcriptsForModal = foundFile.associated_transcripts;
+      console.log('DEBUG: Transcripts for modal:', transcriptsForModal);
+    } else {
+      console.warn('DEBUG: No transcripts found for modal or foundFile missing:', foundFile);
+      transcriptsForModal = [];
+    }
+    toggleTranslateModal(true);
+  }
 
-	// Variable to hold transcript path for export modal
-	let transcriptPathForExport = "";
+  // Variable to hold transcript path for export modal
+  let transcriptPathForExport = '';
 
-	function handleAddBlankTranscript() {
-		console.log("Add Blank Transcript clicked");
-		// TODO: implement blank transcript creation
-	}
+  function handleAddBlankTranscript() {
+    console.log('Add Blank Transcript clicked');
+    // TODO: implement blank transcript creation
+  }
 
-	// --- Project Name ---
-	let displayTitle = "";
-	$: {
-		if ($project && $project.name) {
-			displayTitle = $project.name;
-		} else {
-			displayTitle = "Harvey";
-		}
-	}
+  // --- Project Name ---
+  let displayTitle = '';
+  $: {
+    if ($project && $project.name) {
+      displayTitle = $project.name;
+    } else {
+      displayTitle = 'Harvey';
+    }
+  }
 
-	// --- Load Configuration ---
-	async function loadConfiguration() {
-		isLoadingModels = true;
-		try {
-			const localModelsResult = await getDownloadedModels();
-			downloadedModelsList = localModelsResult;
-			console.log("TopBar: Loaded local models:", downloadedModelsList);
-		} catch (e) {
-			console.error("TopBar: Error during configuration loading:", e);
-			downloadedModelsList = [];
-		} finally {
-			isLoadingModels = false;
-			// validateSelectedModel();
+  // --- Load Configuration ---
+  async function loadConfiguration() {
+    isLoadingModels = true;
+    try {
+      const localModelsResult = await getDownloadedModels();
+      downloadedModelsList = localModelsResult;
+      console.log('TopBar: Loaded local models:', downloadedModelsList);
+    } catch (e) {
+      console.error('TopBar: Error during configuration loading:', e);
+      downloadedModelsList = [];
+    } finally {
+      isLoadingModels = false;
+      // validateSelectedModel();
 
-			// --- ADDED: Set Default Model and Language ---
-			const currentTranscriptState = get(transcriptStore); // Get current state non-reactively
+      // --- ADDED: Set Default Model and Language ---
+      const currentTranscriptState = get(transcriptStore); // Get current state non-reactively
 
-			// Set default model if none selected
-			if (!currentTranscriptState.selectedModelName) {
-				let defaultModel = downloadedModelsList[0]?.name; // Try first local model
-				if (defaultModel) {
-					console.log(
-						`[TopBar] No model selected, setting default: ${defaultModel}`,
-					);
-					setSelectedModel(defaultModel);
-				} else {
-					console.log(
-						"[TopBar] No model selected and no default available.",
-					);
-				}
-			} else {
-				console.log(
-					`[TopBar] Model already selected: ${currentTranscriptState.selectedModelName}`,
-				);
-			}
+      // Set default model if none selected
+      if (!currentTranscriptState.selectedModelName) {
+        let defaultModel = downloadedModelsList[0]?.name; // Try first local model
+        if (defaultModel) {
+          console.log(`[TopBar] No model selected, setting default: ${defaultModel}`);
+          setSelectedModel(defaultModel);
+        } else {
+          console.log('[TopBar] No model selected and no default available.');
+        }
+      } else {
+        console.log(`[TopBar] Model already selected: ${currentTranscriptState.selectedModelName}`);
+      }
 
-			// Set default language if none selected
-			if (!currentTranscriptState.selectedLanguage) {
-				console.log(
-					"[TopBar] No language selected, setting default: auto",
-				);
-				setSelectedLanguage("auto"); // Default to Auto Detect
-			} else {
-				console.log(
-					`[TopBar] Language already selected: ${currentTranscriptState.selectedLanguage}`,
-				);
-			}
-			// --- END ADDED ---
-		}
-	}
+      // Set default language if none selected
+      if (!currentTranscriptState.selectedLanguage) {
+        console.log('[TopBar] No language selected, setting default: auto');
+        setSelectedLanguage('auto'); // Default to Auto Detect
+      } else {
+        console.log(
+          `[TopBar] Language already selected: ${currentTranscriptState.selectedLanguage}`
+        );
+      }
+      // --- END ADDED ---
+    }
+  }
 
-	// --- Validate Selected Model ---
+  // --- Validate Selected Model ---
 
-	// --- Lifecycle ---
-	onMount(async () => {
-		await updateConfigStatus();
-		await loadConfiguration();
-	});
+  // --- Lifecycle ---
+  onMount(async () => {
+    await updateConfigStatus();
+    await loadConfiguration();
+  });
 
-	// --- Event Handlers ---
-	async function handleTranscribeClick() {
-		console.log("TopBar: Transcribe icon clicked");
-		if (!$transcriptStore.selectedMediaFile?.path) {
-			message("Please select a media file first.", {
-				title: "No Media Selected",
-				type: "warning",
-			});
-			return;
-		}
+  // --- Event Handlers ---
+  async function handleTranscribeClick() {
+    console.log('TopBar: Transcribe icon clicked');
+    if (!$transcriptStore.selectedMediaFile?.path) {
+      message('Please select a media file first.', {
+        title: 'No Media Selected',
+        type: 'warning'
+      });
+      return;
+    }
 
-		if (!$transcriptStore.selectedLanguage) {
-			message("Please select the audio language first.", {
-				title: "No Language Selected",
-				type: "warning",
-			});
-			return;
-		}
-		await requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
-	}
+    if (!$transcriptStore.selectedLanguage) {
+      message('Please select the audio language first.', {
+        title: 'No Language Selected',
+        type: 'warning'
+      });
+      return;
+    }
+    await requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
+  }
 
-	function openExportModal() {
-		if (
-			$transcriptStore.segments?.length > 0 &&
-			$transcriptStore.currentTranscriptPath
-		) {
-			console.log("Export icon clicked, opening export modal");
-			transcriptPathForExport = $transcriptStore.currentTranscriptPath;
-			isExportModalOpen = true;
-		} else {
-			console.log(
-				"Export icon clicked but no transcript loaded to export.",
-			);
-			message("No transcript data loaded to export.", {
-				title: "Cannot Export",
-				type: "info",
-			});
-		}
-	}
-	async function handleExportConfirm(event) {
-		const { filePath, format, layoutChoice, excludeSpeakerNames } =
-			event.detail;
-		console.log("TopBar: Export modal confirmed. Exporting:", {
-			filePath,
-			format,
-			layoutChoice,
-			excludeSpeakerNames,
-		});
-		const segmentsToExport = $transcriptStore.segments;
-		if (!segmentsToExport || segmentsToExport.length === 0) {
-			console.error(
-				"TopBar: Cannot export, no segments available in store.",
-			);
-			message("No transcript data available to export.", {
-				title: "Export Failed",
-				type: "error",
-			});
-			return;
-		}
-		try {
-			await exportTranscript(
-				filePath,
-				format,
-				segmentsToExport,
-				transcriptPathForExport,
-				layoutChoice,
-				excludeSpeakerNames,
-			);
-			console.log(
-				`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || "N/A"}, ExcludeSpeakers: ${excludeSpeakerNames}) successful.`,
-			);
-			message(`Transcript successfully exported to ${filePath}`, {
-				title: "Export Successful",
-				type: "info",
-			});
-		} catch (error) {
-			console.error(
-				`TopBar: Export failed to ${filePath} (${format}, Layout: ${layoutChoice || "N/A"}):`,
-				error,
-			);
-			message(`Failed to export transcript: ${error?.message || error}`, {
-				title: "Export Failed",
-				type: "error",
-			});
-		}
-	}
-	async function handleModelChange(event) {
-		const selectedValue = event.target.value;
-		if (selectedValue === "__manage__") {
-			console.log("TopBar: Manage Models selected");
-			isManageModalOpen = true;
-			event.target.value = $transcriptStore.selectedModelName || "";
-		} else {
-			const newModelIdentifier =
-				selectedValue === "" ? null : selectedValue;
-			console.log(
-				"TopBar: Selected model identifier:",
-				newModelIdentifier || "None",
-			);
-			setSelectedModel(newModelIdentifier);
-			const currentLang = $transcriptStore.selectedLanguage;
-			const localModelInfo = downloadedModelsList.find(
-				(m) => m.name === newModelIdentifier,
-			);
-			if (localModelInfo && currentLang && currentLang !== "en") {
-				console.log(
-					`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`,
-				);
-				await showModelInfoDialog(localModelInfo);
-			}
-		}
-	}
-	async function handleLanguageChange(event) {
-		const selectedValue = event.target.value;
-		const newLanguage = selectedValue === "" ? null : selectedValue;
-		console.log("TopBar: Selected language:", newLanguage || "None");
-		setSelectedLanguage(newLanguage);
-		const currentModelIdentifier = $transcriptStore.selectedModelName;
-		if (newLanguage && newLanguage !== "en" && currentModelIdentifier) {
-			const localModelInfo = downloadedModelsList.find(
-				(m) => m.name === currentModelIdentifier,
-			);
-			if (localModelInfo) {
-				console.log(
-					`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`,
-				);
-				await showModelInfoDialog(localModelInfo);
-			}
-		}
-	}
-	async function showModelInfoDialog(modelInfo) {
-		if (!modelInfo) return;
-		let infoMessage = `Model Information: ${modelInfo.name}\n\n`;
-		if (modelInfo.description && modelInfo.description.trim() !== "") {
-			infoMessage += `${modelInfo.description}\n\n`;
-		} else if (modelInfo.language && modelInfo.language.trim() !== "") {
-			infoMessage += `Primary Language Focus: ${modelInfo.language}\n`;
-		} else {
-			infoMessage += "General purpose model.\n";
-		}
-		if (modelInfo.size && modelInfo.size.trim() !== "") {
-			infoMessage += `Size: ${modelInfo.size}`;
-		}
-		if (
-			modelInfo.language &&
-			modelInfo.language.toLowerCase().includes("multilingual")
-		) {
-			infoMessage += "\n\nNote: This is a multilingual model.";
-		} else if (
-			modelInfo.language &&
-			!modelInfo.language.toLowerCase().startsWith("en")
-		) {
-			infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`;
-		}
-		infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`;
-		await message(infoMessage, {
-			title: `Model Info: ${modelInfo.name}`,
-			type: "info",
-			okLabel: "OK",
-		});
-	}
-	async function handleManageModalClose() {
-		console.log(
-			"TopBar: Manage Models modal closed. Refreshing ALL configuration...",
-		);
-		await loadConfiguration();
-	} // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
-	function openSpeakersModal() {
-		isSpeakersModalOpen = true;
-	}
-	function handleSpeakersConfirm(event) {
-		const { count, names, translatedNames } = event.detail;
-		console.log(
-			"TopBar: Confirmed speakers:",
-			count,
-			names,
-			translatedNames,
-		);
-		updateSpeakerConfig(count, names, translatedNames);
-	}
-	function handleMediaSelectionChange(selectedPath) {
-		if (!selectedPath) {
-			return;
-		}
-		const currentDropdownList = mediaFilesForDropdown;
-		const selectedFileEntry = currentDropdownList.find(
-			(f) => f.path === selectedPath,
-		);
+  function openExportModal() {
+    if ($transcriptStore.segments?.length > 0 && $transcriptStore.currentTranscriptPath) {
+      console.log('Export icon clicked, opening export modal');
+      transcriptPathForExport = $transcriptStore.currentTranscriptPath;
+      isExportModalOpen = true;
+    } else {
+      console.log('Export icon clicked but no transcript loaded to export.');
+      message('No transcript data loaded to export.', {
+        title: 'Cannot Export',
+        type: 'info'
+      });
+    }
+  }
+  async function handleExportConfirm(event) {
+    const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
+    console.log('TopBar: Export modal confirmed. Exporting:', {
+      filePath,
+      format,
+      layoutChoice,
+      excludeSpeakerNames
+    });
+    const segmentsToExport = $transcriptStore.segments;
+    if (!segmentsToExport || segmentsToExport.length === 0) {
+      console.error('TopBar: Cannot export, no segments available in store.');
+      message('No transcript data available to export.', {
+        title: 'Export Failed',
+        type: 'error'
+      });
+      return;
+    }
+    try {
+      await exportTranscript(
+        filePath,
+        format,
+        segmentsToExport,
+        transcriptPathForExport,
+        layoutChoice,
+        excludeSpeakerNames
+      );
+      console.log(
+        `TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}, ExcludeSpeakers: ${excludeSpeakerNames}) successful.`
+      );
+      message(`Transcript successfully exported to ${filePath}`, {
+        title: 'Export Successful',
+        type: 'info'
+      });
+    } catch (error) {
+      console.error(
+        `TopBar: Export failed to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}):`,
+        error
+      );
+      message(`Failed to export transcript: ${error?.message || error}`, {
+        title: 'Export Failed',
+        type: 'error'
+      });
+    }
+  }
+  async function handleModelChange(event) {
+    const selectedValue = event.target.value;
+    if (selectedValue === '__manage__') {
+      console.log('TopBar: Manage Models selected');
+      isManageModalOpen = true;
+      event.target.value = $transcriptStore.selectedModelName || '';
+    } else {
+      const newModelIdentifier = selectedValue === '' ? null : selectedValue;
+      console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None');
+      setSelectedModel(newModelIdentifier);
+      const currentLang = $transcriptStore.selectedLanguage;
+      const localModelInfo = downloadedModelsList.find((m) => m.name === newModelIdentifier);
+      if (localModelInfo && currentLang && currentLang !== 'en') {
+        console.log(
+          `TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`
+        );
+        await showModelInfoDialog(localModelInfo);
+      }
+    }
+  }
+  async function handleLanguageChange(event) {
+    const selectedValue = event.target.value;
+    const newLanguage = selectedValue === '' ? null : selectedValue;
+    console.log('TopBar: Selected language:', newLanguage || 'None');
+    setSelectedLanguage(newLanguage);
+    const currentModelIdentifier = $transcriptStore.selectedModelName;
+    if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) {
+      const localModelInfo = downloadedModelsList.find((m) => m.name === currentModelIdentifier);
+      if (localModelInfo) {
+        console.log(
+          `TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`
+        );
+        await showModelInfoDialog(localModelInfo);
+      }
+    }
+  }
+  async function showModelInfoDialog(modelInfo) {
+    if (!modelInfo) return;
+    let infoMessage = `Model Information: ${modelInfo.name}\n\n`;
+    if (modelInfo.description && modelInfo.description.trim() !== '') {
+      infoMessage += `${modelInfo.description}\n\n`;
+    } else if (modelInfo.language && modelInfo.language.trim() !== '') {
+      infoMessage += `Primary Language Focus: ${modelInfo.language}\n`;
+    } else {
+      infoMessage += 'General purpose model.\n';
+    }
+    if (modelInfo.size && modelInfo.size.trim() !== '') {
+      infoMessage += `Size: ${modelInfo.size}`;
+    }
+    if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) {
+      infoMessage += '\n\nNote: This is a multilingual model.';
+    } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) {
+      infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`;
+    }
+    infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`;
+    await message(infoMessage, {
+      title: `Model Info: ${modelInfo.name}`,
+      type: 'info',
+      okLabel: 'OK'
+    });
+  }
+  async function handleManageModalClose() {
+    console.log('TopBar: Manage Models modal closed. Refreshing ALL configuration...');
+    await loadConfiguration();
+  } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
+  function openSpeakersModal() {
+    isSpeakersModalOpen = true;
+  }
+  function handleSpeakersConfirm(event) {
+    const { count, names, translatedNames } = event.detail;
+    console.log('TopBar: Confirmed speakers:', count, names, translatedNames);
+    updateSpeakerConfig(count, names, translatedNames);
+  }
+  function handleMediaSelectionChange(selectedPath) {
+    if (!selectedPath) {
+      return;
+    }
+    const currentDropdownList = mediaFilesForDropdown;
+    const selectedFileEntry = currentDropdownList.find((f) => f.path === selectedPath);
 
-		if (selectedFileEntry) {
-			console.log(
-				"[TopBar] Media selected via dropdown:",
-				selectedFileEntry.name,
-			);
-			selectMedia(selectedFileEntry);
-		} else {
-			console.warn(
-				"[TopBar] Could not find FileEntry in dropdown list for selected path:",
-				selectedPath,
-			);
-		}
-	}
+    if (selectedFileEntry) {
+      console.log('[TopBar] Media selected via dropdown:', selectedFileEntry.name);
+      selectMedia(selectedFileEntry);
+    } else {
+      console.warn(
+        '[TopBar] Could not find FileEntry in dropdown list for selected path:',
+        selectedPath
+      );
+    }
+  }
 
-	// --- Helper computed values for binding ---
-	$: modelSelectValue = $transcriptStore.selectedModelName ?? "";
-	$: languageSelectValue = $transcriptStore.selectedLanguage ?? "";
+  // --- Helper computed values for binding ---
+  $: modelSelectValue = $transcriptStore.selectedModelName ?? '';
+  $: languageSelectValue = $transcriptStore.selectedLanguage ?? '';
 
-	// Ensure translateToEnglish is false if language is switched to English
-	$: if (
-		$transcriptStore.selectedLanguage === "en" &&
-		$transcriptStore.translateToEnglish
-	) {
-		setTranslateToEnglish(false);
-	}
+  // Ensure translateToEnglish is false if language is switched to English
+  $: if ($transcriptStore.selectedLanguage === 'en' && $transcriptStore.translateToEnglish) {
+    setTranslateToEnglish(false);
+  }
 
-	// --- Reactive check for Transcribe button disable state ---
-	$: isTranscribeDisabled = !$transcriptStore.selectedMediaFile?.path;
+  // --- Reactive check for Transcribe button disable state ---
+  $: isTranscribeDisabled = !$transcriptStore.selectedMediaFile?.path;
 
-	$: isExportDisabled =
-		!$transcriptStore.activeTranscript?.path ||
-		!$transcriptStore.segments ||
-		$transcriptStore.segments.length === 0 ||
-		$project.isTranscribing ||
-		$project.isLoading; // isTranscribing and isLoading can remain from projectStore
+  $: isExportDisabled =
+    !$transcriptStore.activeTranscript?.path ||
+    !$transcriptStore.segments ||
+    $transcriptStore.segments.length === 0 ||
+    $project.isTranscribing ||
+    $project.isLoading; // isTranscribing and isLoading can remain from projectStore
 
-	$: mediaFilesForDropdown = (() => {
-		const rootNodes = $project.files || []; // files list still comes from projectStore
-		const mediaFiles = [];
-		function findMediaFilesRecursive(nodes) {
-			for (const node of nodes) {
-				if (node.file_type === "media" && !node.is_directory) {
-					mediaFiles.push(node);
-				}
-				if (
-					node.children &&
-					Array.isArray(node.children) &&
-					node.children.length > 0
-				) {
-					findMediaFilesRecursive(node.children);
-				}
-			}
-		}
-		findMediaFilesRecursive(rootNodes);
-		mediaFiles.sort((a, b) => a.name.localeCompare(b.name));
-		return mediaFiles;
-	})();
+  $: mediaFilesForDropdown = (() => {
+    const rootNodes = $project.files || []; // files list still comes from projectStore
+    const mediaFiles = [];
+    function findMediaFilesRecursive(nodes) {
+      for (const node of nodes) {
+        if (node.file_type === 'media' && !node.is_directory) {
+          mediaFiles.push(node);
+        }
+        if (node.children && Array.isArray(node.children) && node.children.length > 0) {
+          findMediaFilesRecursive(node.children);
+        }
+      }
+    }
+    findMediaFilesRecursive(rootNodes);
+    mediaFiles.sort((a, b) => a.name.localeCompare(b.name));
+    return mediaFiles;
+  })();
 
-	$: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? "";
+  $: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? '';
 
-	// --- Theme Icons ---
-	$: currentThemeName =
-		$themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
-	$: nextThemeName =
-		$themePreference === "light"
-			? "Dark"
-			: $themePreference === "dark"
-				? "System"
-				: "Light";
-	$: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
+  // --- Theme Icons ---
+  $: currentThemeName = $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
+  $: nextThemeName =
+    $themePreference === 'light' ? 'Dark' : $themePreference === 'dark' ? 'System' : 'Light';
+  $: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
 
-	// --- Layout Button Icon ---
-	const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
+  // --- Layout Button Icon ---
+  const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
 
+  function cycleWaveformLayout() {
+    const layouts = ['none', 'horizontal', 'vertical'];
+    const currentIndex = layouts.indexOf($waveformLayoutStore);
+    const nextIndex = (currentIndex + 1) % layouts.length;
+    waveformLayoutStore.setLayout(layouts[nextIndex]);
+  }
 
-	function cycleWaveformLayout() {
-		const layouts = ["none", "horizontal", "vertical"];
-		const currentIndex = layouts.indexOf($waveformLayoutStore);
-		const nextIndex = (currentIndex + 1) % layouts.length;
-		waveformLayoutStore.setLayout(layouts[nextIndex]);
-	}
-
-	async function handleDualModeToggle() {
-		if ($transcriptStore.isDualModeActive) {
-			// If already active, deactivate
-			await deactivateDualMode();
-		} else {
-			// If not active, check for media first
-			if (!$transcriptStore.selectedMediaFile?.path) {
-				message("Please select a media file first.", {
-					title: "No Media Selected",
-					type: "warning",
-				});
-				return;
-			}
-			// Open the selection modal
-			setDualTranscriptModal(true);
-		}
-	}
+  async function handleDualModeToggle() {
+    if ($transcriptStore.isDualModeActive) {
+      // If already active, deactivate
+      await deactivateDualMode();
+    } else {
+      // If not active, check for media first
+      if (!$transcriptStore.selectedMediaFile?.path) {
+        message('Please select a media file first.', {
+          title: 'No Media Selected',
+          type: 'warning'
+        });
+        return;
+      }
+      // Open the selection modal
+      setDualTranscriptModal(true);
+    }
+  }
 </script>
 
 <div
-	class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
+  class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
 >
-	<!-- Drag Handle Background -->
-	<div class="absolute inset-0 z-0" data-tauri-drag-region></div>
+  <!-- Drag Handle Background -->
+  <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-	<!-- Section 1: Left Bar (w-12) — Import button -->
-	<div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
-		<button
-			type="button"
-			class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-			on:click={(e) => dispatch("requestImport", e)}
-			title="Import Audio or Video"
-			aria-label="Import Audio or Video"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke-width="2"
-				stroke="currentColor"
-				class="w-5 h-5"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					d="M12 4.5v15m7.5-7.5h-15"
-				/>
-			</svg>
-		</button>
-	</div>
+  <!-- Section 1: Left Bar (w-12) — Import button -->
+  <div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
+    <button
+      type="button"
+      class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      on:click={(e) => dispatch('requestImport', e)}
+      title="Import Audio or Video"
+      aria-label="Import Audio or Video"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="2"
+        stroke="currentColor"
+        class="w-5 h-5"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+    </button>
+  </div>
 
-	<!-- Sections 2 & 3 Combined: Middle Panel (flex-grow) -->
-	<div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
-		<!-- Left side: Project name + Media selection + Action buttons -->
-		<div class="flex items-center space-x-1.5">
-			<!-- Project name with bounded width properly accounting for previous px-2 padding -->
-			<div class="max-w-[15rem] flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out">
-				<span
-					class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
-					title={displayTitle}>{displayTitle}</span>
-			</div>
+  <!-- Sections 2 & 3 Combined: Middle Panel (flex-grow) -->
+  <div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">
+    <!-- Left side: Project name + Media selection + Action buttons -->
+    <div class="flex items-center space-x-1.5">
+      <!-- Project name with bounded width properly accounting for previous px-2 padding -->
+      <div
+        class="max-w-[15rem] flex-shrink-0 flex items-center overflow-hidden transition-all duration-300 ease-in-out"
+      >
+        <span
+          class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
+          title={displayTitle}>{displayTitle}</span
+        >
+      </div>
 
-			<!-- Media Selection Dropdown -->
-			<div class="relative">
-				<Button
-					id="media-selection-btn"
-					size="xs"
-					color="alternative"
-					class="w-[216px] justify-between px-3 !py-1.5 focus:ring-0"
-					disabled={$project.isLoading ||
-						mediaFilesForDropdown.length === 0}
-					title="Select Media"
-				>
-					<span class="truncate">
-						{#if $project.isLoading}
-							Loading...
-						{:else if mediaFilesForDropdown.length === 0}
-							No Media
-						{:else}
-							{mediaFilesForDropdown.find(
-								(f) => f.path === selectedMediaValue,
-							)?.name || "Select Media"}
-						{/if}
-					</span>
-					<ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
-				</Button>
-				{#if mediaFilesForDropdown.length > 0}
-					<Dropdown
-						triggeredBy="#media-selection-btn"
-						class="w-[216px] z-[1001] max-h-96 overflow-y-auto"
-					>
-						{#each mediaFilesForDropdown as f}
-							<DropdownItem
-								class="text-xs flex items-center {selectedMediaValue ===
-								f.path
-									? 'font-bold bg-blue-50 dark:bg-gray-700'
-									: ''}"
-								on:click={() => handleMediaSelectionChange(f.path)}
-							>
-								<span class="truncate">{f.name}</span>
-							</DropdownItem>
-						{/each}
-					</Dropdown>
-				{/if}
-			</div>
+      <!-- Media Selection Dropdown -->
+      <div class="relative">
+        <Button
+          id="media-selection-btn"
+          size="xs"
+          color="alternative"
+          class="w-[216px] justify-between px-3 !py-1.5 focus:ring-0"
+          disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
+          title="Select Media"
+        >
+          <span class="truncate">
+            {#if $project.isLoading}
+              Loading...
+            {:else if mediaFilesForDropdown.length === 0}
+              No Media
+            {:else}
+              {mediaFilesForDropdown.find((f) => f.path === selectedMediaValue)?.name ||
+                'Select Media'}
+            {/if}
+          </span>
+          <ChevronDown class="w-3.5 h-3.5 ml-2 text-gray-500 shrink-0" />
+        </Button>
+        {#if mediaFilesForDropdown.length > 0}
+          <Dropdown
+            triggeredBy="#media-selection-btn"
+            class="w-[216px] z-[1001] max-h-96 overflow-y-auto"
+          >
+            {#each mediaFilesForDropdown as f (f.path)}
+              <DropdownItem
+                class="text-xs flex items-center {selectedMediaValue === f.path
+                  ? 'font-bold bg-blue-50 dark:bg-gray-700'
+                  : ''}"
+                on:click={() => handleMediaSelectionChange(f.path)}
+              >
+                <span class="truncate">{f.name}</span>
+              </DropdownItem>
+            {/each}
+          </Dropdown>
+        {/if}
+      </div>
 
-			<!-- Speakers Button -->
-			<div class="relative inline-flex items-center">
-				<Button
-					size="xs"
-					color="alternative"
-					class="space-x-0.5 px-2 !py-1 relative"
-					on:click={openSpeakersModal}
-					disabled={mediaFilesForDropdown.length === 0}
-					title={mediaFilesForDropdown.length === 0 ? "No media available" : "Configure number of speakers and their names"}
-				>
-					<Users class="w-3.5 h-3.5" />
-					<span>Speakers</span>
-					<!-- Shorter Text -->
-					{#if $transcriptStore.speakers.count > 0}
-						<span
-							class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"
-						>
-							{$transcriptStore.speakers.count}
-						</span>
-					{/if}
-				</Button>
-			</div>
+      <!-- Speakers Button -->
+      <div class="relative inline-flex items-center">
+        <Button
+          size="xs"
+          color="alternative"
+          class="space-x-0.5 px-2 !py-1 relative"
+          on:click={openSpeakersModal}
+          disabled={mediaFilesForDropdown.length === 0}
+          title={mediaFilesForDropdown.length === 0
+            ? 'No media available'
+            : 'Configure number of speakers and their names'}
+        >
+          <Users class="w-3.5 h-3.5" />
+          <span>Speakers</span>
+          <!-- Shorter Text -->
+          {#if $transcriptStore.speakers.count > 0}
+            <span
+              class="absolute -top-1.5 -right-1.5 bg-blue-500 text-white rounded-full text-xxs w-4 h-4 flex items-center justify-center font-bold"
+            >
+              {$transcriptStore.speakers.count}
+            </span>
+          {/if}
+        </Button>
+      </div>
 
-			<!-- Transcribe Button -->
-			<Button
-				size="xs"
-				color="alternative"
-				class="space-x-0.5 px-2 !py-1"
-				on:click={handleTranscribeClick}
-				disabled={isTranscribeDisabled}
-				title={isTranscribeDisabled
-					? "Select media first"
-					: "Transcribe Media"}
-			>
-				{#if $transcriptStore.isTranscribing}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-3.5 h-3.5 animate-spin"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-						/>
-					</svg>
-					<span>Transcribing...</span>
-				{:else}
-					<MessageSquareText class="w-3.5 h-3.5" />
-					<span>Transcribe</span>
-				{/if}
-			</Button>
+      <!-- Transcribe Button -->
+      <Button
+        size="xs"
+        color="alternative"
+        class="space-x-0.5 px-2 !py-1"
+        on:click={handleTranscribeClick}
+        disabled={isTranscribeDisabled}
+        title={isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}
+      >
+        {#if $transcriptStore.isTranscribing}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="w-3.5 h-3.5 animate-spin"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+            />
+          </svg>
+          <span>Transcribing...</span>
+        {:else}
+          <MessageSquareText class="w-3.5 h-3.5" />
+          <span>Transcribe</span>
+        {/if}
+      </Button>
 
-			<!-- Translate Button -->
-			<Button
-				size="xs"
-				color="alternative"
-				class="space-x-0.5 px-2 !py-1"
-				on:click={openTranslateModal}
-				disabled={mediaFilesForDropdown.length === 0}
-				title={mediaFilesForDropdown.length === 0 ? "No media available" : ($transcriptStore.isTranslating
-					? "View Translation Status"
-					: "Translate Transcript")}
-			>
-				{#if $transcriptStore.isTranslating}
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-3.5 h-3.5 animate-spin"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-						/>
-					</svg>
-					<span>Translating...</span>
-				{:else}
-					<Languages class="w-3.5 h-3.5" />
-					<span>Translate</span>
-				{/if}
-			</Button>
-		</div>
+      <!-- Translate Button -->
+      <Button
+        size="xs"
+        color="alternative"
+        class="space-x-0.5 px-2 !py-1"
+        on:click={openTranslateModal}
+        disabled={mediaFilesForDropdown.length === 0}
+        title={mediaFilesForDropdown.length === 0
+          ? 'No media available'
+          : $transcriptStore.isTranslating
+            ? 'View Translation Status'
+            : 'Translate Transcript'}
+      >
+        {#if $transcriptStore.isTranslating}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="w-3.5 h-3.5 animate-spin"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+            />
+          </svg>
+          <span>Translating...</span>
+        {:else}
+          <Languages class="w-3.5 h-3.5" />
+          <span>Translate</span>
+        {/if}
+      </Button>
+    </div>
 
-		<!-- Right side: Controls -->
-		<div class="flex items-center space-x-1.5 flex-shrink-0">
-		<!-- Export Button -->
-		<Button
-			size="xs"
-			color="alternative"
-			class="space-x-0.5 px-2 !py-1"
-			on:click={openExportModal}
-			disabled={isExportDisabled}
-			title="Export Transcript"
-		>
-			<Share class="w-3.5 h-3.5" />
-			<span class="hidden xl:inline">Export</span>
-		</Button>
+    <!-- Right side: Controls -->
+    <div class="flex items-center space-x-1.5 flex-shrink-0">
+      <!-- Export Button -->
+      <Button
+        size="xs"
+        color="alternative"
+        class="space-x-0.5 px-2 !py-1"
+        on:click={openExportModal}
+        disabled={isExportDisabled}
+        title="Export Transcript"
+      >
+        <Share class="w-3.5 h-3.5" />
+        <span class="hidden xl:inline">Export</span>
+      </Button>
 
+      <!-- Dual Mode Toggle Button -->
+      <button
+        on:click={handleDualModeToggle}
+        class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive
+          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
+          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+        title="Compare Transcripts"
+      >
+        <Rows2 size={16} strokeWidth={2} />
+      </button>
 
-		<!-- Dual Mode Toggle Button -->
-		<button
-			on:click={handleDualModeToggle}
-			class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive
-				? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-				: 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-			title="Compare Transcripts"
-		>
-			<Rows2 size={16} strokeWidth={2} />
-		</button>
+      <!-- Layout Settings Button & Dropdown -->
+      <button
+        id="layout-settings-btn"
+        class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
+          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
+          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
+        title="Change Transcript View Layout"
+      >
+        <LayoutDashboard class="w-4 h-4" />
+      </button>
+      <Dropdown
+        bind:open={isLayoutDropdownOpen}
+        triggeredBy="#layout-settings-btn"
+        class="w-72 z-[1001] p-3 shadow-xl border border-gray-200 dark:border-gray-700"
+      >
+        <div class="mb-3 px-1">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Transcript Layout</h3>
+          <p class="text-xxs text-gray-500 dark:text-gray-400">
+            Select how the transcript appears on screen.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 gap-2">
+          {#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+            <button
+              type="button"
+              class="text-left p-3 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {$activeLayout ===
+              layout.rustLayoutKey
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400'
+                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
+              on:click={() => activeLayout.setLayout(layout.rustLayoutKey)}
+              title="Select {layout.name} layout"
+            >
+              <div
+                class="font-bold mb-1.5 text-xs {$activeLayout === layout.rustLayoutKey
+                  ? 'text-blue-700 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300'}"
+              >
+                {layout.name}
+              </div>
+              <div
+                class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800"
+              >
+                {#each layout.columnStyles as style (style.content)}
+                  <div
+                    class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center"
+                  >
+                    {style.content}
+                  </div>
+                {/each}
+              </div>
+              {#if $activeLayout === layout.rustLayoutKey}
+                <div class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      </Dropdown>
 
-		<!-- Layout Settings Button & Dropdown -->
-		<button
-			id="layout-settings-btn"
-			class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
-				? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
-				: 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
-			title="Change Transcript View Layout"
-		>
-			<LayoutDashboard class="w-4 h-4" />
-		</button>
-		<Dropdown
-			bind:open={isLayoutDropdownOpen}
-			triggeredBy="#layout-settings-btn"
-			class="w-72 z-[1001] p-3 shadow-xl border border-gray-200 dark:border-gray-700"
-		>
-			<div class="mb-3 px-1">
-				<h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-					Transcript Layout
-				</h3>
-				<p class="text-xxs text-gray-500 dark:text-gray-400">
-					Select how the transcript appears on screen.
-				</p>
-			</div>
-			<div class="grid grid-cols-1 gap-2">
-				{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
-					<button
-						type="button"
-						class="text-left p-3 border rounded-xl transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 group relative {$activeLayout ===
-						layout.rustLayoutKey
-							? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400'
-							: 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}"
-						on:click={() => activeLayout.setLayout(layout.rustLayoutKey)}
-						title="Select {layout.name} layout"
-					>
-						<div
-							class="font-bold mb-1.5 text-xs {$activeLayout ===
-							layout.rustLayoutKey
-								? 'text-blue-700 dark:text-blue-300'
-								: 'text-gray-700 dark:text-gray-300'}"
-						>
-							{layout.name}
-						</div>
-						<div
-							class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800"
-						>
-							{#each layout.columnStyles as style}
-								<div
-									class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center"
-								>
-									{style.content}
-								</div>
-							{/each}
-						</div>
-						{#if $activeLayout === layout.rustLayoutKey}
-							<div
-								class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"
-							></div>
-						{/if}
-					</button>
-				{/each}
-			</div>
-		</Dropdown>
+      <!-- Waveform Toggle Button -->
+      <button
+        on:click={cycleWaveformLayout}
+        class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$waveformLayoutStore ===
+        'none'
+          ? 'bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600'
+          : 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'}"
+        title="Toggle Waveform Panel ({$waveformLayoutStore})"
+      >
+        <div
+          class="transition-transform duration-200"
+          style="transform: rotate({$waveformLayoutStore === 'vertical' ? '90deg' : '0deg'})"
+        >
+          <AudioLines size={16} strokeWidth={2} />
+        </div>
+      </button>
 
-		<!-- Waveform Toggle Button -->
-		<button
-			on:click={cycleWaveformLayout}
-			class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$waveformLayoutStore ===
-			'none'
-				? 'bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600'
-				: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'}"
-			title="Toggle Waveform Panel ({$waveformLayoutStore})"
-		>
-			<div
-				class="transition-transform duration-200"
-				style="transform: rotate({$waveformLayoutStore === 'vertical'
-					? '90deg'
-					: '0deg'})"
-			>
-				<AudioLines size={16} strokeWidth={2} />
-			</div>
-		</button>
+      <!-- Read/Edit Mode Toggle -->
+      <button
+        id="read-edit-toggle-transcription"
+        on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
+        class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode
+          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
+          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+        title={$isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
+      >
+        {#if $isLexicalEditMode}
+          <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+          <span class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
+            >Edit Mode</span
+          >
+        {:else}
+          <PencilOff class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+          <span class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400"
+            >Read Mode</span
+          >
+        {/if}
+      </button>
+    </div>
+  </div>
 
-
-		<!-- Read/Edit Mode Toggle -->
-		<button
-			id="read-edit-toggle-transcription"
-			on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
-			class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode
-				? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-				: 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-			title={$isLexicalEditMode
-				? "Switch to Read Mode"
-				: "Switch to Edit Mode"}
-		>
-			{#if $isLexicalEditMode}
-				<Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-				<span
-					class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
-					>Edit Mode</span
-				>
-			{:else}
-				<PencilOff
-					class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400"
-				/>
-				<span
-					class="hidden xl:inline text-xs font-medium text-gray-500 dark:text-gray-400"
-					>Read Mode</span
-				>
-			{/if}
-		</button>
-
-
-		</div>
-	</div>
-
-	<!-- Section 4: Right Bar (w-8) — Theme Toggle -->
-	<div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
-		<button
-			on:click={cycleThemePreference}
-			class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-			title={themeTitle}
-			aria-label={themeTitle}
-		>
-			{#if $themePreference === "light"}
-				<Sun class="w-4 h-4" />
-			{:else if $themePreference === "dark"}
-				<Moon class="w-4 h-4" />
-			{:else}
-				<Monitor class="w-4 h-4" />
-			{/if}
-		</button>
-	</div>
+  <!-- Section 4: Right Bar (w-8) — Theme Toggle -->
+  <div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
+    <button
+      on:click={cycleThemePreference}
+      class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+      title={themeTitle}
+      aria-label={themeTitle}
+    >
+      {#if $themePreference === 'light'}
+        <Sun class="w-4 h-4" />
+      {:else if $themePreference === 'dark'}
+        <Moon class="w-4 h-4" />
+      {:else}
+        <Monitor class="w-4 h-4" />
+      {/if}
+    </button>
+  </div>
 </div>
 
 <!-- Modals -->
 
 <SpeakersModal
-	bind:showModal={isSpeakersModalOpen}
-	currentSpeakers={$transcriptStore.speakers}
-	on:confirm={handleSpeakersConfirm}
+  bind:showModal={isSpeakersModalOpen}
+  currentSpeakers={$transcriptStore.speakers}
+  on:confirm={handleSpeakersConfirm}
 />
 <ExportModal
-	bind:showModal={isExportModalOpen}
-	transcriptPath={transcriptPathForExport}
-	on:confirm={handleExportConfirm}
-	on:close={() => (isExportModalOpen = false)}
+  bind:showModal={isExportModalOpen}
+  transcriptPath={transcriptPathForExport}
+  on:confirm={handleExportConfirm}
+  on:close={() => (isExportModalOpen = false)}
 />
 
 <DualTranscriptModal />
 
 <TranslateModal
-	availableTranscripts={transcriptsForModal}
-	activeTranscriptPath={$transcriptStore.currentTranscriptPath}
-	on:confirm={async (e) => {
-		console.log("Translation confirmed:", e.detail);
-		await requestTranslation(
-			e.detail.transcript.path,
-			e.detail.model,
-			e.detail.targetLanguage,
-			e.detail.sourceLanguage,
-		);
-	}}
-	on:cancelRequest={() => dispatch("cancelTranslationRequest")}
-	on:openConfig={() => dispatch("openConfig")}
-	on:closeAndReset={() => toggleTranslateModal(false)}
-	on:runInBackgroundAndClose={() => {
-		dispatch("runTranslationInBackground");
-		toggleTranslateModal(false);
-	}}
+  availableTranscripts={transcriptsForModal}
+  activeTranscriptPath={$transcriptStore.currentTranscriptPath}
+  on:confirm={async (e) => {
+    console.log('Translation confirmed:', e.detail);
+    await requestTranslation(
+      e.detail.transcript.path,
+      e.detail.model,
+      e.detail.targetLanguage,
+      e.detail.sourceLanguage
+    );
+  }}
+  on:cancelRequest={() => dispatch('cancelTranslationRequest')}
+  on:openConfig={() => dispatch('openConfig')}
+  on:closeAndReset={() => toggleTranslateModal(false)}
+  on:runInBackgroundAndClose={() => {
+    dispatch('runTranslationInBackground');
+    toggleTranslateModal(false);
+  }}
 />
 
 <style lang="postcss">
-	:global(.hover-scale-effect) {
-		will-change: transform;
-		backface-visibility: hidden;
-		transform: translateZ(0);
-	}
+  :global(.hover-scale-effect) {
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
 </style>

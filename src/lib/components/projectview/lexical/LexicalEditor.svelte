@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/lexical/LexicalEditor.svelte -->
 <script>
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy, tick } from 'svelte';
   import {
     createEditor,
     $getRoot as _getRoot,
@@ -39,20 +39,20 @@
     createCommand,
     $isNodeSelection as _isNodeSelection,
     $createNodeSelection as _createNodeSelection,
-    $insertNodes as _insertNodes,
-  } from "lexical";
+    $insertNodes as _insertNodes
+  } from 'lexical';
 
   import {
     mergeRegister,
     $findMatchingParent as _findMatchingParent,
     $getNearestNodeOfType as _getNearestNodeOfType,
-    calculateZoomLevel,
-  } from "@lexical/utils";
+    calculateZoomLevel
+  } from '@lexical/utils';
 
-  import { $wrapNodes as _internalWrapNodes } from "@lexical/selection";
+  import { $wrapNodes as _internalWrapNodes } from '@lexical/selection';
   const _wrapNodes = _internalWrapNodes;
 
-  import * as lexicalCore from "lexical";
+  import * as lexicalCore from 'lexical';
   const _createTextNode = lexicalCore.$createTextNode;
 
   import {
@@ -62,13 +62,13 @@
     $createHeadingNode as _createHeadingNode,
     $createQuoteNode as _createQuoteNode,
     $isQuoteNode as _isQuoteNode,
-    registerRichText,
-  } from "@lexical/rich-text";
+    registerRichText
+  } from '@lexical/rich-text';
   import {
     CodeNode,
     $createCodeNode as _createCodeNode,
-    $isCodeNode as _isCodeNode,
-  } from "@lexical/code";
+    $isCodeNode as _isCodeNode
+  } from '@lexical/code';
   import {
     ListNode,
     ListItemNode,
@@ -80,8 +80,8 @@
     REMOVE_LIST_COMMAND,
     registerList,
     registerCheckList,
-    $createListNode as _createListNode,
-  } from "@lexical/list";
+    $createListNode as _createListNode
+  } from '@lexical/list';
   import {
     TableNode,
     TableRowNode,
@@ -98,64 +98,64 @@
     $computeTableMapSkipCellCheck as _computeTableMapSkipCellCheck,
     $getTableNodeFromLexicalNodeOrThrow as _getTableNodeFromLexicalNodeOrThrow,
     $getTableRowIndexFromTableCellNode as _getTableRowIndexFromTableCellNode,
-    $getTableColumnIndexFromTableCellNode as _getTableColumnIndexFromTableCellNode,
-  } from "@lexical/table";
+    $getTableColumnIndexFromTableCellNode as _getTableColumnIndexFromTableCellNode
+  } from '@lexical/table';
 
   import {
     LinkNode,
     $isLinkNode as _isLinkNode,
     TOGGLE_LINK_COMMAND,
     $createLinkNode as _createLinkNode,
-    toggleLink as _toggleLink,
-  } from "@lexical/link";
+    toggleLink as _toggleLink
+  } from '@lexical/link';
   import {
     $setBlocksType as _setBlocksType,
     $patchStyleText as _patchStyleText,
-    $getSelectionStyleValueForProperty as _getSelectionStyleValueForProperty,
-  } from "@lexical/selection";
-  import { $generateHtmlFromNodes as _generateHtmlFromNodes } from "@lexical/html";
-  import { createEmptyHistoryState, registerHistory } from "@lexical/history";
-  import { createEventDispatcher } from "svelte";
-  import { v4 as uuidv4 } from "uuid";
+    $getSelectionStyleValueForProperty as _getSelectionStyleValueForProperty
+  } from '@lexical/selection';
+  import { $generateHtmlFromNodes as _generateHtmlFromNodes } from '@lexical/html';
+  import { createEmptyHistoryState, registerHistory } from '@lexical/history';
+  import { createEventDispatcher } from 'svelte';
+  import { v4 as uuidv4 } from 'uuid';
 
   import {
     ExtendedTextNode,
     $createExtendedTextNode as _createExtendedTextNode,
-    $isExtendedTextNode as _isExtendedTextNode,
-  } from "$lib/nodes/ExtendedTextNode.js";
+    $isExtendedTextNode as _isExtendedTextNode
+  } from '$lib/nodes/ExtendedTextNode.js';
 
   import {
     HorizontalRuleNode,
-    $createHorizontalRuleNode as _createHorizontalRuleNode,
-  } from "$lib/nodes/HorizontalRuleNode.js";
+    $createHorizontalRuleNode as _createHorizontalRuleNode
+  } from '$lib/nodes/HorizontalRuleNode.js';
   import {
     ImageNode,
     $createImageNode as _createImageNode,
-    $isImageNode as _isImageNode,
-  } from "$lib/nodes/ImageNode.js";
+    $isImageNode as _isImageNode
+  } from '$lib/nodes/ImageNode.js';
   import {
     DateNode,
     $createDateNode as _createDateNode,
-    $isDateNode as _isDateNode,
-  } from "$lib/nodes/DateNode.js";
+    $isDateNode as _isDateNode
+  } from '$lib/nodes/DateNode.js';
   import {
     EquationNode,
     $createEquationNode as _createEquationNode,
-    $isEquationNode as _isEquationNode,
-  } from "$lib/nodes/EquationNode.js";
-  import { DOCX_LAYOUT_COLUMN_CONFIGS } from "$lib/constants/exportLayouts.js";
-  import { SHARED_NODES } from "$lib/nodes/LexicalConfig.js";
+    $isEquationNode as _isEquationNode
+  } from '$lib/nodes/EquationNode.js';
+  import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
+  import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
 
-  import LinkModal from "../modals/LinkModal.svelte";
-  import InsertTableModal from "../modals/InsertTableModal.svelte";
-  import InsertImageModal from "./InsertImageModal.svelte";
-  import InsertEquationModal from "./InsertEquationModal.svelte";
-  import DatePromptModal from "../modals/DatePromptModal.svelte";
-  import FindReplaceModal from "../modals/FindReplaceModal.svelte";
-  import TableCellActionMenu from "./TableCellActionMenu.svelte";
-  import FloatingHighlightToolbar from "./FloatingHighlightToolbar.svelte";
-  import FloatingModifyHighlightToolbar from "./FloatingModifyHighlightToolbar.svelte";
-  import notificationStore from "$lib/stores/notificationStore.js";
+  import LinkModal from '../modals/LinkModal.svelte';
+  import InsertTableModal from '../modals/InsertTableModal.svelte';
+  import InsertImageModal from './InsertImageModal.svelte';
+  import InsertEquationModal from './InsertEquationModal.svelte';
+  import DatePromptModal from '../modals/DatePromptModal.svelte';
+  import FindReplaceModal from '../modals/FindReplaceModal.svelte';
+  import TableCellActionMenu from './TableCellActionMenu.svelte';
+  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
+  import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
+  import notificationStore from '$lib/stores/notificationStore.js';
   import {
     Undo2,
     Redo2,
@@ -198,13 +198,13 @@
     CaseSensitive,
     Subscript as SubscriptIcon,
     Superscript as SuperscriptIcon,
-    CalendarDays,
-  } from "@lucide/svelte";
+    CalendarDays
+  } from '@lucide/svelte';
   export let initialJson = null;
   export let editable = true;
   export let allowReadModeHighlights = false;
-  export let placeholder = "Enter text...";
-  export let activeLayout = "Layout1"; // New prop
+  export let placeholder = 'Enter text...';
+  export let activeLayout = 'Layout1'; // New prop
   export let toolbarConfig = {
     undo: true,
     redo: true,
@@ -222,14 +222,14 @@
     textColor: true,
     highlight: true,
     clearFormatting: true,
-    search: true,
+    search: true
   };
   export let enableTableCellMenu = false;
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
   export let enableSegmentPlayback = false; // New prop
-  export let backgroundClass = "bg-white dark:bg-gray-900";
+  export let backgroundClass = 'bg-white dark:bg-gray-900';
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];
@@ -254,21 +254,21 @@
   let isStrikethrough = false;
   let isLink = false;
   let showLinkModal = false;
-  let currentModalUrl = "";
+  let currentModalUrl = '';
   let isEditingLink = false;
 
   let showSearchBox = false;
-  let searchTerm = "";
+  let searchTerm = '';
   let searchResults = [];
   let currentSearchResultIndex = -1;
   let showFindReplaceModal = false;
   let showSearchOptionsDropdown = false;
   let searchOptionsDropdownRef;
 
-  const SEARCH_MATCH_BACKGROUND_LIGHT = "rgba(255, 215, 0, 0.4)";
-  const SEARCH_MATCH_BACKGROUND_DARK = "rgba(75, 125, 175, 0.4)";
+  const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)';
+  const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';
 
-  let blockType = "paragraph";
+  let blockType = 'paragraph';
   let isBlockDropdownOpen = false;
   let blockDropdownRef;
 
@@ -284,10 +284,8 @@
   let tableCellMenuPosition = { top: 0, left: 0 };
   let activeTableCellKey = null;
 
-  const INSERT_HORIZONTAL_RULE_COMMAND = createCommand(
-    "INSERT_HORIZONTAL_RULE_COMMAND",
-  );
-  const INSERT_DATE_COMMAND = createCommand("INSERT_DATE_COMMAND");
+  const INSERT_HORIZONTAL_RULE_COMMAND = createCommand('INSERT_HORIZONTAL_RULE_COMMAND');
+  const INSERT_DATE_COMMAND = createCommand('INSERT_DATE_COMMAND');
 
   let searchUiContainerElement;
   let searchToggleButtonElement;
@@ -311,18 +309,18 @@
   let showDateModal = false;
   let dateNodeToEditKey = null;
   let lastUsedDateConfig = {
-    format: "YYYY-MM-DD",
+    format: 'YYYY-MM-DD',
     showTime: false,
-    timeFormat: "HH:mm",
+    timeFormat: 'HH:mm'
   };
   let dateInitialData = {
     date: new Date().toISOString(),
-    ...lastUsedDateConfig,
+    ...lastUsedDateConfig
   };
 
   let showInsertEquationModal = false;
   let equationNodeToEditKey = null;
-  let equationInitialData = { equation: "", inline: true };
+  let equationInitialData = { equation: '', inline: true };
 
   let savedImageSelection = null;
 
@@ -330,7 +328,7 @@
   let resizeDirection = null;
   let resizeTargetCellKey = null;
   let resizeStartPos = { x: 0, y: 0 };
-  let resizerLineStyle = "display: none;";
+  let resizerLineStyle = 'display: none;';
 
   let showModifyToolbar = false;
   let modifyToolbarPosition = { top: 0, left: 0 };
@@ -358,7 +356,7 @@
   export const editorNodes = SHARED_NODES;
 
   function handleShortcut(event) {
-    if (event.key === "Escape") {
+    if (event.key === 'Escape') {
       showCreateToolbar = false;
       showModifyToolbar = false;
       clickedNodeKey = null;
@@ -369,17 +367,17 @@
 
     if (mod && event.altKey) {
       const map = {
-        "0": "paragraph",
-        "1": "h1",
-        "2": "h2",
-        "3": "h3",
-        "4": "ul",
-        "5": "ol",
-        q: "quote",
-        c: "code",
+        '0': 'paragraph',
+        '1': 'h1',
+        '2': 'h2',
+        '3': 'h3',
+        '4': 'ul',
+        '5': 'ol',
+        q: 'quote',
+        c: 'code'
       };
       const key =
-        event.code && event.code.startsWith("Digit")
+        event.code && event.code.startsWith('Digit')
           ? event.code.slice(5)
           : event.key.toLowerCase();
       const type = map[key];
@@ -389,27 +387,22 @@
         return;
       }
     }
-    if (
-      mod &&
-      !event.shiftKey &&
-      !event.altKey &&
-      event.key.toLowerCase() === "k"
-    ) {
+    if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       toggleLink();
       return;
     }
-    if (mod && event.key === "]") {
+    if (mod && event.key === ']') {
       event.preventDefault();
       indentContent();
       return;
     }
-    if (mod && event.key === "[") {
+    if (mod && event.key === '[') {
       event.preventDefault();
       outdentContent();
       return;
     }
-    if (event.key === "Tab") {
+    if (event.key === 'Tab') {
       event.preventDefault();
       if (event.shiftKey) {
         outdentContent();
@@ -431,7 +424,7 @@
       searchOptionsDropdownRef,
       fontDropdownRef,
       fontSizeDropdownRef,
-      textFormatDropdownRef,
+      textFormatDropdownRef
     ];
 
     let clickedInsideDropdown = false;
@@ -473,7 +466,7 @@
     }
     const domElement = editor.getElementByKey(selectedImageKey);
     if (domElement) {
-      const img = domElement.querySelector("img");
+      const img = domElement.querySelector('img');
       if (img) {
         const rect = img.getBoundingClientRect();
         const wrapperRect = editorWrapper.getBoundingClientRect();
@@ -481,7 +474,7 @@
           top: rect.top - wrapperRect.top + editorWrapper.scrollTop,
           left: rect.left - wrapperRect.left + editorWrapper.scrollLeft,
           width: rect.width,
-          height: rect.height,
+          height: rect.height
         };
         return;
       }
@@ -500,10 +493,10 @@
       height: imageResizerRect.height,
       x: event.clientX,
       y: event.clientY,
-      ratio: imageResizerRect.width / imageResizerRect.height,
+      ratio: imageResizerRect.width / imageResizerRect.height
     };
-    window.addEventListener("pointermove", handleImageResizeMove);
-    window.addEventListener("pointerup", handleImageResizeEnd);
+    window.addEventListener('pointermove', handleImageResizeMove);
+    window.addEventListener('pointerup', handleImageResizeEnd);
   }
 
   function handleImageResizeMove(event) {
@@ -513,9 +506,9 @@
     const deltaX = event.clientX - imageResizeStartParams.x;
     let newWidth = imageResizeStartParams.width;
 
-    if (imageResizeDirection === "se" || imageResizeDirection === "ne") {
+    if (imageResizeDirection === 'se' || imageResizeDirection === 'ne') {
       newWidth += deltaX;
-    } else if (imageResizeDirection === "sw" || imageResizeDirection === "nw") {
+    } else if (imageResizeDirection === 'sw' || imageResizeDirection === 'nw') {
       newWidth -= deltaX;
     }
 
@@ -525,15 +518,15 @@
     imageResizerRect = {
       ...imageResizerRect,
       width: newWidth,
-      height: newHeight,
+      height: newHeight
     };
   }
 
   function handleImageResizeEnd(event) {
     if (!isResizingImage) return;
     isResizingImage = false;
-    window.removeEventListener("pointermove", handleImageResizeMove);
-    window.removeEventListener("pointerup", handleImageResizeEnd);
+    window.removeEventListener('pointermove', handleImageResizeMove);
+    window.removeEventListener('pointerup', handleImageResizeEnd);
 
     if (editor && selectedImageKey && imageResizerRect) {
       editor.update(() => {
@@ -541,7 +534,7 @@
         if (_isImageNode(node)) {
           node.setWidthAndHeight(
             Math.round(imageResizerRect.width),
-            Math.round(imageResizerRect.height),
+            Math.round(imageResizerRect.height)
           );
         }
       });
@@ -577,7 +570,7 @@
   function applyTextFormat(formatType) {
     if (!editor || !isReady || !editor.isEditable()) return;
 
-    if (["strikethrough", "subscript", "superscript"].includes(formatType)) {
+    if (['strikethrough', 'subscript', 'superscript'].includes(formatType)) {
       editor.dispatchCommand(FORMAT_TEXT_COMMAND, formatType);
     } else {
       editor.update(() => {
@@ -587,14 +580,12 @@
           nodes.forEach((node) => {
             if (_isTextNode(node)) {
               let text = node.getTextContent();
-              if (formatType === "uppercase") text = text.toUpperCase();
-              else if (formatType === "lowercase") text = text.toLowerCase();
-              else if (formatType === "capitalize") {
+              if (formatType === 'uppercase') text = text.toUpperCase();
+              else if (formatType === 'lowercase') text = text.toLowerCase();
+              else if (formatType === 'capitalize') {
                 text = text.replace(/\b\w/g, (c) => c.toUpperCase());
-              } else if (formatType === "sentencecase") {
-                text = text
-                  .toLowerCase()
-                  .replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase());
+              } else if (formatType === 'sentencecase') {
+                text = text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase());
               }
               node.setTextContent(text);
             }
@@ -623,7 +614,7 @@
     const { rows, columns } = event.detail;
     editor.dispatchCommand(INSERT_TABLE_COMMAND, {
       rows: String(rows),
-      columns: String(columns),
+      columns: String(columns)
     });
     showInsertTableModal = false;
   }
@@ -634,11 +625,11 @@
       return;
     }
     try {
-      const highlightsJson = await invoke("load_lexical_highlights", {
+      const highlightsJson = await invoke('load_lexical_highlights', {
         args: {
           projectId: get(project).id,
-          documentPath,
-        },
+          documentPath
+        }
       });
       if (highlightsJson && editor) {
         const highlights = JSON.parse(highlightsJson);
@@ -654,89 +645,88 @@
         });
       }
     } catch (error) {
-      console.error("Error loading highlights:", error);
+      console.error('Error loading highlights:', error);
     } finally {
       areHighlightsReady = true;
     }
   }
 
-  let selectedAlignment = "left";
-  let selectedTextColor = "#000000";
-  let selectedHighlightColor = "transparent";
+  let selectedAlignment = 'left';
+  let selectedTextColor = '#000000';
+  let selectedHighlightColor = 'transparent';
 
   const isMac =
-    typeof navigator !== "undefined" &&
-    navigator.platform.toUpperCase().includes("MAC");
-  const optLabel = isMac ? "Opt" : "Alt";
-  const modLabel = isMac ? "⌘" : "Ctrl";
+    typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
+  const optLabel = isMac ? 'Opt' : 'Alt';
+  const modLabel = isMac ? '⌘' : 'Ctrl';
 
   const blockTypeOptions = [
     {
-      value: "paragraph",
-      label: "Normal",
-      shortcut: `${modLabel}+${optLabel}+0`,
+      value: 'paragraph',
+      label: 'Normal',
+      shortcut: `${modLabel}+${optLabel}+0`
     },
-    { value: "h1", label: "Heading 1", shortcut: `${modLabel}+${optLabel}+1` },
-    { value: "h2", label: "Heading 2", shortcut: `${modLabel}+${optLabel}+2` },
-    { value: "h3", label: "Heading 3", shortcut: `${modLabel}+${optLabel}+3` },
+    { value: 'h1', label: 'Heading 1', shortcut: `${modLabel}+${optLabel}+1` },
+    { value: 'h2', label: 'Heading 2', shortcut: `${modLabel}+${optLabel}+2` },
+    { value: 'h3', label: 'Heading 3', shortcut: `${modLabel}+${optLabel}+3` },
     {
-      value: "ul",
-      label: "Bullet List",
-      shortcut: `${modLabel}+${optLabel}+4`,
+      value: 'ul',
+      label: 'Bullet List',
+      shortcut: `${modLabel}+${optLabel}+4`
     },
     {
-      value: "ol",
-      label: "Numbered List",
-      shortcut: `${modLabel}+${optLabel}+5`,
+      value: 'ol',
+      label: 'Numbered List',
+      shortcut: `${modLabel}+${optLabel}+5`
     },
-    { value: "check", label: "Check List", shortcut: "" },
-    { value: "quote", label: "Quote", shortcut: `${modLabel}+${optLabel}+Q` },
+    { value: 'check', label: 'Check List', shortcut: '' },
+    { value: 'quote', label: 'Quote', shortcut: `${modLabel}+${optLabel}+Q` },
     {
-      value: "code",
-      label: "Code Block",
-      shortcut: `${modLabel}+${optLabel}+C`,
-    },
+      value: 'code',
+      label: 'Code Block',
+      shortcut: `${modLabel}+${optLabel}+C`
+    }
   ];
 
-  import { Image as ImageIcon, Sigma } from "@lucide/svelte";
+  import { Image as ImageIcon, Sigma } from '@lucide/svelte';
 
   const insertOptions = [
     {
-      value: "table",
-      label: "Table",
+      value: 'table',
+      label: 'Table',
       action: openInsertTableDialog,
-      iconComponent: TableIcon,
+      iconComponent: TableIcon
     },
     {
-      value: "hr",
-      label: "Horizontal Rule",
+      value: 'hr',
+      label: 'Horizontal Rule',
       action: insertHorizontalRule,
-      iconComponent: Minus,
+      iconComponent: Minus
     },
     {
-      value: "date",
-      label: "Date",
+      value: 'date',
+      label: 'Date',
       action: openInsertDateDialog,
-      iconComponent: CalendarDays,
+      iconComponent: CalendarDays
     },
     {
-      value: "link",
-      label: "Link",
+      value: 'link',
+      label: 'Link',
       action: toggleLink,
-      iconComponent: LinkIcon,
+      iconComponent: LinkIcon
     },
     {
-      value: "image",
-      label: "Image",
+      value: 'image',
+      label: 'Image',
       action: insertImage,
-      iconComponent: ImageIcon,
+      iconComponent: ImageIcon
     },
     {
-      value: "equation",
-      label: "Equation",
+      value: 'equation',
+      label: 'Equation',
       action: openInsertEquationDialog,
-      iconComponent: Sigma,
-    },
+      iconComponent: Sigma
+    }
   ];
 
   async function insertImage() {
@@ -764,7 +754,7 @@
 
   function openInsertEquationDialog() {
     equationNodeToEditKey = null;
-    equationInitialData = { equation: "", inline: true };
+    equationInitialData = { equation: '', inline: true };
     showInsertEquationModal = true;
     isInsertDropdownOpen = false;
   }
@@ -793,8 +783,7 @@
     equationNodeToEditKey = null;
   }
   function handleDateConfirm(event) {
-    const { date, format, showTime, timeFormat, displayValue, insertAsText } =
-      event.detail;
+    const { date, format, showTime, timeFormat, displayValue, insertAsText } = event.detail;
 
     // Remember last used config
     lastUsedDateConfig = { format, showTime, timeFormat };
@@ -824,13 +813,7 @@
           const textNode = _createTextNode(displayValue);
           _insertNodes([textNode]);
         } else {
-          const dateNode = _createDateNode(
-            date,
-            format,
-            showTime,
-            timeFormat,
-            displayValue,
-          );
+          const dateNode = _createDateNode(date, format, showTime, timeFormat, displayValue);
           _insertNodes([dateNode]);
         }
       });
@@ -882,16 +865,14 @@
       const projectStoreState = get(project);
       let relPath = documentPath;
       if (documentPath.startsWith(projectStoreState.baseDirectory)) {
-        relPath = documentPath.substring(
-          projectStoreState.baseDirectory.length,
-        );
-        relPath = relPath.replace(/\\/g, "/").replace(/^\//, "");
+        relPath = documentPath.substring(projectStoreState.baseDirectory.length);
+        relPath = relPath.replace(/\\/g, '/').replace(/^\//, '');
       }
 
-      const uploadedPath = await invoke("upload_attachment", {
+      const uploadedPath = await invoke('upload_attachment', {
         projectXmlPathStr: projectStoreState.xmlPath,
         assetRelativePath: relPath,
-        sourceFilePathStr: path,
+        sourceFilePathStr: path
       });
 
       if (uploadedPath) {
@@ -913,15 +894,12 @@
           }
         });
 
-        dispatch("attachmentadded");
+        dispatch('attachmentadded');
         triggerRefresh();
       }
     } catch (error) {
-      console.error("Error inserting external image:", error);
-      notificationStore.add(
-        `Failed to insert global/local image: ${error}`,
-        "error",
-      );
+      console.error('Error inserting external image:', error);
+      notificationStore.add(`Failed to insert global/local image: ${error}`, 'error');
     }
   }
 
@@ -934,77 +912,77 @@
     ol: ListOrdered,
     check: ListChecks,
     quote: QuoteIcon,
-    code: CodeIcon,
+    code: CodeIcon
   };
 
   const fontOptions = [
-    { label: "Inter", value: "Inter" },
-    { label: "Anton", value: "Anton" },
-    { label: "Arial", value: "Arial, Helvetica, sans-serif" },
-    { label: "Bangers", value: "Bangers" },
+    { label: 'Inter', value: 'Inter' },
+    { label: 'Anton', value: 'Anton' },
+    { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+    { label: 'Bangers', value: 'Bangers' },
     {
-      label: "Calibri",
-      value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif',
+      label: 'Calibri',
+      value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif'
     },
-    { label: "Comic Neue", value: "'Comic Neue'" },
-    { label: "Comic Sans", value: '"Comic Sans MS", "Comic Sans", cursive' },
+    { label: 'Comic Neue', value: "'Comic Neue'" },
+    { label: 'Comic Sans', value: '"Comic Sans MS", "Comic Sans", cursive' },
     {
-      label: "Console",
-      value: 'Monaco, Consolas, "Lucida Console", monospace',
+      label: 'Console',
+      value: 'Monaco, Consolas, "Lucida Console", monospace'
     },
-    { label: "Courier Prime", value: "'Courier Prime'" },
-    { label: "Dancing Script", value: "'Dancing Script'" },
-    { label: "Indie Flower", value: "'Indie Flower'" },
-    { label: "JetBrains Mono", value: "'JetBrains Mono'" },
-    { label: "Merriweather", value: "'Merriweather'" },
-    { label: "Montserrat", value: "Montserrat" },
+    { label: 'Courier Prime', value: "'Courier Prime'" },
+    { label: 'Dancing Script', value: "'Dancing Script'" },
+    { label: 'Indie Flower', value: "'Indie Flower'" },
+    { label: 'JetBrains Mono', value: "'JetBrains Mono'" },
+    { label: 'Merriweather', value: "'Merriweather'" },
+    { label: 'Montserrat', value: 'Montserrat' },
     {
-      label: "Palatino Linotype",
-      value: '"Palatino Linotype", "Book Antiqua", Palatino, serif',
+      label: 'Palatino Linotype',
+      value: '"Palatino Linotype", "Book Antiqua", Palatino, serif'
     },
-    { label: "Playfair Display", value: "'Playfair Display'" },
-    { label: "Roboto", value: "Roboto" },
-    { label: "Roboto Slab", value: "'Roboto Slab'" },
-    { label: "Times New Roman", value: '"Times New Roman", Times, serif' },
+    { label: 'Playfair Display', value: "'Playfair Display'" },
+    { label: 'Roboto', value: 'Roboto' },
+    { label: 'Roboto Slab', value: "'Roboto Slab'" },
+    { label: 'Times New Roman', value: '"Times New Roman", Times, serif' }
   ];
 
   const fontSizeOptions = [
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-    "15",
-    "16",
-    "17",
-    "18",
-    "19",
-    "20",
-    "22",
-    "24",
-    "26",
-    "28",
-    "30",
-    "32",
-    "36",
-    "40",
-    "48",
-    "64",
-    "72",
-    "96",
+    '10',
+    '11',
+    '12',
+    '13',
+    '14',
+    '15',
+    '16',
+    '17',
+    '18',
+    '19',
+    '20',
+    '22',
+    '24',
+    '26',
+    '28',
+    '30',
+    '32',
+    '36',
+    '40',
+    '48',
+    '64',
+    '72',
+    '96'
   ];
 
   const alignmentOptions = [
-    { value: "left", label: "Left" },
-    { value: "center", label: "Center" },
-    { value: "right", label: "Right" },
-    { value: "justify", label: "Justify" },
+    { value: 'left', label: 'Left' },
+    { value: 'center', label: 'Center' },
+    { value: 'right', label: 'Right' },
+    { value: 'justify', label: 'Justify' }
   ];
   const alignmentIcons = {
-    left: "left",
-    center: "center",
-    right: "right",
-    justify: "justify",
+    left: 'left',
+    center: 'center',
+    right: 'right',
+    justify: 'justify'
   };
 
   let isAlignDropdownOpen = false;
@@ -1016,7 +994,7 @@
     isAlignDropdownOpen = nextState;
   }
 
-  let selectedFontFamily = "Inter";
+  let selectedFontFamily = 'Inter';
   let isFontDropdownOpen = false;
   let fontDropdownRef;
 
@@ -1029,11 +1007,11 @@
 
   function applyFontFamily(fontFamily) {
     if (!editor || !isReady || !editor.isEditable()) return;
-    applyStyle("font-family", fontFamily);
+    applyStyle('font-family', fontFamily);
     isFontDropdownOpen = false;
   }
 
-  let selectedFontSize = "15";
+  let selectedFontSize = '15';
   let isFontSizeDropdownOpen = false;
   let fontSizeDropdownRef;
 
@@ -1054,7 +1032,7 @@
       }
       const normalizedSelection = _getSelection();
       if (_isRangeSelection(normalizedSelection)) {
-        _patchStyleText(normalizedSelection, { "font-size": fontSize + "px" });
+        _patchStyleText(normalizedSelection, { 'font-size': fontSize + 'px' });
 
         // Also apply the font size to parent ListItemNodes so bullets/numbers scale
         const nodes = normalizedSelection.getNodes();
@@ -1072,11 +1050,9 @@
 
         for (const key of listItems) {
           const liNode = _getNodeByKey(key);
-          if (liNode && typeof liNode.getStyle === "function") {
-            const currentStyle = liNode.getStyle() || "";
-            const newStyle = currentStyle
-              .replace(/font-size:\s*[^;]+;?/g, "")
-              .trim();
+          if (liNode && typeof liNode.getStyle === 'function') {
+            const currentStyle = liNode.getStyle() || '';
+            const newStyle = currentStyle.replace(/font-size:\s*[^;]+;?/g, '').trim();
             liNode.setStyle(`${newStyle} font-size: ${fontSize}px;`.trim());
           }
         }
@@ -1098,16 +1074,16 @@
   }
 
   const colorOptions = [
-    { value: "#000000", label: "Black" },
-    { value: "#FF0000", label: "Red" },
-    { value: "#000080", label: "Navy" },
-    { value: "#228B22", label: "Forest Green" },
-    { value: "#FF8C00", label: "Dark Orange" },
-    { value: "#800080", label: "Purple" },
-    { value: "#008B8B", label: "Teal" },
-    { value: "transparent", label: "Default" },
+    { value: '#000000', label: 'Black' },
+    { value: '#FF0000', label: 'Red' },
+    { value: '#000080', label: 'Navy' },
+    { value: '#228B22', label: 'Forest Green' },
+    { value: '#FF8C00', label: 'Dark Orange' },
+    { value: '#800080', label: 'Purple' },
+    { value: '#008B8B', label: 'Teal' },
+    { value: 'transparent', label: 'Default' }
   ];
-  import { HIGHLIGHT_OPTIONS_WITH_NONE } from "$lib/constants/highlightOptions.js";
+  import { HIGHLIGHT_OPTIONS_WITH_NONE } from '$lib/constants/highlightOptions.js';
   const highlightOptions = HIGHLIGHT_OPTIONS_WITH_NONE;
   let isHighlightDropdownOpen = false;
   let highlightDropdownRef;
@@ -1127,26 +1103,23 @@
     isColorDropdownOpen = nextState;
   }
 
-  import { get } from "svelte/store";
-  import {
-    project,
-    toggleTagInHighlightLocal,
-  } from "$lib/stores/projectStore.js";
-  import { triggerRefresh } from "$lib/stores/refresherStore.js";
-  import { invoke } from "@tauri-apps/api/core";
+  import { get } from 'svelte/store';
+  import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
+  import { triggerRefresh } from '$lib/stores/refresherStore.js';
+  import { invoke } from '@tauri-apps/api/core';
 
   const dispatch = createEventDispatcher();
 
   function createInitialEditorState(jsonProp) {
     if (
       jsonProp &&
-      typeof jsonProp === "string" &&
-      jsonProp.trim() !== "" &&
-      jsonProp !== "null" &&
-      jsonProp !== "undefined"
+      typeof jsonProp === 'string' &&
+      jsonProp.trim() !== '' &&
+      jsonProp !== 'null' &&
+      jsonProp !== 'undefined'
     ) {
       try {
-        if (jsonProp.startsWith("{") && jsonProp.endsWith("}")) {
+        if (jsonProp.startsWith('{') && jsonProp.endsWith('}')) {
           const parsedForValidation = JSON.parse(jsonProp);
           if (
             parsedForValidation &&
@@ -1156,7 +1129,7 @@
             return jsonProp;
           } else {
             console.warn(
-              `[LexicalEditor] initialJson prop looks like JSON but lacks root.children. Using default empty state.`,
+              `[LexicalEditor] initialJson prop looks like JSON but lacks root.children. Using default empty state.`
             );
           }
         } else {
@@ -1165,122 +1138,118 @@
             root: {
               children: [
                 {
-                  type: "paragraph",
+                  type: 'paragraph',
                   version: 1,
-                  children: [{ type: "text", text: jsonProp, version: 1 }],
-                },
+                  children: [{ type: 'text', text: jsonProp, version: 1 }]
+                }
               ],
               direction: null,
-              format: "",
+              format: '',
               indent: 0,
-              type: "root",
-              version: 1,
-            },
+              type: 'root',
+              version: 1
+            }
           });
         }
       } catch (e) {
         console.error(
           `[LexicalEditor] Error during basic validation of initialJson prop. Using default empty state.`,
-          e,
+          e
         );
       }
     }
     return JSON.stringify({
       root: {
-        children: [{ type: "paragraph", version: 1, children: [] }],
+        children: [{ type: 'paragraph', version: 1, children: [] }],
         direction: null,
-        format: "",
+        format: '',
         indent: 0,
-        type: "root",
-        version: 1,
-      },
+        type: 'root',
+        version: 1
+      }
     });
   }
 
   onMount(() => {
-    console.log(
-      "[LexicalEditor] onMount. enableSegmentPlayback:",
-      enableSegmentPlayback,
-    );
+    console.log('[LexicalEditor] onMount. enableSegmentPlayback:', enableSegmentPlayback);
     const instanceId = Math.random().toString(36).substring(7);
 
     if (!editorContainer) {
       console.error(
-        `[LexicalEditor ${instanceId}] Critical: editorContainer element not found on mount!`,
+        `[LexicalEditor ${instanceId}] Critical: editorContainer element not found on mount!`
       );
       return;
     }
 
     const isDocument =
       enableTableCellResize ||
-      documentPath?.toLowerCase().includes("/documents/") ||
-      documentPath?.toLowerCase().includes("\\documents\\");
+      documentPath?.toLowerCase().includes('/documents/') ||
+      documentPath?.toLowerCase().includes('\\documents\\');
     const EFFECTIVE_MIN_WIDTH = isDocument ? 10 : 50;
     console.log(
       `[LexicalEditor ${instanceId}] isDocument:`,
       isDocument,
-      "EFFECTIVE_MIN_WIDTH:",
+      'EFFECTIVE_MIN_WIDTH:',
       EFFECTIVE_MIN_WIDTH,
-      "path:",
-      documentPath,
+      'path:',
+      documentPath
     );
 
     editor = createEditor({
       namespace: `SvelteLexicalEditor-${instanceId}`,
       nodes: editorNodes,
       theme: {
-        paragraph: "speech-plain-text",
-        "live-transcription": "text-gray-500 italic",
+        paragraph: 'speech-plain-text',
+        'live-transcription': 'text-gray-500 italic',
         text: {
-          bold: "font-bold",
-          italic: "italic",
-          underline: "underline",
-          strikethrough: "line-through",
+          bold: 'font-bold',
+          italic: 'italic',
+          underline: 'underline',
+          strikethrough: 'line-through'
         },
         heading: {
-          h1: "text-2xl font-bold mb-1 mt-2",
-          h2: "text-xl font-semibold mb-1 mt-1",
-          h3: "text-lg font-semibold mb-1",
+          h1: 'text-2xl font-bold mb-1 mt-2',
+          h2: 'text-xl font-semibold mb-1 mt-1',
+          h3: 'text-lg font-semibold mb-1'
         },
         list: {
-          ul: "list-disc list-outside mb-1 lexical-ul",
-          ol: "list-decimal list-outside mb-1 lexical-ol",
-          checklist: "list-none mb-1 pl-0",
-          listitem: "mb-0.5 relative lexical-li list-item-checkbox",
+          ul: 'list-disc list-outside mb-1 lexical-ul',
+          ol: 'list-decimal list-outside mb-1 lexical-ol',
+          checklist: 'list-none mb-1 pl-0',
+          listitem: 'mb-0.5 relative lexical-li list-item-checkbox',
           nested: {
-            listitem: "lexical-nested-listitem",
-          },
+            listitem: 'lexical-nested-listitem'
+          }
         },
-        quote:
-          "border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1",
-        code: "editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto",
-        link: "text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text",
+        quote: 'border-l-4 border-gray-300 dark:border-gray-700 pl-4 ml-4 italic my-1',
+        code: 'editor-code-block bg-gray-100 dark:bg-gray-700 dark:text-gray-200 p-4 my-2 block whitespace-pre-wrap overflow-x-auto',
+        link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 link-text',
         table: `editor-table border-collapse border border-gray-300 dark:border-gray-700 my-2 table-fixed`,
         tableCell: `editor-table-cell border border-gray-300 dark:border-gray-700 px-2 py-1 align-top min-w-[20px] relative overflow-hidden`,
         tableCellHeader:
-          "editor-table-cell-header text-gray-900 dark:text-gray-100 px-2 py-1 align-top min-w-[20px] font-normal border border-gray-300 dark:border-gray-700 overflow-hidden relative",
-        tableRow: "editor-table-row",
-        tableCellResizer: "editor-table-cell-resizer",
+          'editor-table-cell-header text-gray-900 dark:text-gray-100 px-2 py-1 align-top min-w-[20px] font-normal border border-gray-300 dark:border-gray-700 overflow-hidden relative',
+        tableRow: 'editor-table-row',
+        tableCellResizer: 'editor-table-cell-resizer',
         placeholder:
-          "lexical-placeholder-theme-class absolute top-0 left-0 text-gray-400 dark:text-gray-500 text-sm select-none pointer-events-none opacity-50 p-2",
-        align_left: "text-left",
-        align_center: "text-center",
-        align_right: "text-right",
-        align_justify: "text-justify",
+          'lexical-placeholder-theme-class absolute top-0 left-0 text-gray-400 dark:text-gray-500 text-sm select-none pointer-events-none opacity-50 p-2',
+        align_left: 'text-left',
+        align_center: 'text-center',
+        align_right: 'text-right',
+        align_justify: 'text-justify'
       },
       onError: (error, editorInstance) => {
         console.error(`[LexicalEditor ${instanceId}] Editor Error:`, error);
       },
       editable: editable,
-      historyState: historyState,
+      historyState: historyState
     });
 
     editor.setRootElement(editorContainer);
 
     editorContainer.addEventListener(
-      "click",
+      'click',
       (e) => {
-        const anchor = e.target.closest("a");
+        const anchor = e.target.closest('a');
         if (anchor) {
           e.preventDefault();
           return;
@@ -1288,11 +1257,10 @@
 
         // Handle custom checklist clicks natively before Lexical gets it
         if (!editable || !editor) return;
-        const closestLi = e.target.closest("li.list-item-checkbox");
+        const closestLi = e.target.closest('li.list-item-checkbox');
         if (closestLi) {
           const rect = closestLi.getBoundingClientRect();
-          const fontSizePx =
-            parseFloat(window.getComputedStyle(closestLi).fontSize) || 15;
+          const fontSizePx = parseFloat(window.getComputedStyle(closestLi).fontSize) || 15;
           const clickX = e.clientX;
           const clickY = e.clientY;
 
@@ -1322,10 +1290,7 @@
 
               if (nodeToToggle) {
                 const parentList = nodeToToggle.getParent();
-                if (
-                  _isListNode(parentList) &&
-                  parentList.getListType() === "check"
-                ) {
+                if (_isListNode(parentList) && parentList.getListType() === 'check') {
                   nodeToToggle.toggleChecked();
                 }
               }
@@ -1333,17 +1298,14 @@
           }
         }
       },
-      true,
+      true
     ); // Use capture phase so we get it before bubbling
 
-    editorContainer.addEventListener(
-      "pointerdown",
-      handlePointerDownOnContainer,
-    );
-    editorWrapper.addEventListener("pointermove", handlePointerHover);
-    editorContainer.addEventListener("contextmenu", handleContextMenu, true);
-    editorContainer.addEventListener("keydown", handleShortcut);
-    window.addEventListener("mousedown", handleClickOutside, true);
+    editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
+    editorWrapper.addEventListener('pointermove', handlePointerHover);
+    editorContainer.addEventListener('contextmenu', handleContextMenu, true);
+    editorContainer.addEventListener('keydown', handleShortcut);
+    window.addEventListener('mousedown', handleClickOutside, true);
 
     isReady = true; // Set to true before registering listener and setting state
 
@@ -1369,52 +1331,38 @@
               }
             });
           } catch (readError) {
-            console.error(
-              "Error reading editor state in update listener:",
-              readError,
-            );
+            console.error('Error reading editor state in update listener:', readError);
           }
           const jsonString = JSON.stringify(editorState.toJSON());
-          let htmlString = "";
-          let textContent = "";
+          let htmlString = '';
+          let textContent = '';
           try {
             editorState.read(() => {
               htmlString = _generateHtmlFromNodes(editor);
               textContent = _getRoot().getTextContent();
             });
           } catch (htmlError) {
-            console.error(
-              "Error generating HTML or text in update listener:",
-              htmlError,
-            );
+            console.error('Error generating HTML or text in update listener:', htmlError);
           }
           const chars = textContent.length;
-          const words = textContent.trim()
-            ? textContent.trim().split(/\s+/).length
-            : 0;
-          dispatch("change", {
+          const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+          dispatch('change', {
             jsonString,
             htmlString,
             textContent,
             chars,
-            words,
+            words
           });
-          dispatch("textcountchange", { chars, words });
+          dispatch('textcountchange', { chars, words });
         }
         if (showTableCellMenu) {
           try {
             editorState.read(() => {
               const selection = _getSelection();
               let show = false;
-              if (
-                _isRangeSelection(selection) ||
-                _isTableSelection(selection)
-              ) {
+              if (_isRangeSelection(selection) || _isTableSelection(selection)) {
                 const anchorNode = selection.anchor.getNode();
-                const cellNode = _findMatchingParent(
-                  anchorNode,
-                  _isTableCellNode,
-                );
+                const cellNode = _findMatchingParent(anchorNode, _isTableCellNode);
                 show = cellNode?.getKey() === activeTableCellKey;
               }
               if (!show) {
@@ -1422,10 +1370,7 @@
               }
             });
           } catch (readError) {
-            console.error(
-              "Error reading editor state in update listener (menu check):",
-              readError,
-            );
+            console.error('Error reading editor state in update listener (menu check):', readError);
           }
         }
       }),
@@ -1441,23 +1386,19 @@
                 clickedNodeKey = null;
               }
             } catch (readError) {
-              console.error(
-                "Error reading state on selection change:",
-                readError,
-              );
+              console.error('Error reading state on selection change:', readError);
             }
           }
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       editor.registerCommand(
         CLICK_COMMAND,
         (payload) => {
           const event = payload;
-          if (event.button !== 0 || !editor)
-            return false;
-          
+          if (event.button !== 0 || !editor) return false;
+
           let linkNode = null;
           let clickedCell = null;
           let clickedImageKey = null;
@@ -1479,7 +1420,7 @@
                       date: targetNode.__date,
                       format: targetNode.__format,
                       showTime: targetNode.__showTime,
-                      timeFormat: targetNode.__timeFormat,
+                      timeFormat: targetNode.__timeFormat
                     };
                     showDateModal = true;
                     return true;
@@ -1489,7 +1430,7 @@
                     equationNodeToEditKey = targetNode.getKey();
                     equationInitialData = {
                       equation: targetNode.__equation,
-                      inline: targetNode.__inline,
+                      inline: targetNode.__inline
                     };
                     showInsertEquationModal = true;
                     return true;
@@ -1498,17 +1439,14 @@
               }
             });
           } catch (readError) {
-            console.error(
-              "Error reading editor state during CLICK command:",
-              readError,
-            );
+            console.error('Error reading editor state during CLICK command:', readError);
             return false;
           }
 
           if (linkNode) {
             // ALWAYS prevent default for links to avoid external navigation
             event.preventDefault();
-            console.log("Clicked on link node:", linkNode.getURL());
+            console.log('Clicked on link node:', linkNode.getURL());
             currentModalUrl = linkNode.getURL();
             isEditingLink = true;
             showLinkModal = true;
@@ -1526,13 +1464,13 @@
             });
             return true;
           }
-          
+
           if (!clickedCell && showTableCellMenu) {
             closeTableCellMenu(false);
           }
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       editor.registerCommand(
         CLICK_COMMAND,
@@ -1543,11 +1481,7 @@
 
           editor.update(() => {
             const selection = _getSelection();
-            if (
-              selection &&
-              _isRangeSelection(selection) &&
-              selection.isCollapsed()
-            ) {
+            if (selection && _isRangeSelection(selection) && selection.isCollapsed()) {
               const node = selection.anchor.getNode();
               const parent = node.getParent();
               if (_isExtendedTextNode(node) && node.getHighlightId()) {
@@ -1556,21 +1490,18 @@
                   const rect = domElement.getBoundingClientRect();
                   modifyToolbarPosition = {
                     top: rect.top - 45,
-                    left: Math.max(5, rect.left + rect.width / 2 - 100),
+                    left: Math.max(5, rect.left + rect.width / 2 - 100)
                   };
                   showModifyToolbar = true;
                   clickedNodeKey = node.getKey();
                 }
-              } else if (
-                _isExtendedTextNode(parent) &&
-                parent.getHighlightId()
-              ) {
+              } else if (_isExtendedTextNode(parent) && parent.getHighlightId()) {
                 const domElement = editor.getElementByKey(parent.getKey());
                 if (domElement) {
                   const rect = domElement.getBoundingClientRect();
                   modifyToolbarPosition = {
                     top: rect.top - 45,
-                    left: Math.max(5, rect.left + rect.width / 2 - 100),
+                    left: Math.max(5, rect.left + rect.width / 2 - 100)
                   };
                   showModifyToolbar = true;
                   clickedNodeKey = parent.getKey();
@@ -1581,7 +1512,7 @@
 
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       registerRichText(editor),
       registerHistory(editor, historyState, 300),
@@ -1599,20 +1530,14 @@
               const selection = _getSelection();
               if (_isRangeSelection(selection)) {
                 const anchorNode = selection.anchor.getNode();
-                const cellNode = _findMatchingParent(
-                  anchorNode,
-                  _isTableCellNode,
-                );
+                const cellNode = _findMatchingParent(anchorNode, _isTableCellNode);
                 if (cellNode) {
                   shouldIntercept = true;
                 }
               }
             });
           } catch (readError) {
-            console.error(
-              "Error reading state during Enter key check (High Priority):",
-              readError,
-            );
+            console.error('Error reading state during Enter key check (High Priority):', readError);
             return false;
           }
           if (shouldIntercept) {
@@ -1627,7 +1552,7 @@
           }
           return false;
         },
-        COMMAND_PRIORITY_HIGH,
+        COMMAND_PRIORITY_HIGH
       ),
       // Exit list on double Enter (pressing Enter on an empty list item)
       editor.registerCommand(
@@ -1640,8 +1565,7 @@
           try {
             editor.getEditorState().read(() => {
               const selection = _getSelection();
-              if (!_isRangeSelection(selection) || !selection.isCollapsed())
-                return;
+              if (!_isRangeSelection(selection) || !selection.isCollapsed()) return;
               const anchorNode = selection.anchor.getNode();
               const li = _findMatchingParent(anchorNode, _isListItemNode);
               if (!li) return;
@@ -1649,14 +1573,14 @@
               if (!_isListNode(parent)) return;
               // Empty if the list item's text content is blank
               const text = li.getTextContent();
-              if (text === "") {
+              if (text === '') {
                 isEmptyListItem = true;
                 listItemNode = li;
                 listNode = parent;
               }
             });
           } catch (e) {
-            console.error("Error reading state during list Enter check:", e);
+            console.error('Error reading state during list Enter check:', e);
             return false;
           }
           if (isEmptyListItem) {
@@ -1688,7 +1612,7 @@
                 li.remove();
 
                 const newList = _createListNode(listType);
-                if (listType === "number") newList.setStart(1); // Reset numbering for the split list
+                if (listType === 'number') newList.setStart(1); // Reset numbering for the split list
 
                 for (const sibling of siblingsToMove) {
                   newList.append(sibling);
@@ -1704,7 +1628,7 @@
           }
           return false;
         },
-        COMMAND_PRIORITY_NORMAL,
+        COMMAND_PRIORITY_NORMAL
       ),
       editor.registerCommand(
         KEY_ENTER_COMMAND,
@@ -1725,7 +1649,7 @@
           }
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       editor.registerCommand(
         INSERT_TABLE_COMMAND,
@@ -1735,22 +1659,17 @@
           const { rows, columns } = payload;
           const numRows = parseInt(rows, 10);
           const numCols = parseInt(columns, 10);
-          if (isNaN(numRows) || isNaN(numCols) || numRows <= 0 || numCols <= 0)
-            return true;
+          if (isNaN(numRows) || isNaN(numCols) || numRows <= 0 || numCols <= 0) return true;
           editor.update(() => {
             const selection = _getSelection();
             if (!_isRangeSelection(selection)) return;
 
             let defaultWidth = MIN_COLUMN_WIDTH;
             if (editorContainer) {
-              const containerWidth =
-                editorContainer.getBoundingClientRect().width;
+              const containerWidth = editorContainer.getBoundingClientRect().width;
               const availableWidth = containerWidth - 40; // 40px margin/padding buffer
               if (availableWidth > 0) {
-                defaultWidth = Math.max(
-                  MIN_COLUMN_WIDTH,
-                  Math.floor(availableWidth / numCols),
-                );
+                defaultWidth = Math.max(MIN_COLUMN_WIDTH, Math.floor(availableWidth / numCols));
               }
             }
             const newColWidths = Array(numCols).fill(defaultWidth);
@@ -1761,7 +1680,7 @@
               const rowNode = _createTableRowNode();
               for (let j = 0; j < numCols; j++) {
                 const cellNode = _createTableCellNode({
-                  headerState: TableCellHeaderStates.NO_STATUS,
+                  headerState: TableCellHeaderStates.NO_STATUS
                 });
                 cellNode.append(_createParagraphNode());
                 rowNode.append(cellNode);
@@ -1772,25 +1691,21 @@
             const focusNode = selection.focus.getNode();
             let parentBlock = _findMatchingParent(
               focusNode,
-              (node) => _isElementNode(node) && !node.isInline(),
+              (node) => _isElementNode(node) && !node.isInline()
             );
             if (!parentBlock)
               parentBlock =
-                typeof focusNode.getTopLevelElement === "function"
+                typeof focusNode.getTopLevelElement === 'function'
                   ? focusNode.getTopLevelElement()
                   : null;
 
-            if (
-              parentBlock &&
-              parentBlock.isEmpty() &&
-              _isParagraphNode(parentBlock)
-            ) {
+            if (parentBlock && parentBlock.isEmpty() && _isParagraphNode(parentBlock)) {
               parentBlock.replace(tableNode);
             } else {
               _insertNodes([tableNode]);
             }
             const pBefore = _createParagraphNode();
-            pBefore.append(_createTextNode("\u00A0")); // Add a non-breaking space to ensure it's selectable? Or just leave empty?
+            pBefore.append(_createTextNode('\u00A0')); // Add a non-breaking space to ensure it's selectable? Or just leave empty?
             // Usually an empty paragraph is fine in Lexical as it often has a default <br> internally.
             // But let's check other usages. Line 810 uses empty paragraph.
 
@@ -1801,7 +1716,7 @@
           });
           return true;
         },
-        COMMAND_PRIORITY_EDITOR,
+        COMMAND_PRIORITY_EDITOR
       ),
       editor.registerCommand(
         KEY_TAB_COMMAND,
@@ -1822,24 +1737,15 @@
                 const tableElement = editor.getElementByKey(tableNode.getKey());
                 if (!tableElement) return;
 
-                const cells = Array.from(
-                  tableElement.querySelectorAll(".editor-table-cell"),
-                );
-                const currentCellElement = editor.getElementByKey(
-                  cellNode.getKey(),
-                );
-                const currentIndex = cells.findIndex(
-                  (c) => c === currentCellElement,
-                );
+                const cells = Array.from(tableElement.querySelectorAll('.editor-table-cell'));
+                const currentCellElement = editor.getElementByKey(cellNode.getKey());
+                const currentIndex = cells.findIndex((c) => c === currentCellElement);
 
                 if (currentIndex !== -1) {
-                  const nextIndex = event.shiftKey
-                    ? currentIndex - 1
-                    : currentIndex + 1;
+                  const nextIndex = event.shiftKey ? currentIndex - 1 : currentIndex + 1;
                   if (nextIndex >= 0 && nextIndex < cells.length) {
                     const nextCellElement = cells[nextIndex];
-                    const nextCellNode =
-                      _getNearestNodeFromDOMNode(nextCellElement);
+                    const nextCellNode = _getNearestNodeFromDOMNode(nextCellElement);
                     if (_isTableCellNode(nextCellNode)) {
                       nextCellNode.selectStart();
                     }
@@ -1854,7 +1760,7 @@
           }
           return false;
         },
-        COMMAND_PRIORITY_HIGH,
+        COMMAND_PRIORITY_HIGH
       ),
       editor.registerCommand(
         TOGGLE_LINK_COMMAND,
@@ -1868,7 +1774,7 @@
           });
           return true;
         },
-        COMMAND_PRIORITY_HIGH,
+        COMMAND_PRIORITY_HIGH
       ),
       editor.registerCommand(
         FOCUS_COMMAND,
@@ -1877,7 +1783,7 @@
           updateToolbarState();
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       editor.registerCommand(
         BLUR_COMMAND,
@@ -1886,7 +1792,7 @@
           updateToolbarState();
           return false;
         },
-        COMMAND_PRIORITY_LOW,
+        COMMAND_PRIORITY_LOW
       ),
       editor.registerCommand(
         INSERT_HORIZONTAL_RULE_COMMAND,
@@ -1905,7 +1811,7 @@
           });
           return true;
         },
-        COMMAND_PRIORITY_EDITOR,
+        COMMAND_PRIORITY_EDITOR
       ),
       editor.registerCommand(
         INSERT_DATE_COMMAND,
@@ -1913,15 +1819,15 @@
           openInsertDateDialog();
           return true;
         },
-        COMMAND_PRIORITY_EDITOR,
-      ),
+        COMMAND_PRIORITY_EDITOR
+      )
     );
 
     unregisterListeners = mergeRegister(
       unregisterListeners,
       editor.registerUpdateListener(() => {
         editorUpdateTracker++;
-      }),
+      })
     );
 
     // Now set the initial state, which will trigger the listener we just registered
@@ -1935,16 +1841,11 @@
       editor.getEditorState().read(() => {
         const textContent = _getRoot().getTextContent();
         const chars = textContent.length;
-        const words = textContent.trim()
-          ? textContent.trim().split(/\s+/).length
-          : 0;
-        dispatch("textcountchange", { chars, words });
+        const words = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+        dispatch('textcountchange', { chars, words });
       });
     } catch (e) {
-      console.error(
-        `[LexicalEditor] Failed to parse and set initial editor state:`,
-        e,
-      );
+      console.error(`[LexicalEditor] Failed to parse and set initial editor state:`, e);
       editor.update(() => {
         const root = _getRoot();
         root.clear();
@@ -1964,40 +1865,30 @@
         try {
           editor.getEditorState().read(updateToolbarState);
         } catch (readError) {
-          console.error(
-            "Error reading state during initial toolbar update:",
-            readError,
-          );
+          console.error('Error reading state during initial toolbar update:', readError);
         }
       }
     });
 
     return () => {
       unregisterListeners();
-      window.removeEventListener("mousedown", handleClickOutside, true);
+      window.removeEventListener('mousedown', handleClickOutside, true);
       if (editorWrapper) {
-        editorWrapper.removeEventListener("pointermove", handlePointerHover);
+        editorWrapper.removeEventListener('pointermove', handlePointerHover);
       }
       if (editorContainer) {
+        editorContainer.removeEventListener('pointerdown', handlePointerDownOnContainer);
+        editorContainer.removeEventListener('contextmenu', handleContextMenu, true);
+        editorContainer.removeEventListener('keydown', handleShortcut);
         editorContainer.removeEventListener(
-          "pointerdown",
-          handlePointerDownOnContainer,
-        );
-        editorContainer.removeEventListener(
-          "contextmenu",
-          handleContextMenu,
-          true,
-        );
-        editorContainer.removeEventListener("keydown", handleShortcut);
-        editorContainer.removeEventListener(
-          "click",
+          'click',
           (e) => {
-            const anchor = e.target.closest("a");
+            const anchor = e.target.closest('a');
             if (anchor) {
               e.preventDefault();
             }
           },
-          true,
+          true
         );
       }
       editor = null;
@@ -2014,12 +1905,9 @@
       while (nodesToVisit.length > 0) {
         const currentNode = nodesToVisit.pop();
         // Since $isImageNode wasn't aliased to _isImageNode locally, we just use getType()
-        if (
-          currentNode.getType() === "image" &&
-          currentNode.getFilename() === filename
-        ) {
+        if (currentNode.getType() === 'image' && currentNode.getFilename() === filename) {
           currentNode.remove();
-        } else if (typeof currentNode.getChildren === "function") {
+        } else if (typeof currentNode.getChildren === 'function') {
           const children = currentNode.getChildren();
           for (let i = children.length - 1; i >= 0; i--) {
             nodesToVisit.push(children[i]);
@@ -2034,7 +1922,7 @@
     isFinal,
     startTime,
     endTime,
-    addTimestamps = false,
+    addTimestamps = false
   ) {
     if (!editor || !isReady || !editable) return;
 
@@ -2051,12 +1939,12 @@
         if (
           lastParagraph &&
           _isParagraphNode(lastParagraph) &&
-          typeof lastParagraph.hasStyle === "function" &&
-          lastParagraph.hasStyle("live-transcription")
+          typeof lastParagraph.hasStyle === 'function' &&
+          lastParagraph.hasStyle('live-transcription')
         ) {
           livePara = lastParagraph;
         } else {
-          livePara = _createParagraphNode().setStyle("live-transcription");
+          livePara = _createParagraphNode().setStyle('live-transcription');
           root.append(livePara);
         }
 
@@ -2064,13 +1952,12 @@
           // On final result, clear the live paragraph and append the final text.
           livePara.clear();
           const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
-          const finalText = timestamp + " " + trimmedText;
+          const finalText = timestamp + ' ' + trimmedText;
           livePara.append(_createTextNode(finalText));
           // Then, remove the style so it becomes a normal paragraph.
-          livePara.setStyle("");
+          livePara.setStyle('');
           // And create a new, empty live paragraph for the next utterance.
-          const newLivePara =
-            _createParagraphNode().setStyle("live-transcription");
+          const newLivePara = _createParagraphNode().setStyle('live-transcription');
           root.append(newLivePara);
           newLivePara.selectEnd();
         } else {
@@ -2093,8 +1980,8 @@
           const lastChild = children[children.length - 1];
           if (
             _isTextNode(lastChild) &&
-            typeof lastChild.hasStyle === "function" &&
-            lastChild.hasStyle("live-transcription")
+            typeof lastChild.hasStyle === 'function' &&
+            lastChild.hasStyle('live-transcription')
           ) {
             liveTextNode = lastChild;
           }
@@ -2107,42 +1994,41 @@
           }
 
           // Determine if we need a leading space before appending
-          let prefixSpace = "";
+          let prefixSpace = '';
           const currentTextContent = lastParagraph.getTextContent();
           if (
             currentTextContent.length > 0 &&
-            !currentTextContent.endsWith(" ") &&
+            !currentTextContent.endsWith(' ') &&
             !/^[.,!?]/.test(trimmedText)
           ) {
-            prefixSpace = " ";
+            prefixSpace = ' ';
           }
 
-          const finalNode = _createTextNode(prefixSpace + trimmedText + " ");
+          const finalNode = _createTextNode(prefixSpace + trimmedText + ' ');
           lastParagraph.append(finalNode);
           finalNode.selectEnd();
         } else {
           // Update interim node
-          let prefixSpace = "";
+          let prefixSpace = '';
           const currentTextContent = lastParagraph.getTextContent();
           // When evaluating prefix space for interim, ignore the live node text itself
           const textWithoutLive = liveTextNode
             ? currentTextContent.substring(
                 0,
-                currentTextContent.length -
-                  liveTextNode.getTextContent().length,
+                currentTextContent.length - liveTextNode.getTextContent().length
               )
             : currentTextContent;
           if (
             textWithoutLive.length > 0 &&
-            !textWithoutLive.endsWith(" ") &&
+            !textWithoutLive.endsWith(' ') &&
             !/^[.,!?]/.test(trimmedText)
           ) {
-            prefixSpace = " ";
+            prefixSpace = ' ';
           }
 
           if (!liveTextNode) {
             liveTextNode = _createTextNode(prefixSpace + trimmedText).setStyle(
-              "live-transcription",
+              'live-transcription'
             );
             lastParagraph.append(liveTextNode);
           } else {
@@ -2156,12 +2042,10 @@
 
   export function resetEditorState(jsonString = null) {
     if (!editor) {
-      console.warn(
-        "[LexicalEditor] resetEditorState called before editor initialized.",
-      );
+      console.warn('[LexicalEditor] resetEditorState called before editor initialized.');
       return;
     }
-    console.log("[LexicalEditor] resetEditorState called.");
+    console.log('[LexicalEditor] resetEditorState called.');
     closeTableCellMenu(false);
     areNodesReady = false;
     editor.update(() => {
@@ -2170,10 +2054,10 @@
         let stateToParse = jsonString;
         if (
           !stateToParse ||
-          typeof stateToParse !== "string" ||
-          stateToParse.trim() === "" ||
-          stateToParse === "null" ||
-          stateToParse === "undefined"
+          typeof stateToParse !== 'string' ||
+          stateToParse.trim() === '' ||
+          stateToParse === 'null' ||
+          stateToParse === 'undefined'
         ) {
           stateToParse = JSON.stringify({
             root: {
@@ -2181,25 +2065,22 @@
                 {
                   children: [],
                   direction: null,
-                  format: "",
+                  format: '',
                   indent: 0,
-                  type: "paragraph",
-                  version: 1,
-                },
+                  type: 'paragraph',
+                  version: 1
+                }
               ],
               direction: null,
-              format: "",
+              format: '',
               indent: 0,
-              type: "root",
-              version: 1,
-            },
+              type: 'root',
+              version: 1
+            }
           });
-        } else if (
-          !stateToParse.startsWith("{") ||
-          !stateToParse.endsWith("}")
-        ) {
+        } else if (!stateToParse.startsWith('{') || !stateToParse.endsWith('}')) {
           console.warn(
-            "[LexicalEditor] resetEditorState received non-JSON object string, wrapping in paragraph.",
+            '[LexicalEditor] resetEditorState received non-JSON object string, wrapping in paragraph.'
           );
           const pNode = _createParagraphNode();
           pNode.append(_createTextNode(stateToParse));
@@ -2207,11 +2088,11 @@
             root: {
               children: [pNode.exportJSON()],
               direction: null,
-              format: "",
+              format: '',
               indent: 0,
-              type: "root",
-              version: 1,
-            },
+              type: 'root',
+              version: 1
+            }
           });
         }
         newState = editor.parseEditorState(stateToParse);
@@ -2223,10 +2104,10 @@
         areNodesReady = true;
       } catch (e) {
         console.error(
-          "[LexicalEditor] Error parsing JSON during resetEditorState:",
+          '[LexicalEditor] Error parsing JSON during resetEditorState:',
           e,
-          "Attempted JSON:",
-          jsonString?.substring(0, 100),
+          'Attempted JSON:',
+          jsonString?.substring(0, 100)
         );
         try {
           editor.setEditorState(
@@ -2237,20 +2118,20 @@
                     {
                       children: [],
                       direction: null,
-                      format: "",
+                      format: '',
                       indent: 0,
-                      type: "paragraph",
-                      version: 1,
-                    },
+                      type: 'paragraph',
+                      version: 1
+                    }
                   ],
                   direction: null,
-                  format: "",
+                  format: '',
                   indent: 0,
-                  type: "root",
-                  version: 1,
-                },
-              }),
-            ),
+                  type: 'root',
+                  version: 1
+                }
+              })
+            )
           );
           historyState.undoStack = [];
           historyState.redoStack = [];
@@ -2258,8 +2139,8 @@
           areNodesReady = true;
         } catch (fallbackError) {
           console.error(
-            "[LexicalEditor] CRITICAL: Failed to set even fallback state during resetEditorState:",
-            fallbackError,
+            '[LexicalEditor] CRITICAL: Failed to set even fallback state during resetEditorState:',
+            fallbackError
           );
         }
       }
@@ -2273,7 +2154,7 @@
       setTimeout(() => {
         if (!initialSyncDone) {
           console.debug(
-            `[LexicalEditor resetEditorState] Secondary syncLayout attempt for ${documentPath}`,
+            `[LexicalEditor resetEditorState] Secondary syncLayout attempt for ${documentPath}`
           );
           syncLayout(true);
         }
@@ -2281,7 +2162,7 @@
     }, 50);
   }
 
-  $: if (editor && typeof editor.setEditable === "function") {
+  $: if (editor && typeof editor.setEditable === 'function') {
     editor.setEditable(editable);
     if (!editable) {
       closeTableCellMenu(false);
@@ -2290,15 +2171,11 @@
 
   export function updateContent(newJsonString) {
     if (!editor) {
-      console.warn(
-        "[LexicalEditor] updateContent called but editor not initialized.",
-      );
+      console.warn('[LexicalEditor] updateContent called but editor not initialized.');
       return;
     }
     if (!isReady) {
-      console.warn(
-        "[LexicalEditor] updateContent called before editor is ready.",
-      );
+      console.warn('[LexicalEditor] updateContent called before editor is ready.');
       return;
     }
     closeTableCellMenu(false);
@@ -2308,50 +2185,44 @@
           let parsedState;
           if (
             newJsonString &&
-            typeof newJsonString === "string" &&
-            newJsonString.startsWith("{") &&
-            newJsonString.endsWith("}")
+            typeof newJsonString === 'string' &&
+            newJsonString.startsWith('{') &&
+            newJsonString.endsWith('}')
           ) {
             parsedState = editor.parseEditorState(newJsonString);
             let isValid = false;
             try {
               parsedState.read(() => {
                 const root = _getRoot();
-                isValid = !!root && root.getType() === "root";
+                isValid = !!root && root.getType() === 'root';
               });
             } catch (readErr) {
-              console.error(
-                "Error validating parsed state in updateContent:",
-                readErr,
-              );
+              console.error('Error validating parsed state in updateContent:', readErr);
               isValid = false;
             }
             if (!isValid) {
               console.error(
-                "[LexicalEditor] Invalid state structure after parsing in updateContent. Aborting.",
+                '[LexicalEditor] Invalid state structure after parsing in updateContent. Aborting.'
               );
               return;
             }
           } else {
             console.error(
-              "[LexicalEditor] Invalid JSON string format provided to updateContent:",
-              newJsonString ? newJsonString.substring(0, 200) + "..." : "null",
+              '[LexicalEditor] Invalid JSON string format provided to updateContent:',
+              newJsonString ? newJsonString.substring(0, 200) + '...' : 'null'
             );
             return;
           }
-          editor.setEditorState(parsedState, { tag: "history-merge" });
+          editor.setEditorState(parsedState, { tag: 'history-merge' });
         } catch (e) {
+          console.error('[LexicalEditor] Failed to parse JSON in updateContent:', e);
           console.error(
-            "[LexicalEditor] Failed to parse JSON in updateContent:",
-            e,
-          );
-          console.error(
-            "[LexicalEditor] Faulty JSON for updateContent:",
-            newJsonString ? newJsonString.substring(0, 200) + "..." : "null",
+            '[LexicalEditor] Faulty JSON for updateContent:',
+            newJsonString ? newJsonString.substring(0, 200) + '...' : 'null'
           );
         }
       },
-      { tag: "external" },
+      { tag: 'external' }
     );
   }
 
@@ -2370,11 +2241,9 @@
     const topY = wrapperRect.top + 5; // 5px down to avoid borders
 
     const elAtTop = document.elementFromPoint(centerX, topY);
-    const rowAtTop = elAtTop?.closest(".editor-table-row");
+    const rowAtTop = elAtTop?.closest('.editor-table-row');
 
-    const rows = Array.from(
-      editorWrapper.querySelectorAll(".editor-table-row"),
-    );
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
 
     if (rowAtTop) {
       const index = rows.indexOf(rowAtTop);
@@ -2402,8 +2271,7 @@
   }
 
   export function getCursorRowInfo() {
-    if (!editorWrapper || !editor)
-      return { index: -1, offset: 0, visible: false };
+    if (!editorWrapper || !editor) return { index: -1, offset: 0, visible: false };
 
     let info = { index: -1, offset: 0, visible: false };
 
@@ -2412,21 +2280,17 @@
       if (_isRangeSelection(selection)) {
         const anchorNode = selection.anchor.getNode();
         const element = editor.getElementByKey(anchorNode.getKey());
-        const row = element?.closest(".editor-table-row");
+        const row = element?.closest('.editor-table-row');
 
         if (row) {
           const wrapperRect = editorWrapper.getBoundingClientRect();
           const rowRect = row.getBoundingClientRect();
-          const rows = Array.from(
-            editorWrapper.querySelectorAll(".editor-table-row"),
-          );
+          const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
 
           info.index = rows.indexOf(row);
           info.offset = Math.round(rowRect.top - wrapperRect.top);
           // Visible if the row is within the viewport
-          info.visible =
-            rowRect.bottom > wrapperRect.top &&
-            rowRect.top < wrapperRect.bottom;
+          info.visible = rowRect.bottom > wrapperRect.top && rowRect.top < wrapperRect.bottom;
         }
       }
     });
@@ -2437,9 +2301,7 @@
   export function scrollToRow(index, offset) {
     if (!editorWrapper || !editor || index < 0) return;
 
-    const rows = Array.from(
-      editorWrapper.querySelectorAll(".editor-table-row"),
-    );
+    const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
     if (index >= rows.length) return;
 
     const targetRow = rows[index];
@@ -2469,41 +2331,35 @@
     isUnderline = false;
     isStrikethrough = false;
     isLink = false;
-    blockType = "paragraph";
-    selectedAlignment = "left";
-    selectedTextColor = "#000000";
-    selectedHighlightColor = "transparent";
-    selectedFontFamily = "Inter";
-    selectedFontSize = "15px";
+    blockType = 'paragraph';
+    selectedAlignment = 'left';
+    selectedTextColor = '#000000';
+    selectedHighlightColor = 'transparent';
+    selectedFontFamily = 'Inter';
+    selectedFontSize = '15px';
 
     if (_isRangeSelection(selection)) {
-      isBold = selection.hasFormat("bold");
-      isItalic = selection.hasFormat("italic");
-      isUnderline = selection.hasFormat("underline");
-      isStrikethrough = selection.hasFormat("strikethrough");
+      isBold = selection.hasFormat('bold');
+      isItalic = selection.hasFormat('italic');
+      isUnderline = selection.hasFormat('underline');
+      isStrikethrough = selection.hasFormat('strikethrough');
       selectedTextColor =
-        _getSelectionStyleValueForProperty(selection, "color", "#000000") ||
-        "#000000";
+        _getSelectionStyleValueForProperty(selection, 'color', '#000000') || '#000000';
       selectedHighlightColor =
-        _getSelectionStyleValueForProperty(
-          selection,
-          "background-color",
-          "transparent",
-        ) || "transparent";
+        _getSelectionStyleValueForProperty(selection, 'background-color', 'transparent') ||
+        'transparent';
       selectedFontFamily =
-        _getSelectionStyleValueForProperty(selection, "font-family", "Inter") ||
-        "Inter";
+        _getSelectionStyleValueForProperty(selection, 'font-family', 'Inter') || 'Inter';
 
       const rawFontSize =
-        _getSelectionStyleValueForProperty(selection, "font-size", "15px") ||
-        "15px";
-      selectedFontSize = rawFontSize.replace("px", "");
+        _getSelectionStyleValueForProperty(selection, 'font-size', '15px') || '15px';
+      selectedFontSize = rawFontSize.replace('px', '');
 
       const anchorNode = selection.anchor.getNode();
       if (anchorNode) {
         let element = _findMatchingParent(
           anchorNode,
-          (node) => _isElementNode(node) && !node.isInline(),
+          (node) => _isElementNode(node) && !node.isInline()
         );
         if (!element) {
           let maybeTopLevel = anchorNode;
@@ -2519,12 +2375,11 @@
           }
           if (!element) {
             element =
-              _findMatchingParent(anchorNode, _isParagraphNode) ||
-              anchorNode.getTopLevelElement();
+              _findMatchingParent(anchorNode, _isParagraphNode) || anchorNode.getTopLevelElement();
           }
         }
 
-        if (element && typeof element.getType === "function") {
+        if (element && typeof element.getType === 'function') {
           const type = element.getType();
           if (_isHeadingNode(element)) {
             blockType = element.getTag();
@@ -2533,15 +2388,15 @@
             if (parentList) {
               const listType = parentList.getListType();
               blockType =
-                listType === "bullet"
-                  ? "ul"
-                  : listType === "number"
-                    ? "ol"
-                    : listType === "check"
-                      ? "check"
-                      : "paragraph";
+                listType === 'bullet'
+                  ? 'ul'
+                  : listType === 'number'
+                    ? 'ol'
+                    : listType === 'check'
+                      ? 'check'
+                      : 'paragraph';
             } else {
-              blockType = "paragraph";
+              blockType = 'paragraph';
             }
           } else if (_isTableCellNode(element)) {
             const firstChild = element.getFirstChild();
@@ -2550,28 +2405,24 @@
             } else if (_isListNode(firstChild)) {
               const listType = firstChild.getListType();
               blockType =
-                listType === "bullet"
-                  ? "ul"
-                  : listType === "number"
-                    ? "ol"
-                    : listType === "check"
-                      ? "check"
-                      : "paragraph";
+                listType === 'bullet'
+                  ? 'ul'
+                  : listType === 'number'
+                    ? 'ol'
+                    : listType === 'check'
+                      ? 'check'
+                      : 'paragraph';
             } else if (_isQuoteNode(firstChild)) {
-              blockType = "quote";
+              blockType = 'quote';
             } else if (_isCodeNode(firstChild)) {
-              blockType = "code";
+              blockType = 'code';
             } else {
-              blockType = "paragraph";
+              blockType = 'paragraph';
             }
-          } else if (
-            type === "paragraph" ||
-            type === "quote" ||
-            type === "code"
-          ) {
+          } else if (type === 'paragraph' || type === 'quote' || type === 'code') {
             blockType = type;
           } else {
-            blockType = "paragraph";
+            blockType = 'paragraph';
           }
 
           let formatElement = element;
@@ -2581,62 +2432,52 @@
             formatElement = element.getParent();
           }
 
-          if (
-            _isElementNode(formatElement) &&
-            typeof formatElement.getFormatType === "function"
-          ) {
-            selectedAlignment = formatElement.getFormatType() || "left";
+          if (_isElementNode(formatElement) && typeof formatElement.getFormatType === 'function') {
+            selectedAlignment = formatElement.getFormatType() || 'left';
           } else {
-            selectedAlignment = "left";
+            selectedAlignment = 'left';
           }
         } else {
-          blockType = "paragraph";
-          selectedAlignment = "left";
+          blockType = 'paragraph';
+          selectedAlignment = 'left';
           isLink = false;
         }
 
-        const nodeForLinkCheck = selection.isCollapsed()
-          ? anchorNode
-          : selection.anchor.getNode();
-        const parentForLinkCheck = nodeForLinkCheck
-          ? nodeForLinkCheck.getParent()
-          : null;
-        isLink =
-          _isLinkNode(nodeForLinkCheck) || _isLinkNode(parentForLinkCheck);
+        const nodeForLinkCheck = selection.isCollapsed() ? anchorNode : selection.anchor.getNode();
+        const parentForLinkCheck = nodeForLinkCheck ? nodeForLinkCheck.getParent() : null;
+        isLink = _isLinkNode(nodeForLinkCheck) || _isLinkNode(parentForLinkCheck);
 
         // Track current row index for glowing highlight
         if (editorWrapper) {
           const domNode = editor.getElementByKey(anchorNode.getKey());
-          const row = domNode?.closest(".editor-table-row");
+          const row = domNode?.closest('.editor-table-row');
           if (row) {
-            const rows = Array.from(
-              editorWrapper.querySelectorAll(".editor-table-row"),
-            );
+            const rows = Array.from(editorWrapper.querySelectorAll('.editor-table-row'));
             const newIndex = rows.indexOf(row);
             if (newIndex !== internalCursorRowIndex) {
               internalCursorRowIndex = newIndex;
-              dispatch("cursorrowchange", { index: internalCursorRowIndex });
+              dispatch('cursorrowchange', { index: internalCursorRowIndex });
             }
           } else {
             internalCursorRowIndex = -1;
           }
         }
       } else {
-        blockType = "paragraph";
-        selectedAlignment = "left";
+        blockType = 'paragraph';
+        selectedAlignment = 'left';
         isLink = false;
         internalCursorRowIndex = -1;
       }
     } else if (_isTableSelection(selection)) {
-      blockType = "paragraph";
-      selectedAlignment = "left";
+      blockType = 'paragraph';
+      selectedAlignment = 'left';
       isLink = false;
       isBold = false;
       isItalic = false;
       isUnderline = false;
       isStrikethrough = false;
-      selectedTextColor = "#000000";
-      selectedHighlightColor = "transparent";
+      selectedTextColor = '#000000';
+      selectedHighlightColor = 'transparent';
       internalCursorRowIndex = -1;
     } else {
       isBold = false;
@@ -2644,10 +2485,10 @@
       isUnderline = false;
       isStrikethrough = false;
       isLink = false;
-      blockType = "paragraph";
-      selectedAlignment = "left";
-      selectedTextColor = "#000000";
-      selectedHighlightColor = "transparent";
+      blockType = 'paragraph';
+      selectedAlignment = 'left';
+      selectedTextColor = '#000000';
+      selectedHighlightColor = 'transparent';
       internalCursorRowIndex = -1;
     }
 
@@ -2667,18 +2508,16 @@
   // Reactive row highlighting logic
   $: if (
     editorWrapper &&
-    (internalCursorRowIndex !== undefined ||
-      externalHighlightedRowIndex !== undefined)
+    (internalCursorRowIndex !== undefined || externalHighlightedRowIndex !== undefined)
   ) {
-    const rows = editorWrapper.querySelectorAll(".editor-table-row");
+    const rows = editorWrapper.querySelectorAll('.editor-table-row');
     rows.forEach((row, i) => {
       const shouldGlow =
-        i === externalHighlightedRowIndex ||
-        (i === internalCursorRowIndex && isFocused);
+        i === externalHighlightedRowIndex || (i === internalCursorRowIndex && isFocused);
       if (shouldGlow) {
-        row.classList.add("cursor-row-glow");
+        row.classList.add('cursor-row-glow');
       } else {
-        row.classList.remove("cursor-row-glow");
+        row.classList.remove('cursor-row-glow');
       }
     });
   }
@@ -2717,7 +2556,7 @@
 
   function applyTextColor(color) {
     if (!editor || !editable) return;
-    applyStyle("color", color === "transparent" ? null : color);
+    applyStyle('color', color === 'transparent' ? null : color);
     isColorDropdownOpen = false;
   }
 
@@ -2733,10 +2572,10 @@
       if (_isRangeSelection(normalizedSelection)) {
         const styles = {};
 
-        if (colorToApply !== "transparent") {
-          styles["background-color"] = colorToApply;
+        if (colorToApply !== 'transparent') {
+          styles['background-color'] = colorToApply;
         } else {
-          styles["background-color"] = null;
+          styles['background-color'] = null;
         }
 
         _patchStyleText(normalizedSelection, styles);
@@ -2745,10 +2584,7 @@
         generatedHighlightId = uuidv4();
         for (const node of selectedNodes) {
           let targetNode = node;
-          if (
-            targetNode.getParent() &&
-            _isExtendedTextNode(targetNode.getParent())
-          ) {
+          if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent())) {
             // Check if it's a segmented node within an ExtendedTextNode
             targetNode = targetNode.getParent();
           }
@@ -2757,7 +2593,7 @@
             const extendedNode = targetNode;
             const currentHighlightId = extendedNode.getHighlightId();
 
-            if (colorToApply !== "transparent") {
+            if (colorToApply !== 'transparent') {
               // Always assign a new ID for the new highlight range
               extendedNode.setHighlightId(generatedHighlightId);
             } else {
@@ -2794,9 +2630,7 @@
 
     // Use latest highlights from store for metadata merging
     const currentHighlights = documentHighlights || [];
-    const existingHighlightsMap = new Map(
-      currentHighlights.map((h) => [h.id, h]),
-    );
+    const existingHighlightsMap = new Map(currentHighlights.map((h) => [h.id, h]));
 
     // 2. Group into blocks that are contiguous in the document flow
     const blocks = [];
@@ -2841,7 +2675,7 @@
       const style = firstNode.getStyle();
       // Robust regex to capture color regardless of semicolons
       const colorMatch = style.match(/background-color:\s*([^;]+)/);
-      const color = colorMatch ? colorMatch[1].trim() : "transparent";
+      const color = colorMatch ? colorMatch[1].trim() : 'transparent';
 
       const originalId = highlightId;
       if (seenIds.has(highlightId)) {
@@ -2857,12 +2691,12 @@
 
       finalHighlights.push({
         id: highlightId,
-        text: block.map((n) => n.getTextContent()).join(""),
+        text: block.map((n) => n.getTextContent()).join(''),
         nodeKey: firstNode.getKey(),
         color: color,
         tags: metadata ? [...(metadata.tags || [])] : [],
         comments: metadata ? [...(metadata.comments || [])] : [],
-        documentOrder: i, // Assign order based on current sequence in document
+        documentOrder: i // Assign order based on current sequence in document
       });
     }
 
@@ -2873,7 +2707,7 @@
     if (!editor || !documentPath) return;
 
     previousDocumentHighlightsIds = new Set(highlights.map((h) => h.id));
-    dispatch("highlightschange", { highlights });
+    dispatch('highlightschange', { highlights });
   }
 
   function scrollToHighlight(id, currentEditor) {
@@ -2889,10 +2723,7 @@
       const findNodeKey = () => {
         let foundKey = null;
         try {
-          if (
-            currentEditor &&
-            typeof currentEditor.getEditorState === "function"
-          ) {
+          if (currentEditor && typeof currentEditor.getEditorState === 'function') {
             currentEditor.getEditorState().read(() => {
               const root = _getRoot();
               const nodesToVisit = [root];
@@ -2912,7 +2743,7 @@
             });
           }
         } catch (error) {
-          console.error("[LexicalEditor] Error in scrollToHighlight:", error);
+          console.error('[LexicalEditor] Error in scrollToHighlight:', error);
         }
         return foundKey;
       };
@@ -2923,21 +2754,20 @@
         const domElement = currentEditor.getElementByKey(targetNodeKey);
         if (domElement) {
           console.log(
-            `[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`,
+            `[LexicalEditor] Scrolling to highlight ${id} (Node ${targetNodeKey}) after ${attempts} attempts`
           );
-          domElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          domElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
           // Pulse effect
-          domElement.style.transition = "outline 0.3s ease";
-          domElement.style.outline = "4px solid #3b82f6";
-          domElement.style.outlineOffset = "2px";
+          domElement.style.transition = 'outline 0.3s ease';
+          domElement.style.outline = '4px solid #3b82f6';
+          domElement.style.outlineOffset = '2px';
           setTimeout(() => {
-            if (domElement) domElement.style.outline = "none";
+            if (domElement) domElement.style.outline = 'none';
           }, 2000);
 
           // Success - clear the request
           project.update((p) => {
-            if (p.requestedHighlightId === id)
-              return { ...p, requestedHighlightId: null };
+            if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
             return p;
           });
           return;
@@ -2950,11 +2780,10 @@
         setTimeout(tryScroll, 150); // Slightly longer delay between retries
       } else {
         console.warn(
-          `[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`,
+          `[LexicalEditor] Failed to scroll to highlight ${id} after ${maxAttempts} attempts. Node found: ${!!targetNodeKey}`
         );
         project.update((p) => {
-          if (p.requestedHighlightId === id)
-            return { ...p, requestedHighlightId: null };
+          if (p.requestedHighlightId === id) return { ...p, requestedHighlightId: null };
           return p;
         });
       }
@@ -2979,12 +2808,12 @@
     const type = event.target.value;
     if (!editor || !isReady || !editor.isEditable()) return;
     if (
-      type === "paragraph" ||
-      type === "h1" ||
-      type === "h2" ||
-      type === "h3" ||
-      type === "quote" ||
-      type === "code"
+      type === 'paragraph' ||
+      type === 'h1' ||
+      type === 'h2' ||
+      type === 'h3' ||
+      type === 'quote' ||
+      type === 'code'
     ) {
       editor.update(() => {
         const selection = _getSelection();
@@ -2994,17 +2823,17 @@
         const normalizedSelection = _getSelection();
         if (_isRangeSelection(normalizedSelection)) {
           const createNodeFn =
-            type === "paragraph"
+            type === 'paragraph'
               ? _createParagraphNode
-              : type === "h1"
-                ? () => _createHeadingNode("h1")
-                : type === "h2"
-                  ? () => _createHeadingNode("h2")
-                  : type === "h3"
-                    ? () => _createHeadingNode("h3")
-                    : type === "quote"
+              : type === 'h1'
+                ? () => _createHeadingNode('h1')
+                : type === 'h2'
+                  ? () => _createHeadingNode('h2')
+                  : type === 'h3'
+                    ? () => _createHeadingNode('h3')
+                    : type === 'quote'
                       ? _createQuoteNode
-                      : type === "code"
+                      : type === 'code'
                         ? _createCodeNode
                         : null;
           if (createNodeFn) {
@@ -3012,11 +2841,11 @@
           }
         }
       });
-    } else if (type === "ul") {
+    } else if (type === 'ul') {
       editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
-    } else if (type === "ol") {
+    } else if (type === 'ol') {
       editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
-    } else if (type === "check") {
+    } else if (type === 'check') {
       editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined);
     }
   }
@@ -3036,18 +2865,18 @@
             if (_isExtendedTextNode(targetNode)) {
               const highlightId = targetNode.getHighlightId();
               if (highlightId) {
-                dispatch("highlightevent", {
-                  type: "remove",
+                dispatch('highlightevent', {
+                  type: 'remove',
                   id: highlightId,
                   nodeKey: targetNode.getKey(),
-                  color: "transparent", // Part of highlight data
+                  color: 'transparent' // Part of highlight data
                 });
                 targetNode.setHighlightId(null);
               }
             }
 
             if (_isTextNode(targetNode)) {
-              targetNode.setFormat(0).setStyle("");
+              targetNode.setFormat(0).setStyle('');
             } else if (_isLinkNode(targetNode)) {
               const children = targetNode.getChildren();
               children.forEach((child) => {
@@ -3055,16 +2884,16 @@
                   if (_isExtendedTextNode(child)) {
                     const childHighlightId = child.getHighlightId();
                     if (childHighlightId) {
-                      dispatch("highlightevent", {
-                        type: "remove",
+                      dispatch('highlightevent', {
+                        type: 'remove',
                         id: childHighlightId,
                         nodeKey: child.getKey(),
-                        color: "transparent",
+                        color: 'transparent'
                       });
                       child.setHighlightId(null);
                     }
                   }
-                  child.setFormat(0).setStyle("");
+                  child.setFormat(0).setStyle('');
                 }
               });
               targetNode.replace(...children);
@@ -3072,10 +2901,7 @@
           });
           _setBlocksType(selection, () => _createParagraphNode());
         } catch (error) {
-          console.error(
-            "[LexicalEditor] Error during clearFormatting (Range):",
-            error,
-          );
+          console.error('[LexicalEditor] Error during clearFormatting (Range):', error);
         }
       } else if (_isTableSelection(selection)) {
         try {
@@ -3086,26 +2912,23 @@
               if (_isExtendedTextNode(node)) {
                 const highlightId = node.getHighlightId();
                 if (highlightId) {
-                  dispatch("highlightevent", {
-                    type: "remove",
+                  dispatch('highlightevent', {
+                    type: 'remove',
                     id: highlightId,
                     nodeKey: node.getKey(),
-                    color: "transparent",
+                    color: 'transparent'
                   });
                   node.setHighlightId(null);
                 }
               }
               if (_isTextNode(node)) {
-                node.setFormat(0).setStyle("");
+                node.setFormat(0).setStyle('');
               } else if (_isElementNode(node)) {
               }
             });
           }
         } catch (error) {
-          console.error(
-            "[LexicalEditor] Error during clearFormatting (Table):",
-            error,
-          );
+          console.error('[LexicalEditor] Error during clearFormatting (Table):', error);
         }
       }
     });
@@ -3124,7 +2947,7 @@
     if (!editor || !editable) return;
     closeAllDropdowns();
     closeTableCellMenu(false);
-    currentModalUrl = "";
+    currentModalUrl = '';
     isEditingLink = false;
     editor.focus();
     await tick();
@@ -3142,7 +2965,7 @@
             currentModalUrl = node.getURL();
             isEditingLink = true;
           } else {
-            currentModalUrl = "";
+            currentModalUrl = '';
             isEditingLink = false;
           }
         } else {
@@ -3150,13 +2973,11 @@
         }
       });
     } catch (readError) {
-      console.error("Error reading state for toggleLink:", readError);
+      console.error('Error reading state for toggleLink:', readError);
       return;
     }
     if (!isEditingLink && (!savedSelection || savedSelection.isCollapsed())) {
-      console.warn(
-        "Cannot toggle link without a text selection or editing an existing link.",
-      );
+      console.warn('Cannot toggle link without a text selection or editing an existing link.');
       savedSelection = null;
       return;
     }
@@ -3171,13 +2992,11 @@
       if (savedSelection) {
         _setSelection(savedSelection.clone());
       }
-      if (url && url.trim() !== "") {
-        console.log("Dispatching TOGGLE_LINK_COMMAND with URL:", url);
+      if (url && url.trim() !== '') {
+        console.log('Dispatching TOGGLE_LINK_COMMAND with URL:', url);
         editor.dispatchCommand(TOGGLE_LINK_COMMAND, url.trim());
       } else {
-        console.log(
-          "Dispatching TOGGLE_LINK_COMMAND with null (empty URL received).",
-        );
+        console.log('Dispatching TOGGLE_LINK_COMMAND with null (empty URL received).');
         editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
       }
     });
@@ -3192,7 +3011,7 @@
       if (savedSelection) {
         _setSelection(savedSelection.clone());
       }
-      console.log("Dispatching TOGGLE_LINK_COMMAND with null to remove link.");
+      console.log('Dispatching TOGGLE_LINK_COMMAND with null to remove link.');
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
     });
     savedSelection = null;
@@ -3220,10 +3039,7 @@
         }
       });
     } catch (readError) {
-      console.error(
-        "Error reading editor state during context menu:",
-        readError,
-      );
+      console.error('Error reading editor state during context menu:', readError);
       closeTableCellMenu(false);
       return;
     }
@@ -3278,7 +3094,7 @@
   function detectResizeTarget(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return null;
-    const cellElement = target.closest(".editor-table-cell");
+    const cellElement = target.closest('.editor-table-cell');
     if (!cellElement) return null;
 
     const rect = cellElement.getBoundingClientRect();
@@ -3290,20 +3106,18 @@
     const bw = RESIZE_BORDER_WIDTH;
 
     // Check Right Edge (standard)
-    if (Math.abs(x - w) <= bw)
-      return { element: cellElement, direction: "col" };
+    if (Math.abs(x - w) <= bw) return { element: cellElement, direction: 'col' };
 
     // Check Left Edge (resize previous column)
     if (Math.abs(x) <= bw) {
       const prev = cellElement.previousElementSibling;
-      if (prev && prev.classList.contains("editor-table-cell")) {
-        return { element: prev, direction: "col" };
+      if (prev && prev.classList.contains('editor-table-cell')) {
+        return { element: prev, direction: 'col' };
       }
     }
 
     // Check Bottom Edge (standard)
-    if (Math.abs(y - h) <= bw)
-      return { element: cellElement, direction: "row" };
+    if (Math.abs(y - h) <= bw) return { element: cellElement, direction: 'row' };
 
     // Check Top Edge (resize previous row)
     if (Math.abs(y) <= bw) {
@@ -3312,9 +3126,9 @@
       if (prevRow) {
         // Any cell in previous row works to identify the row index
         const prevCell = Array.from(prevRow.children).find((c) =>
-          c.classList.contains("editor-table-cell"),
+          c.classList.contains('editor-table-cell')
         );
-        if (prevCell) return { element: prevCell, direction: "row" };
+        if (prevCell) return { element: prevCell, direction: 'row' };
       }
     }
 
@@ -3330,8 +3144,7 @@
       const wrapperRect = editorWrapper.getBoundingClientRect();
 
       // Check if we are in the gutter (first 60px of the wrapper)
-      const isWithinGutterX =
-        x >= wrapperRect.left && x <= wrapperRect.left + 60;
+      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
 
       // If we are in the gutter, scan slightly to the right to find the row at this Y level
       const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
@@ -3339,23 +3152,19 @@
       // Use elementsFromPoint to find the row
       const elements = document.elementsFromPoint(scanX, y);
       const rowElement = elements.find(
-        (el) =>
-          el.classList?.contains("editor-table-row") ||
-          el.closest?.(".editor-table-row"),
+        (el) => el.classList?.contains('editor-table-row') || el.closest?.('.editor-table-row')
       );
-      const actualRow = rowElement?.classList?.contains("editor-table-row")
+      const actualRow = rowElement?.classList?.contains('editor-table-row')
         ? rowElement
-        : rowElement?.closest?.(".editor-table-row");
+        : rowElement?.closest?.('.editor-table-row');
 
       if (actualRow) {
         // Skip if this is a header row
         const isHeaderRow =
-          actualRow.querySelector("th") ||
-          actualRow.querySelector(".editor-table-cell-header");
+          actualRow.querySelector('th') || actualRow.querySelector('.editor-table-cell-header');
         // Also skip if it's the very first row of the table (index 0), as this is invariably the header in our transcript structure
         // We use actualRow.rowIndex if available (standard HTMLTableRowElement), or fallback to checking siblings
-        const isFirstRow =
-          actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
+        const isFirstRow = actualRow.rowIndex === 0 || !actualRow.previousElementSibling;
 
         if (isHeaderRow || isFirstRow) {
           if (showPlayButton) {
@@ -3364,7 +3173,7 @@
           }
           // We continue here to allow resize detection even if over header
         } else {
-          let rowKey = actualRow.getAttribute("data-lexical-key");
+          let rowKey = actualRow.getAttribute('data-lexical-key');
 
           // Fallback if data-lexical-key is missing from DOM
           if (!rowKey) {
@@ -3380,12 +3189,8 @@
 
             // Position button in the gutter (left: 20px relative to wrapper)
             playButtonPosition = {
-              top:
-                rect.top -
-                wrapperRect.top +
-                editorWrapper.scrollTop +
-                rect.height / 2,
-              left: 20,
+              top: rect.top - wrapperRect.top + editorWrapper.scrollTop + rect.height / 2,
+              left: 20
             };
             showPlayButton = true;
           }
@@ -3395,7 +3200,7 @@
         // and NOT in the gutter (to prevent flickering)
         const currentElements = document.elementsFromPoint(x, y);
         const isOverPlayButton = currentElements.some((el) =>
-          el.classList?.contains("play-segment-hover-btn"),
+          el.classList?.contains('play-segment-hover-btn')
         );
 
         if (!isOverPlayButton && !isWithinGutterX) {
@@ -3412,19 +3217,16 @@
 
     const targetInfo = detectResizeTarget(event);
     if (targetInfo) {
-      editorContainer.style.cursor =
-        targetInfo.direction === "col" ? "col-resize" : "row-resize";
+      editorContainer.style.cursor = targetInfo.direction === 'col' ? 'col-resize' : 'row-resize';
     } else {
-      editorContainer.style.cursor = "";
+      editorContainer.style.cursor = '';
     }
   }
 
   function parseTimestamp(text) {
     // Flexible format: (HH:)?MM:SS.mmm - (HH:)?MM:SS.mmm
     const timePattern = /(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2}(?:\.\d{1,3})?)/;
-    const regex = new RegExp(
-      `^${timePattern.source}\\s*-\\s*${timePattern.source}$`,
-    );
+    const regex = new RegExp(`^${timePattern.source}\\s*-\\s*${timePattern.source}$`);
     const match = text.match(regex);
     if (!match) return null;
 
@@ -3434,9 +3236,9 @@
   }
 
   function timeStringToSeconds(h, m, s) {
-    const hours = parseInt(h || "0", 10);
-    const minutes = parseInt(m || "0", 10);
-    const seconds = parseFloat(s || "0");
+    const hours = parseInt(h || '0', 10);
+    const minutes = parseInt(m || '0', 10);
+    const seconds = parseFloat(s || '0');
     return hours * 3600 + minutes * 60 + seconds;
   }
 
@@ -3447,14 +3249,14 @@
       const rowNode = _getNodeByKey(hoveredRowKey);
       if (_isTableRowNode(rowNode)) {
         const cells = rowNode.getChildren();
-        let timestampText = "";
+        let timestampText = '';
         for (const cell of cells) {
           if (_isTableCellNode(cell)) {
             const text = cell.getTextContent().trim();
             // Flexible check for timestamp pattern
             if (
               /(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?\s*-\s*(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:\.\d{1,3})?/.test(
-                text,
+                text
               )
             ) {
               timestampText = text;
@@ -3466,18 +3268,15 @@
         if (timestampText) {
           const parsed = parseTimestamp(timestampText);
           if (parsed) {
-            dispatch("playsegment", parsed);
+            dispatch('playsegment', parsed);
           } else {
             notificationStore.add(
-              "Invalid timestamp values. Expected format: MM:SS.mmm or HH:MM:SS.mmm",
-              "error",
+              'Invalid timestamp values. Expected format: MM:SS.mmm or HH:MM:SS.mmm',
+              'error'
             );
           }
         } else {
-          notificationStore.add(
-            "Could not find a valid timestamp in this row.",
-            "error",
-          );
+          notificationStore.add('Could not find a valid timestamp in this row.', 'error');
         }
       }
     });
@@ -3501,10 +3300,7 @@
           }
         });
       } catch (readError) {
-        console.error(
-          "Error reading editor state during resize check:",
-          readError,
-        );
+        console.error('Error reading editor state during resize check:', readError);
         return;
       }
 
@@ -3517,11 +3313,10 @@
       resizeTargetCellKey = cellNodeKeyToResize;
       resizeStartPos = { x: event.clientX, y: event.clientY };
       updateResizerLine(event.clientX, event.clientY);
-      document.body.style.cursor =
-        direction === "col" ? "col-resize" : "row-resize";
+      document.body.style.cursor = direction === 'col' ? 'col-resize' : 'row-resize';
 
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
     }
   }
 
@@ -3534,7 +3329,7 @@
 
   function updateResizerLine(clientX, clientY) {
     if (!editorContainer || !resizeTargetCellKey) {
-      resizerLineStyle = "display: none;";
+      resizerLineStyle = 'display: none;';
       return;
     }
     const containerRect = editorContainer.getBoundingClientRect();
@@ -3542,11 +3337,11 @@
     const currentX = clientX / zoom;
     const currentY = clientY / zoom;
     const targetCellElement = editorContainer.querySelector(
-      `[data-lexical-key="${resizeTargetCellKey}"]`,
+      `[data-lexical-key="${resizeTargetCellKey}"]`
     );
-    const tableElement = targetCellElement?.closest(".editor-table");
+    const tableElement = targetCellElement?.closest('.editor-table');
     if (!tableElement) {
-      resizerLineStyle = "display: none;";
+      resizerLineStyle = 'display: none;';
       return;
     }
     const tableRect = tableElement.getBoundingClientRect();
@@ -3558,7 +3353,7 @@
     const relativeX = (clientX - containerRect.left) / zoom;
     const relativeY = (clientY - containerRect.top) / zoom;
 
-    if (resizeDirection === "col") {
+    if (resizeDirection === 'col') {
       const left = Math.max(tableRelativeLeft, relativeX);
       resizerLineStyle = `
               display: block; position: absolute;
@@ -3597,32 +3392,24 @@
         try {
           const tableNode = _getTableNodeFromLexicalNodeOrThrow(cellNode);
           const tableElement = editor.getElementByKey(tableNode.getKey());
-          const [tableMap] = _computeTableMapSkipCellCheck(
-            tableNode,
-            null,
-            null,
-          );
-          if (resizeDirection === "col") {
-            const colIndex = _getTableColumnIndexFromTableCellNode(
-              cellNode,
-              tableMap,
-            );
+          const [tableMap] = _computeTableMapSkipCellCheck(tableNode, null, null);
+          if (resizeDirection === 'col') {
+            const colIndex = _getTableColumnIndexFromTableCellNode(cellNode, tableMap);
             if (colIndex !== undefined) {
               const colSpan = cellNode.getColSpan();
               const targetColIndex = colIndex + colSpan - 1;
               const currentWidths = (tableNode.getColWidths() || []).map((w) =>
-                w === null ? undefined : w,
+                w === null ? undefined : w
               );
               let currentWidthVal = currentWidths[targetColIndex];
 
               const localMinWidth = 20;
 
               // Handle string/percentage widths
-              if (typeof currentWidthVal === "string") {
-                if (currentWidthVal.endsWith("%")) {
+              if (typeof currentWidthVal === 'string') {
+                if (currentWidthVal.endsWith('%')) {
                   const pct = parseFloat(currentWidthVal);
-                  const tableWidth =
-                    tableElement.getBoundingClientRect().width / zoom;
+                  const tableWidth = tableElement.getBoundingClientRect().width / zoom;
                   currentWidthVal = (tableWidth * pct) / 100;
                 } else {
                   currentWidthVal = parseFloat(currentWidthVal);
@@ -3640,29 +3427,23 @@
                   currentWidths[i] === undefined ||
                   currentWidths[i] === null ||
                   isNaN(currentWidths[i]) ||
-                  (typeof currentWidths[i] === "string" &&
-                    currentWidths[i].endsWith("%"))
+                  (typeof currentWidths[i] === 'string' && currentWidths[i].endsWith('%'))
                 ) {
                   // Find any cell in this column to get its width
-                  const cellInfo = tableMap.grid.find(
-                    (row) => row[i] && row[i].node,
-                  );
+                  const cellInfo = tableMap.grid.find((row) => row[i] && row[i].node);
                   if (cellInfo) {
                     const rowWithCell = tableMap.grid.find((r) => r[i]);
                     const cellNode = rowWithCell[i].node;
-                    const domElement = editor.getElementByKey(
-                      cellNode.getKey(),
-                    );
+                    const domElement = editor.getElementByKey(cellNode.getKey());
                     if (domElement) {
-                      currentWidths[i] =
-                        domElement.getBoundingClientRect().width / zoom;
+                      currentWidths[i] = domElement.getBoundingClientRect().width / zoom;
                     } else {
                       currentWidths[i] = localMinWidth;
                     }
                   } else {
                     currentWidths[i] = localMinWidth;
                   }
-                } else if (typeof currentWidths[i] === "string") {
+                } else if (typeof currentWidths[i] === 'string') {
                   currentWidths[i] = parseFloat(currentWidths[i]);
                 }
               }
@@ -3675,10 +3456,7 @@
               tableNode.setColWidths(currentWidths);
             }
           } else {
-            const rowIndex = _getTableRowIndexFromTableCellNode(
-              cellNode,
-              tableMap,
-            );
+            const rowIndex = _getTableRowIndexFromTableCellNode(cellNode, tableMap);
             if (rowIndex !== undefined) {
               const actualRowIndex = rowIndex + (cellNode.getRowSpan() - 1);
               const tableRows = tableNode.getChildren();
@@ -3699,10 +3477,10 @@
             }
           }
         } catch (e) {
-          console.error("Error during table resize update:", e);
+          console.error('Error during table resize update:', e);
         }
       },
-      { tag: "skip-scroll" },
+      { tag: 'skip-scroll' }
     );
 
     if (editorWrapper) {
@@ -3714,12 +3492,12 @@
     isResizing = false;
     resizeDirection = null;
     resizeTargetCellKey = null;
-    resizerLineStyle = "display: none;";
-    document.body.style.cursor = "auto";
-    if (editorContainer) editorContainer.style.cursor = "auto";
+    resizerLineStyle = 'display: none;';
+    document.body.style.cursor = 'auto';
+    if (editorContainer) editorContainer.style.cursor = 'auto';
 
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
   }
 
   function handleDocumentHighlightsChange(highlights) {
@@ -3745,7 +3523,7 @@
           if (_isExtendedTextNode(currentNode)) {
             const id = currentNode.getHighlightId();
             if (id && deletedIds.has(id)) {
-              currentNode.setStyle("");
+              currentNode.setStyle('');
               currentNode.setHighlightId(null);
             }
           }
@@ -3794,12 +3572,9 @@
 
         if (_isExtendedTextNode(node)) {
           // Check if we need to update style or ID
-          const currentStyle = node.getStyle() || "";
+          const currentStyle = node.getStyle() || '';
           const targetStyle = `background-color: ${highlight.color}`;
-          if (
-            node.getHighlightId() !== highlight.id ||
-            !currentStyle.includes(targetStyle)
-          ) {
+          if (node.getHighlightId() !== highlight.id || !currentStyle.includes(targetStyle)) {
             node.setStyle(targetStyle);
             node.setHighlightId(highlight.id);
           }
@@ -3828,13 +3603,11 @@
     resolveImagesTimeout = setTimeout(async () => {
       if (!editorContainer) return;
       try {
-        const { convertFileSrc } = await import("@tauri-apps/api/core");
-        const images = editorContainer.querySelectorAll(
-          "img[data-filename]:not([src])",
-        );
+        const { convertFileSrc } = await import('@tauri-apps/api/core');
+        const images = editorContainer.querySelectorAll('img[data-filename]:not([src])');
 
         if (images.length > 0) {
-          const separator = documentPath.includes("\\") ? "\\" : "/";
+          const separator = documentPath.includes('\\') ? '\\' : '/';
           const parts = documentPath.split(separator);
           parts.pop(); // Remove the JSON filename
           let dirPath = parts.join(separator);
@@ -3851,7 +3624,7 @@
           }
 
           for (const img of images) {
-            const filename = img.getAttribute("data-filename");
+            const filename = img.getAttribute('data-filename');
             if (filename) {
               const fullPath = `${absDirPath}${filename}`;
               img.src = convertFileSrc(fullPath);
@@ -3859,13 +3632,13 @@
           }
         }
       } catch (e) {
-        console.error("[LexicalEditor] Error resolving image sources", e);
+        console.error('[LexicalEditor] Error resolving image sources', e);
       }
     }, 300);
   }
 
   function updateSearchHighlights() {
-    if (typeof CSS === "undefined" || !CSS.highlights) {
+    if (typeof CSS === 'undefined' || !CSS.highlights) {
       return;
     }
 
@@ -3875,16 +3648,16 @@
       !searchTerm.trim() ||
       searchResults.length === 0
     ) {
-      const prevMatch = CSS.highlights.get("search-match");
+      const prevMatch = CSS.highlights.get('search-match');
       if (prevMatch) {
         prevMatch.clear();
-        CSS.highlights.delete("search-match");
+        CSS.highlights.delete('search-match');
       }
 
-      const prevActive = CSS.highlights.get("search-match-active");
+      const prevActive = CSS.highlights.get('search-match-active');
       if (prevActive) {
         prevActive.clear();
-        CSS.highlights.delete("search-match-active");
+        CSS.highlights.delete('search-match-active');
       }
       return;
     }
@@ -3902,11 +3675,7 @@
         if (domNode.nodeType === Node.TEXT_NODE) {
           textNode = domNode;
         } else {
-          const walker = document.createTreeWalker(
-            domNode,
-            NodeFilter.SHOW_TEXT,
-            null,
-          );
+          const walker = document.createTreeWalker(domNode, NodeFilter.SHOW_TEXT, null);
           textNode = walker.nextNode();
         }
 
@@ -3926,12 +3695,12 @@
       });
     });
 
-    CSS.highlights.set("search-match", new Highlight(...matchRanges));
-    CSS.highlights.set("search-match-active", new Highlight(...activeRanges));
+    CSS.highlights.set('search-match', new Highlight(...matchRanges));
+    CSS.highlights.set('search-match-active', new Highlight(...activeRanges));
   }
 
   function handleSearchInputKeydown(event) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       event.preventDefault();
       if (event.shiftKey) {
         navigateToPreviousResult();
@@ -3941,14 +3710,10 @@
     }
   }
 
-  let latestSearchTerm = "";
+  let latestSearchTerm = '';
   function executeSearch(termToSearch, options = {}) {
     if (!editor) return;
-    const {
-      isCaseSensitive = false,
-      isRegex = false,
-      isWholeWord = false,
-    } = options;
+    const { isCaseSensitive = false, isRegex = false, isWholeWord = false } = options;
     searchTerm = termToSearch;
     const term = termToSearch;
     latestSearchTerm = term;
@@ -3957,9 +3722,9 @@
     currentSearchResultIndex = -1;
     updateSearchHighlights();
 
-    if (term === "") {
-      dispatch("searchresultsupdated", { results: [], term: "" });
-      dispatch("searchindexchanged", { currentIndex: -1, currentResult: null });
+    if (term === '') {
+      dispatch('searchresultsupdated', { results: [], term: '' });
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
       return;
     }
 
@@ -3969,7 +3734,7 @@
       const root = _getRoot();
 
       // 1. Flatten document text and track node offsets
-      let fullText = "";
+      let fullText = '';
       const textNodeOffsets = []; // { nodeKey, start, end }
 
       const visit = (node) => {
@@ -3978,7 +3743,7 @@
           textNodeOffsets.push({
             nodeKey: node.getKey(),
             start: fullText.length,
-            end: fullText.length + nodeText.length,
+            end: fullText.length + nodeText.length
           });
           fullText += nodeText;
         } else if (_isElementNode(node)) {
@@ -3993,13 +3758,11 @@
       const newResults = [];
       let regex;
       try {
-        let pattern = isRegex
-          ? term
-          : term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        let pattern = isRegex ? term : term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         if (isWholeWord) pattern = `\\b${pattern}\\b`;
-        regex = new RegExp(pattern, isCaseSensitive ? "g" : "gi");
+        regex = new RegExp(pattern, isCaseSensitive ? 'g' : 'gi');
       } catch (e) {
-        console.warn("Invalid search pattern:", term);
+        console.warn('Invalid search pattern:', term);
         return;
       }
 
@@ -4017,7 +3780,7 @@
             nodesInMatch.push({
               nodeKey: tno.nodeKey,
               startOffset: Math.max(0, matchStart - tno.start),
-              endOffset: Math.min(tno.end - tno.start, matchEnd - tno.start),
+              endOffset: Math.min(tno.end - tno.start, matchEnd - tno.start)
             });
           }
           if (tno.start >= matchEnd) break;
@@ -4026,7 +3789,7 @@
         if (nodesInMatch.length > 0) {
           newResults.push({
             nodes: nodesInMatch,
-            text: match[0],
+            text: match[0]
           });
         }
 
@@ -4040,16 +3803,16 @@
         currentSearchResultIndex = 0;
       } else {
         currentSearchResultIndex = -1;
-        dispatch("searchindexchanged", {
+        dispatch('searchindexchanged', {
           currentIndex: -1,
-          currentResult: null,
+          currentResult: null
         });
       }
 
       updateSearchHighlights();
     });
 
-    dispatch("searchresultsupdated", { results: searchResults, term: term });
+    dispatch('searchresultsupdated', { results: searchResults, term: term });
   }
 
   function toggleSearchOptionsDropdown() {
@@ -4081,21 +3844,17 @@
               try {
                 const selection = _getSelection();
                 if (_isRangeSelection(selection)) {
-                  selection.anchor.set(
-                    first.nodeKey,
-                    first.startOffset,
-                    "text",
-                  );
-                  selection.focus.set(last.nodeKey, last.endOffset, "text");
+                  selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                  selection.focus.set(last.nodeKey, last.endOffset, 'text');
                   selection.insertText(replace);
                 }
               } catch (e) {
-                console.error("Replace failed:", e);
+                console.error('Replace failed:', e);
               }
             }
           }
         },
-        { tag: "replace-one" },
+        { tag: 'replace-one' }
       );
 
       executeSearch(find);
@@ -4120,23 +3879,23 @@
             if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
               const selection = _getSelection();
               if (_isRangeSelection(selection)) {
-                selection.anchor.set(first.nodeKey, first.startOffset, "text");
-                selection.focus.set(last.nodeKey, last.endOffset, "text");
+                selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+                selection.focus.set(last.nodeKey, last.endOffset, 'text');
                 selection.insertText(replace);
               }
             }
           }
         }
       },
-      { tag: "replace-all" },
+      { tag: 'replace-all' }
     );
 
     executeSearch(find);
   }
 
   function clearSearchTermInput() {
-    console.log("[clearSearchTermInput] Called.");
-    searchTerm = "";
+    console.log('[clearSearchTermInput] Called.');
+    searchTerm = '';
     searchResults = [];
     currentSearchResultIndex = -1;
     updateSearchHighlights();
@@ -4144,19 +3903,13 @@
     const updateData = { results: searchResults, term: searchTerm };
     const indexChangeData = {
       currentIndex: currentSearchResultIndex,
-      currentResult: null,
+      currentResult: null
     };
 
-    console.log(
-      "[clearSearchTermInput] Dispatching searchresultsupdated with:",
-      updateData,
-    );
-    dispatch("searchresultsupdated", updateData);
-    console.log(
-      "[clearSearchTermInput] Dispatching searchindexchanged with:",
-      indexChangeData,
-    );
-    dispatch("searchindexchanged", indexChangeData);
+    console.log('[clearSearchTermInput] Dispatching searchresultsupdated with:', updateData);
+    dispatch('searchresultsupdated', updateData);
+    console.log('[clearSearchTermInput] Dispatching searchindexchanged with:', indexChangeData);
+    dispatch('searchindexchanged', indexChangeData);
 
     if (showSearchBox) {
       searchInputRef?.focus();
@@ -4166,16 +3919,16 @@
   function navigateToResult(index, shouldFocus = true) {
     if (!editor) return;
     console.log(
-      "[navigateToResult] Called with index:",
+      '[navigateToResult] Called with index:',
       index,
-      "Total results:",
-      searchResults.length,
+      'Total results:',
+      searchResults.length
     );
 
     if (index < 0 || index >= searchResults.length) {
       currentSearchResultIndex = -1;
       updateSearchHighlights();
-      dispatch("searchindexchanged", { currentIndex: -1, currentResult: null });
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
       return;
     }
 
@@ -4198,14 +3951,14 @@
           if (_isTextNode(firstNode) && _isTextNode(lastNode)) {
             const selection = _getSelection();
             if (_isRangeSelection(selection)) {
-              selection.anchor.set(first.nodeKey, first.startOffset, "text");
-              selection.focus.set(last.nodeKey, last.endOffset, "text");
+              selection.anchor.set(first.nodeKey, first.startOffset, 'text');
+              selection.focus.set(last.nodeKey, last.endOffset, 'text');
               latestScrollTargetKey = first.nodeKey;
             }
           }
         }
       },
-      { tag: "search-navigate" },
+      { tag: 'search-navigate' }
     );
 
     tick().then(updateSearchHighlights);
@@ -4216,7 +3969,7 @@
         try {
           const domElement = editor.getElementByKey(keyToScroll);
           if (domElement) {
-            domElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
         } catch (e) {}
       });
@@ -4225,17 +3978,17 @@
 
     const dispatchData = {
       currentIndex: currentSearchResultIndex,
-      currentResult: result,
+      currentResult: result
     };
-    dispatch("searchindexchanged", dispatchData);
+    dispatch('searchindexchanged', dispatchData);
   }
 
   function navigateToPreviousResult() {
     console.log(
-      "[navigateToPreviousResult] Called. currentSearchResultIndex:",
+      '[navigateToPreviousResult] Called. currentSearchResultIndex:',
       currentSearchResultIndex,
-      "Total results:",
-      searchResults.length,
+      'Total results:',
+      searchResults.length
     );
     if (searchResults.length === 0) return;
 
@@ -4247,10 +4000,10 @@
 
   function navigateToNextResult() {
     console.log(
-      "[navigateToNextResult] Called. currentSearchResultIndex:",
+      '[navigateToNextResult] Called. currentSearchResultIndex:',
       currentSearchResultIndex,
-      "Total results:",
-      searchResults.length,
+      'Total results:',
+      searchResults.length
     );
     if (searchResults.length === 0) return;
 
@@ -4288,7 +4041,7 @@
         if (_isTableNode(node)) {
           foundTables.push(node);
         }
-        if (typeof node.getChildren === "function") {
+        if (typeof node.getChildren === 'function') {
           for (const child of node.getChildren()) {
             findTableNodes(child, foundTables);
           }
@@ -4318,31 +4071,25 @@
           // If numCols is 0, it might be uninitialized, which we'll allow on initialRun to set defaults.
           const isCorrectColCount =
             layoutConfig.colgroup &&
-            (numCols === layoutConfig.colgroup.length ||
-              (isInitialRun && numCols === 0));
+            (numCols === layoutConfig.colgroup.length || (isInitialRun && numCols === 0));
 
-          if (documentPath?.includes("transcripts") || !initialSyncDone) {
-            console.debug(
-              `[LexicalEditor syncLayout] Checking table widths for ${documentPath}:`,
-              {
-                numCols,
-                hasWidths,
-                currentWidths,
-                isInitialRun,
-                isCorrectColCount,
-                activeLayout,
-              },
-            );
+          if (documentPath?.includes('transcripts') || !initialSyncDone) {
+            console.debug(`[LexicalEditor syncLayout] Checking table widths for ${documentPath}:`, {
+              numCols,
+              hasWidths,
+              currentWidths,
+              isInitialRun,
+              isCorrectColCount,
+              activeLayout
+            });
           }
 
-          const hasPercentWidths =
-            hasWidths && currentWidths.some((w) => typeof w === "string");
-          const hasPixelWidths =
-            hasWidths && currentWidths.every((w) => typeof w === "number");
+          const hasPercentWidths = hasWidths && currentWidths.some((w) => typeof w === 'string');
+          const hasPixelWidths = hasWidths && currentWidths.every((w) => typeof w === 'number');
 
           // Determine if we should strictly avoid touching this table's widths
           // Documents should prefer their stored pixel widths once set.
-          const isDocument = documentPath?.includes("/Documents/");
+          const isDocument = documentPath?.includes('/Documents/');
           const shouldBypass = hasPixelWidths && (isDocument || !layoutChanged);
 
           if (
@@ -4351,16 +4098,16 @@
               (isInitialRun && isCorrectColCount && !hasPixelWidths)) &&
             !shouldBypass
           ) {
-            if (documentPath?.includes("transcripts") || !initialSyncDone) {
+            if (documentPath?.includes('transcripts') || !initialSyncDone) {
               console.log(
                 `[LexicalEditor syncLayout] APPLYING layout widths for ${documentPath}:`,
-                layoutConfig.colgroup,
+                layoutConfig.colgroup
               );
             }
             const newColWidths = layoutConfig.colgroup;
             tableNode.setColWidths(newColWidths);
           } else {
-            if (documentPath?.includes("transcripts") || !initialSyncDone) {
+            if (documentPath?.includes('transcripts') || !initialSyncDone) {
               console.debug(
                 `[LexicalEditor syncLayout] BYPASSING layout apply (already has pixels or explicit widths):`,
                 {
@@ -4370,8 +4117,8 @@
                   shouldBypass,
                   layoutChanged,
                   isInitialRun,
-                  isCorrectColCount,
-                },
+                  isCorrectColCount
+                }
               );
             }
           }
@@ -4385,14 +4132,12 @@
             cells.forEach((cell, i) => {
               if (_isTableCellNode(cell)) {
                 const shouldHide = layoutConfig.hiddenColumns?.includes(i);
-                const cellStyle = cell.getStyle() || "";
-                let newStyle = cellStyle
-                  .replace(/display:\s*none\s*;?/, "")
-                  .trim();
+                const cellStyle = cell.getStyle() || '';
+                let newStyle = cellStyle.replace(/display:\s*none\s*;?/, '').trim();
 
                 if (shouldHide) {
-                  if (!newStyle.endsWith(";")) newStyle += ";";
-                  newStyle += " display: none;";
+                  if (!newStyle.endsWith(';')) newStyle += ';';
+                  newStyle += ' display: none;';
                 }
 
                 if (newStyle.trim() !== cellStyle.trim()) {
@@ -4428,7 +4173,7 @@
             // Position toolbar above the selection, centered
             createToolbarPosition = {
               top: rect.top - 45,
-              left: Math.max(5, rect.left + rect.width / 2 - 100),
+              left: Math.max(5, rect.left + rect.width / 2 - 100)
             };
 
             // Boundary check for top
@@ -4459,10 +4204,7 @@
           const nodesToVisit = [root];
           while (nodesToVisit.length > 0) {
             const node = nodesToVisit.pop();
-            if (
-              _isExtendedTextNode(node) &&
-              node.getHighlightId() === newHighlightId
-            ) {
+            if (_isExtendedTextNode(node) && node.getHighlightId() === newHighlightId) {
               clickedNodeKey = node.getKey();
               break;
             }
@@ -4481,7 +4223,7 @@
 
   function handleCreateTagDirectly(tagName) {
     // Flow C: Assign tag directly to unhighlighted text (Defaults to Yellow)
-    const newHighlightId = applyHighlightColor("#FFF275"); // Default yellow
+    const newHighlightId = applyHighlightColor('#FFF275'); // Default yellow
     if (newHighlightId) {
       showCreateToolbar = false;
 
@@ -4492,11 +4234,11 @@
         $project.selectedDocumentPath === documentPath
           ? $project.selectedDocumentType
           : $project.currentStandaloneTranscriptPath === documentPath
-            ? "standalone_transcript"
+            ? 'standalone_transcript'
             : $project.activeTranscriptPathInDataTab === documentPath
-              ? $project.activeTranscriptTypeInDataTab || "audio_transcript"
-              : "doc",
-        documentPath,
+              ? $project.activeTranscriptTypeInDataTab || 'audio_transcript'
+              : 'doc',
+        documentPath
       );
 
       setTimeout(() => {
@@ -4508,10 +4250,7 @@
           const nodesToVisit = [root];
           while (nodesToVisit.length > 0) {
             const node = nodesToVisit.pop();
-            if (
-              _isExtendedTextNode(node) &&
-              node.getHighlightId() === newHighlightId
-            ) {
+            if (_isExtendedTextNode(node) && node.getHighlightId() === newHighlightId) {
               clickedNodeKey = node.getKey();
               break;
             }
@@ -4529,7 +4268,7 @@
   }
 
   function handleRemoveHighlightFromToolbar() {
-    applyHighlightColor("transparent");
+    applyHighlightColor('transparent');
     showCreateToolbar = false;
   }
 </script>
@@ -4573,30 +4312,26 @@
             title="Block Type"
             disabled={!editable}
           >
-            {#if blockType === "h1"}<Heading1
+            {#if blockType === 'h1'}<Heading1 size={14} />{:else if blockType === 'h2'}<Heading2
                 size={14}
-              />{:else if blockType === "h2"}<Heading2
+              />{:else if blockType === 'h3'}<Heading3
                 size={14}
-              />{:else if blockType === "h3"}<Heading3
+              />{:else if blockType === 'ul'}<List
                 size={14}
-              />{:else if blockType === "ul"}<List
+              />{:else if blockType === 'ol'}<ListOrdered
                 size={14}
-              />{:else if blockType === "ol"}<ListOrdered
+              />{:else if blockType === 'check'}<ListChecks
                 size={14}
-              />{:else if blockType === "check"}<ListChecks
+              />{:else if blockType === 'quote'}<QuoteIcon
                 size={14}
-              />{:else if blockType === "quote"}<QuoteIcon
-                size={14}
-              />{:else if blockType === "code"}<CodeIcon
-                size={14}
-              />{:else}<Type size={14} />{/if}
+              />{:else if blockType === 'code'}<CodeIcon size={14} />{:else}<Type size={14} />{/if}
             <ChevronDown size={12} class="ml-0.5" />
           </button>
           {#if isBlockDropdownOpen}
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
-              {#each blockTypeOptions as option}
+              {#each blockTypeOptions as option (option.value)}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => selectBlockType(option.value)}
@@ -4604,10 +4339,7 @@
                   tabindex="-1"
                 >
                   <span class="flex items-center gap-3 mr-3">
-                    <svelte:component
-                      this={blockTypeIcons[option.value]}
-                      size={16}
-                    />
+                    <svelte:component this={blockTypeIcons[option.value]} size={16} />
                     <span>{option.label}</span>
                   </span>
                   <span class="text-xs text-gray-500">{option.shortcut}</span>
@@ -4626,8 +4358,8 @@
             disabled={!editable}
           >
             <span class="truncate"
-              >{fontOptions.find((f) => f.value === selectedFontFamily)
-                ?.label ?? selectedFontFamily}</span
+              >{fontOptions.find((f) => f.value === selectedFontFamily)?.label ??
+                selectedFontFamily}</span
             >
             <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
@@ -4635,7 +4367,7 @@
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
-              {#each fontOptions as option}
+              {#each fontOptions as option (option.value)}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
                   on:click={() => applyFontFamily(option.value)}
@@ -4650,10 +4382,7 @@
           {/if}
         </div>
 
-        <div
-          class="relative flex items-center gap-0.5"
-          bind:this={fontSizeDropdownRef}
-        >
+        <div class="relative flex items-center gap-0.5" bind:this={fontSizeDropdownRef}>
           <button
             class="mini-toolbar-button !px-1"
             on:click={() => updateFontSize(-1)}
@@ -4685,7 +4414,7 @@
             <div
               class="absolute mt-1 top-full left-0 z-[200] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
-              {#each fontSizeOptions as size}
+              {#each fontSizeOptions as size (size)}
                 <div
                   class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
                   on:click={() => applyFontSize(size)}
@@ -4705,7 +4434,7 @@
       {#if toolbarConfig.bold}
         <button
           class="mini-toolbar-button font-bold"
-          on:click={() => formatText("bold")}
+          on:click={() => formatText('bold')}
           class:active={isBold}
           title="Bold ({modLabel}+B)"
           disabled={!editable}><BoldIcon size={14} /></button
@@ -4714,7 +4443,7 @@
       {#if toolbarConfig.italic}
         <button
           class="mini-toolbar-button italic"
-          on:click={() => formatText("italic")}
+          on:click={() => formatText('italic')}
           class:active={isItalic}
           title="Italic ({modLabel}+I)"
           disabled={!editable}><ItalicIcon size={14} /></button
@@ -4723,7 +4452,7 @@
       {#if toolbarConfig.underline}
         <button
           class="mini-toolbar-button underline"
-          on:click={() => formatText("underline")}
+          on:click={() => formatText('underline')}
           class:active={isUnderline}
           title="Underline ({modLabel}+U)"
           disabled={!editable}><UnderlineIcon size={14} /></button
@@ -4747,7 +4476,7 @@
             >
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("uppercase")}
+                on:click={() => applyTextFormat('uppercase')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4755,7 +4484,7 @@
               </div>
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("lowercase")}
+                on:click={() => applyTextFormat('lowercase')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4763,7 +4492,7 @@
               </div>
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("sentencecase")}
+                on:click={() => applyTextFormat('sentencecase')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4771,7 +4500,7 @@
               </div>
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("capitalize")}
+                on:click={() => applyTextFormat('capitalize')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4782,7 +4511,7 @@
 
               <div
                 class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("strikethrough")}
+                on:click={() => applyTextFormat('strikethrough')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4791,7 +4520,7 @@
               </div>
               <div
                 class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("subscript")}
+                on:click={() => applyTextFormat('subscript')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4800,7 +4529,7 @@
               </div>
               <div
                 class="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
-                on:click={() => applyTextFormat("superscript")}
+                on:click={() => applyTextFormat('superscript')}
                 role="menuitem"
                 tabindex="-1"
               >
@@ -4828,7 +4557,7 @@
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
-              {#each insertOptions as option}
+              {#each insertOptions as option (option.label)}
                 <div
                   class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={option.action}
@@ -4854,20 +4583,20 @@
             title="Alignment"
             disabled={!editable}
           >
-            {#if selectedAlignment === "left"}<AlignLeft
+            {#if selectedAlignment === 'left'}<AlignLeft
                 size={14}
-              />{:else if selectedAlignment === "center"}<AlignCenter
+              />{:else if selectedAlignment === 'center'}<AlignCenter
                 size={14}
-              />{:else if selectedAlignment === "right"}<AlignRight
+              />{:else if selectedAlignment === 'right'}<AlignRight size={14} />{:else}<AlignJustify
                 size={14}
-              />{:else}<AlignJustify size={14} />{/if}
+              />{/if}
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isAlignDropdownOpen}
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
-              {#each alignmentOptions as option}
+              {#each alignmentOptions as option (option.value)}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => alignElement(option.value)}
@@ -4875,11 +4604,11 @@
                   tabindex="-1"
                 >
                   <span class="flex items-center gap-3">
-                    {#if option.value === "left"}<AlignLeft
+                    {#if option.value === 'left'}<AlignLeft
                         size={14}
-                      />{:else if option.value === "center"}<AlignCenter
+                      />{:else if option.value === 'center'}<AlignCenter
                         size={14}
-                      />{:else if option.value === "right"}<AlignRight
+                      />{:else if option.value === 'right'}<AlignRight
                         size={14}
                       />{:else}<AlignJustify size={14} />{/if}
                     <span>{option.label}</span>
@@ -4934,7 +4663,7 @@
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
-              {#each colorOptions as option}
+              {#each colorOptions as option (option.value)}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => applyTextColor(option.value)}
@@ -4967,8 +4696,8 @@
             disabled={!editable && !allowReadModeHighlights}
             style="background-color: {selectedHighlightColor === 'transparent'
               ? 'transparent'
-              : selectedHighlightColor}; color: {selectedHighlightColor !==
-              'transparent' && selectedHighlightColor !== null
+              : selectedHighlightColor}; color: {selectedHighlightColor !== 'transparent' &&
+            selectedHighlightColor !== null
               ? '#000'
               : 'currentColor'}"
           >
@@ -4979,7 +4708,7 @@
             <div
               class="absolute top-full left-0 mt-1 z-[200] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
-              {#each highlightOptions as option}
+              {#each highlightOptions as option (option.value)}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => applyHighlightColor(option.value)}
@@ -5013,10 +4742,7 @@
       {/if}
 
       {#if toolbarConfig.search}
-        <div
-          class="ml-auto relative flex items-center"
-          bind:this={searchToggleButtonElement}
-        >
+        <div class="ml-auto relative flex items-center" bind:this={searchToggleButtonElement}>
           <button
             class="mini-toolbar-button"
             class:active={showSearchBox}
@@ -5024,8 +4750,7 @@
               showSearchBox = !showSearchBox;
               if (showSearchBox) {
                 tick().then(() => {
-                  const input =
-                    searchUiContainerElement?.querySelector("input");
+                  const input = searchUiContainerElement?.querySelector('input');
                   if (input) input.focus();
                 });
               } else {
@@ -5056,13 +4781,9 @@
                   autocapitalize="off"
                   spellcheck="false"
                 />
-                <div
-                  class="absolute right-1 flex items-center gap-1 pointer-events-none"
-                >
+                <div class="absolute right-1 flex items-center gap-1 pointer-events-none">
                   {#if searchTerm}
-                    <span
-                      class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
-                    >
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
                       {#if searchResults.length > 0}
                         {currentSearchResultIndex + 1}/{searchResults.length}
                       {:else}
@@ -5129,19 +4850,19 @@
 
   <div
     class="lexical-wrapper flex-grow min-h-0 relative overflow-visible"
-    style={enableSegmentPlayback ? "padding-left: 2.5rem !important;" : ""}
+    style={enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}
     bind:this={editorWrapper}
   >
     <div
       bind:this={editorContainer}
       class="lexical-content focus:outline-none min-h-full h-auto relative"
-      contenteditable={editable ? "true" : "false"}
+      contenteditable={editable ? 'true' : 'false'}
       role="textbox"
       aria-multiline="true"
-      spellcheck={["ul", "ol", "check"].includes(blockType) ? "false" : "true"}
-      autocomplete={["ul", "ol", "check"].includes(blockType) ? "off" : "on"}
-      autocorrect={["ul", "ol", "check"].includes(blockType) ? "off" : "on"}
-      autocapitalize={["ul", "ol", "check"].includes(blockType) ? "off" : "on"}
+      spellcheck={['ul', 'ol', 'check'].includes(blockType) ? 'false' : 'true'}
+      autocomplete={['ul', 'ol', 'check'].includes(blockType) ? 'off' : 'on'}
+      autocorrect={['ul', 'ol', 'check'].includes(blockType) ? 'off' : 'on'}
+      autocapitalize={['ul', 'ol', 'check'].includes(blockType) ? 'off' : 'on'}
       data-placeholder={placeholder}
       on:mouseup={handleMouseUp}
     ></div>
@@ -5156,22 +4877,22 @@
         <div
           class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nwse-resize pointer-events-auto shadow-sm"
           style="top: -6px; left: -6px;"
-          on:pointerdown={(e) => handleImageResizeStart(e, "nw")}
+          on:pointerdown={(e) => handleImageResizeStart(e, 'nw')}
         ></div>
         <div
           class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nesw-resize pointer-events-auto shadow-sm"
           style="top: -6px; right: -6px;"
-          on:pointerdown={(e) => handleImageResizeStart(e, "ne")}
+          on:pointerdown={(e) => handleImageResizeStart(e, 'ne')}
         ></div>
         <div
           class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nesw-resize pointer-events-auto shadow-sm"
           style="bottom: -6px; left: -6px;"
-          on:pointerdown={(e) => handleImageResizeStart(e, "sw")}
+          on:pointerdown={(e) => handleImageResizeStart(e, 'sw')}
         ></div>
         <div
           class="absolute w-3 h-3 bg-blue-500 border border-white cursor-nwse-resize pointer-events-auto shadow-sm"
           style="bottom: -6px; right: -6px;"
-          on:pointerdown={(e) => handleImageResizeStart(e, "se")}
+          on:pointerdown={(e) => handleImageResizeStart(e, 'se')}
         ></div>
       </div>
     {/if}
@@ -5221,7 +4942,7 @@
       executeSearch(e.detail.term, {
         isCaseSensitive: e.detail.isCaseSensitive,
         isRegex: e.detail.isRegex,
-        isWholeWord: e.detail.isWholeWord,
+        isWholeWord: e.detail.isWholeWord
       })}
     on:close={() => (showFindReplaceModal = false)}
   />
@@ -5274,10 +4995,10 @@
       docType={$project.selectedDocumentPath === documentPath
         ? $project.selectedDocumentType
         : $project.currentStandaloneTranscriptPath === documentPath
-          ? "standalone_transcript"
+          ? 'standalone_transcript'
           : $project.activeTranscriptPathInDataTab === documentPath
-            ? $project.activeTranscriptTypeInDataTab || "audio_transcript"
-            : "doc"}
+            ? $project.activeTranscriptTypeInDataTab || 'audio_transcript'
+            : 'doc'}
       filePath={documentPath}
       on:close={() => {
         showModifyToolbar = false;
@@ -5332,7 +5053,7 @@
                 _isExtendedTextNode(currentNode) &&
                 currentNode.getHighlightId() === highlightId
               ) {
-                currentNode.setStyle("");
+                currentNode.setStyle('');
                 currentNode.setHighlightId(null);
               }
               if (currentNode.getChildren) {
@@ -5429,10 +5150,8 @@
     position: relative;
   }
 
-  :global(
-      .lexical-content ul.list-none > li.lexical-li.list-item-checkbox::before
-    ) {
-    content: "";
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox::before) {
+    content: '';
     position: absolute;
     left: 0.125em;
     top: 0.25em;
@@ -5445,20 +5164,16 @@
   }
 
   :global(
-      .lexical-content
-        ul.list-none
-        > li.lexical-li.list-item-checkbox[aria-checked="true"]::before
-    ) {
+    .lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked='true']::before
+  ) {
     background-color: #3b82f6; /* Tailwind blue-500 */
     border-color: #3b82f6;
   }
 
   :global(
-      .lexical-content
-        ul.list-none
-        > li.lexical-li.list-item-checkbox[aria-checked="true"]::after
-    ) {
-    content: "";
+    .lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked='true']::after
+  ) {
+    content: '';
     position: absolute;
     left: 0.4375em;
     top: 0.375em;
@@ -5470,11 +5185,7 @@
     pointer-events: none;
   }
 
-  :global(
-      .lexical-content
-        ul.list-none
-        > li.lexical-li.list-item-checkbox[aria-checked="true"]
-    ) {
+  :global(.lexical-content ul.list-none > li.lexical-li.list-item-checkbox[aria-checked='true']) {
     text-decoration: line-through;
     color: #888;
   }
@@ -5519,7 +5230,7 @@
   }
 
   :global(.editor-code-block) {
-    font-family: Monaco, Consolas, "Lucida Console", monospace;
+    font-family: Monaco, Consolas, 'Lucida Console', monospace;
     line-height: 1.6 !important;
   }
 
@@ -5528,10 +5239,10 @@
   }
 
   /* Make text black if it has a background color in dark mode (improves contrast) */
-  :global(html.dark .lexical-content [style*="background-color"]) {
+  :global(html.dark .lexical-content [style*='background-color']) {
     color: black;
   }
-  :global(html.dark .lexical-content [style*="background-color: transparent"]) {
+  :global(html.dark .lexical-content [style*='background-color: transparent']) {
     color: white; /* Revert if it's explicitly transparent */
   }
 
@@ -5618,8 +5329,7 @@
   /* =================================================================== */
 
   /* STYLES FOR LAYOUT 1 (Detailed Table) - Only apply fixed logic if resizing is disabled */
-  .lexical-editor-root.layout-Layout1.resizing-disabled
-    :global(.lexical-content table) {
+  .lexical-editor-root.layout-Layout1.resizing-disabled :global(.lexical-content table) {
     table-layout: fixed !important;
     width: 100% !important;
   }
@@ -5667,23 +5377,17 @@
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table th:nth-child(odd)),
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table td:nth-child(odd)) {
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table th:nth-child(even)),
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table td:nth-child(even)) {
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table th:nth-child(n + 3)),
-  .lexical-editor-root.layout-Layout2
-    :global(.lexical-content table td:nth-child(n + 3)) {
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(n + 3)),
+  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(n + 3)) {
     margin-top: -1px;
   }
 
@@ -5697,37 +5401,27 @@
     flex-wrap: wrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table th:nth-child(1)),
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table td:nth-child(1)) {
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table th:nth-child(n + 2)),
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table td:nth-child(n + 2)) {
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(n + 2)),
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(n + 2)) {
     box-sizing: border-box;
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table th:nth-child(2)),
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table td:nth-child(2)) {
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table th:nth-child(3)),
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table td:nth-child(3)) {
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout3
-    :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 100%;
     margin-top: -1px;
   }
@@ -5742,30 +5436,22 @@
     flex-wrap: nowrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table th:nth-child(-n + 2)),
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table td:nth-child(-n + 2)) {
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(-n + 2)),
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(-n + 2)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table th:nth-child(n + 3)),
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table td:nth-child(n + 3)) {
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(n + 3)),
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(n + 3)) {
     box-sizing: border-box;
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table th:nth-child(3)),
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table td:nth-child(3)) {
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout4
-    :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
@@ -5780,16 +5466,12 @@
     flex-wrap: nowrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout5
-    :global(.lexical-content table th:nth-child(-n + 3)),
-  .lexical-editor-root.layout-Layout5
-    :global(.lexical-content table td:nth-child(-n + 3)) {
+  .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(-n + 3)),
+  .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(-n + 3)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout5
-    :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout5
-    :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 100%;
     box-sizing: border-box;
     padding: 8px;
