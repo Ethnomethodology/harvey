@@ -106,7 +106,7 @@ Full end-to-end test docs live in `Docs/E2E_TESTING.md`. The critical rule to be
 
 > [!CAUTION]
 > **Never run the e2e test suite against a stale binary.**
-> The tests launch the compiled native binary directly (`src-tauri/target/debug/harvey`), which has the entire `build/` directory **embedded at compile time**. If you run tests without first rebuilding both the frontend and the binary, screenshots will show unstyled, broken UI — even if the live app looks correct.
+> The tests launch the compiled native binary directly (`src-tauri/target/debug/harvey`), which has the entire `build/` directory **embedded at compile time**. If you run tests without first rebuilding both the frontend and the binary, the application logic and behavior reflected in the logs may be incorrect or outdated.
 
 **Always run this command before executing `npx wdio run wdio.conf.mjs`:**
 ```bash

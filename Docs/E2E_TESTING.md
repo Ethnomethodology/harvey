@@ -20,7 +20,7 @@ Ensure your `~/.cargo/bin` is in your `PATH` so `tauri-wd` can be executed from 
 > **Always rebuild the application in debug mode before running tests.**
 > Unlike `tauri dev` (which serves a live Vite dev server), the e2e tests launch the compiled
 > native binary directly. That binary has the `build/` directory **embedded at compile time**.
-> If you skip this step, the test screenshots will render with stale or missing styles.
+> If you skip this step, the test logs may reflect stale application logic or missing assets.
 
 ### Step 1 — Build the Debug Binary
 ```bash
@@ -35,7 +35,7 @@ tauri-wd --port 4444 &
 
 ### Step 4 — Run the test suite
 ```bash
-nx wdio run wdio.conf.mjs
+npx wdio run wdio.conf.mjs
 ```
 
 Or as a single pipeline:
@@ -53,8 +53,6 @@ npm run tauri build -- --debug && npx wdio run wdio.conf.mjs
    npx wdio run wdio.conf.mjs
    ```
 
-> **Note:** The `wdio.conf.mjs` is configured to automatically detect your operating system and append `.exe` to the binary path on Windows.
-
 ---
 
 ## 3. Running Tests in a Cloud Agent or Virtual Environment (Linux)
@@ -70,7 +68,7 @@ sudo apt-get install -y xvfb
 ```
 
 ### Execution
-Wrap both the WebDriver server and the test runner using `xvfb-run`. We explicitly set the virtual screen resolution to ensure the app renders correctly before taking screenshots.
+Wrap both the WebDriver server and the test runner using `xvfb-run`.
 
 ```bash
 # 1. Start the tauri webdriver server inside the virtual display
@@ -83,40 +81,32 @@ sleep 3
 xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npx wdio run wdio.conf.mjs
 ```
 
-Screenshots taken during the test run will be saved to `e2e-tests/screenshots/`.
+Console logs captured during the test run will be saved to `e2e-tests/logs/`.
 
 ---
 
 ## 4. Troubleshooting
 
-### Screenshots show no styles (plain unstyled HTML)
+### Logs show unexpected errors or stale behavior
 
-**Symptom:** Test screenshots in `e2e-tests/screenshots/` look like raw, unstyled HTML — no colours, no layout, no Tailwind classes applied — even though the running app looks correct.
+**Symptom:** The captured logs in `e2e-tests/logs/` show incorrect application state or errors that don't appear in the live `tauri dev` environment.
 
-**Root cause:** The e2e test suite launches the compiled native binary (`src-tauri/target/debug/harvey`) directly via `tauri-wd`. That binary has the entire frontend (`build/`) **embedded inside it at compile time** via Tauri's `frontendDist` setting. If the binary was compiled before (or without) running `npm run build`, it contains an old version of the frontend with no up-to-date CSS.
+**Root cause:** The e2e test suite launches the compiled native binary (`src-tauri/target/debug/harvey`) directly via `tauri-wd`. That binary has the entire frontend (`build/`) **embedded inside it at compile time** via Tauri's `frontendDist` setting. If the binary was compiled before (or without) running `npm run build`, it contains an old version of the frontend.
 
-This is fundamentally different from `tauri dev`, which serves a live Vite dev server on port 1420 that always injects the latest styles. E2e tests never hit that dev server.
-
-**Fix:** Always run `npm run tauri build -- --debug` before executing the test suite. See [Step 1 above](#step-1--build-the-debug-binary) for details.
+**Fix:** Always run `npm run tauri build -- --debug` before executing the test suite.
 
 ---
 
-## 5. How It Works (Bypassing System Dialogs)
+## 5. How It Works (Bypassing System Dialogs and Capturing Logs)
 
-Web automation tools like WebdriverIO cannot interact with native OS-level file explorer windows (e.g., macOS Finder or Windows Explorer).
-
-When a user clicks "Create Project" in Harvey, the app typically calls Tauri's `saveDialog` plugin. To bypass this during E2E testing without modifying the Rust backend, the frontend `actions.js` listens for a specific `window` variable.
-
-In the E2E script (`full-flow.e2e.js`), we inject this variable before triggering the click:
+### Bypassing Native Dialogs
+Web automation tools like WebdriverIO cannot interact with native OS-level file explorer windows. In the E2E script (`full-flow.e2e.js`), we inject a variable into the window before triggering a project creation:
 ```javascript
 await browser.execute((path) => {
     window.__E2E_TEST_PROJECT_PATH__ = path;
 }, dummyPath);
 ```
-The application detects this flag and instantly returns the dummy path, skipping the native dialog entirely and allowing the test flow to continue uninterrupted.
 
----
-
-## 6. Reference Screenshots
-
-The `e2e-tests/reference-screenshots/` directory contains known-good baseline screenshots captured from a correctly-built binary. If your test screenshots in `e2e-tests/screenshots/` look visually wrong, compare them against the reference set to identify regressions. Update the reference screenshots after any intentional UI change by copying the passing screenshots over.
+### Capturing Console Logs
+Since stdout from the Tauri webview is not always easily accessible across all platforms via WebDriver, the test suite injects a capture script that monkey-patches `console.log`, `console.error`, etc., to store logs in a global array. At each test stage, these logs are retrieved and saved to files in `e2e-tests/logs/`.
+hots over.
