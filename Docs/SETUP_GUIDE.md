@@ -90,11 +90,3 @@ When you launch Harvey for the first time, you will see the **Welcome Screen**. 
 
 ### Manual Configuration
 If you prefer, you can skip the wizard and configure these settings manually by switching to the **Configure** tab on the Welcome Screen. Here you can change your download paths, manage installed libraries, input your Hugging Face token, and toggle specific transcription engines (e.g., switching between Whisper.cpp and Faster-Whisper).
-
----
-
-## Part 4: End-to-End (E2E) Testing
-
-Harvey uses Playwright to run virtual desktop simulations. This allows for rapid testing of the UI and core application flows without requiring a live backend or native window management.
-
-For detailed instructions on how to run and maintain these tests, see the **[E2E Testing Guide](E2E_TESTING.md)**.
