@@ -23,27 +23,29 @@ const notifications = writable([]);
  * @param {number} [duration=NOTIFICATION_TIMEOUT_MS] - Optional duration in ms. 0 for persistent.
  */
 function addNotification(message, type, duration = NOTIFICATION_TIMEOUT_MS) {
-    const id = uuidv4();
-    const newNotification = {
-        id,
-        message,
-        type,
-        duration,
-        timestamp: Date.now()
-    };
+  const id = uuidv4();
+  const newNotification = {
+    id,
+    message,
+    type,
+    duration,
+    timestamp: Date.now()
+  };
 
-    notifications.update(currentNotifications => {
-        // Add new notification to the top (or bottom, depending on desired visual stacking)
-        // For bottom-right stacking where new ones appear above old ones, add to end of array.
-        return [...currentNotifications, newNotification];
-    });
+  notifications.update((currentNotifications) => {
+    // Add new notification to the top (or bottom, depending on desired visual stacking)
+    // For bottom-right stacking where new ones appear above old ones, add to end of array.
+    return [...currentNotifications, newNotification];
+  });
 
-    if (typeof duration === 'number' && duration > 0) {
-        console.log(`[notificationStore] Setting auto-dismiss for notification ID ${id} with duration: ${duration}`);
-        setTimeout(() => {
-            dismissNotification(id);
-        }, duration);
-    }
+  if (typeof duration === 'number' && duration > 0) {
+    console.log(
+      `[notificationStore] Setting auto-dismiss for notification ID ${id} with duration: ${duration}`
+    );
+    setTimeout(() => {
+      dismissNotification(id);
+    }, duration);
+  }
 }
 
 /**
@@ -51,21 +53,19 @@ function addNotification(message, type, duration = NOTIFICATION_TIMEOUT_MS) {
  * @param {string} id - The ID of the notification to remove.
  */
 function dismissNotification(id) {
-    notifications.update(currentNotifications =>
-        currentNotifications.filter(n => n.id !== id)
-    );
+  notifications.update((currentNotifications) => currentNotifications.filter((n) => n.id !== id));
 }
 
 /**
  * Clears all notifications.
  */
 function clearAllNotifications() {
-    notifications.set([]);
+  notifications.set([]);
 }
 
 export default {
-    subscribe: notifications.subscribe, // Expose the store's subscribe method
-    add: addNotification,
-    dismiss: dismissNotification,
-    clearAll: clearAllNotifications
+  subscribe: notifications.subscribe, // Expose the store's subscribe method
+  add: addNotification,
+  dismiss: dismissNotification,
+  clearAll: clearAllNotifications
 };

@@ -5,7 +5,10 @@ const initialWaveformLayout = 'horizontal'; // Default to horizontal
 
 const createWaveformLayoutStore = () => {
   const storedLayout = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
-  const initialLayout = storedLayout && ['horizontal', 'vertical', 'none'].includes(storedLayout) ? storedLayout : initialWaveformLayout;
+  const initialLayout =
+    storedLayout && ['horizontal', 'vertical', 'none'].includes(storedLayout)
+      ? storedLayout
+      : initialWaveformLayout;
 
   const { subscribe, set, update } = writable(initialLayout);
 
