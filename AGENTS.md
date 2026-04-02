@@ -100,7 +100,22 @@ npm run tauri build
 
 ---
 
-## 7. Documentation is the Source of Truth
+## 7. E2E Testing
+
+Full end-to-end test docs live in `Docs/E2E_TESTING.md`. The critical rule to be aware of:
+
+> [!CAUTION]
+> **Never run the e2e test suite against a stale binary.**
+> The tests launch the compiled native binary directly (`src-tauri/target/debug/harvey`), which has the entire `build/` directory **embedded at compile time**. If you run tests without first rebuilding both the frontend and the binary, screenshots will show unstyled, broken UI — even if the live app looks correct.
+
+**Always run this command before executing `npx wdio run wdio.conf.mjs`:**
+```bash
+npm run tauri build -- --debug
+```
+
+---
+
+## 8. Documentation is the Source of Truth
 The Harvey application is complex, utilizing SvelteKit, Tauri IPC, SQLite, and Python subprocesses. It relies on a strictly enforced **"Visual First" documentation standard**.
 
 Before attempting to implement a new feature, modify a component, or debug an issue, you **MUST**:

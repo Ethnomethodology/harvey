@@ -13,6 +13,14 @@ describe('Harvey E2E Test Flow', () => {
         if (!fs.existsSync(screenshotsDir)) {
             fs.mkdirSync(screenshotsDir, { recursive: true });
         }
+
+        // Delete the dummy project folder if it exists from a previous run.
+        // Do NOT recreate it here — the Rust backend creates the directory itself
+        // when initialising a new project. Pre-creating it triggers E_DIR_EXISTS.
+        const dummyProjectDir = path.join(__dirname, '..', 'e2e-tests', 'dummy-project-folder');
+        if (fs.existsSync(dummyProjectDir)) {
+            fs.rmSync(dummyProjectDir, { recursive: true, force: true });
+        }
     });
 
     it('should launch the app and capture the welcome screen', async () => {
@@ -65,32 +73,16 @@ describe('Harvey E2E Test Flow', () => {
     });
 
     it('should close the project back to the home screen', async () => {
-        // This is typically a back button or close button in the top bar.
-        // Looking at DataTopBar/SimpleTopBar it emits 'close' when returning to the welcome screen
-        // The project is closed via the X icon in the top right window controls, or a dedicated home button.
-        // If not found, we use browser.execute to trigger the close logic internally for the test
-        const closeBtn = await $("button[title='Close Project']");
-
-        if (await closeBtn.isExisting()) {
-            await closeBtn.click();
-        } else {
-            const homeBtn = await $("//button[contains(., 'Home') or @aria-label='Close Project']");
-            if (await homeBtn.isExisting()) {
-                await homeBtn.click();
+        // Since the window controls (close, minimize, maximize) are native OS elements,
+        // WebdriverIO cannot interact with them via CSS selectors.
+        // We simulate the native close event by calling the exposed handler directly.
+        await browser.execute(() => {
+            if (typeof window.__E2E_CLOSE_PROJECT__ === 'function') {
+                window.__E2E_CLOSE_PROJECT__();
             } else {
-                console.log("Could not find standard Close Project button. Using fallback UI dispatch.");
-                // As a fallback to exit the project, click the Harvey top-left logo/home if it exists,
-                // or just trigger the window close via JS if it's the native window frame.
-                // In Svelte tests, we can just click the first button that might be a back button
-                const fallback = await $("button.text-gray-500.hover\\:text-gray-900"); // typical close button styles
-                if (await fallback.isExisting()) {
-                    await fallback.click();
-                } else {
-                     const firstBtn = await $("button");
-                     await firstBtn.click();
-                }
+                console.error("E2E close project hook not found on window object.");
             }
-        }
+        });
 
         await browser.pause(5000);
         await browser.saveScreenshot(path.join(screenshotsDir, '5-returned-home.png'));

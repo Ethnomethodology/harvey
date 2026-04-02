@@ -560,9 +560,15 @@
                 await handleCloseProject();
             },
         );
+        
+        // Expose handleCloseProject for E2E testing to simulate OS window close
+        window.__E2E_CLOSE_PROJECT__ = handleCloseProject;
     });
 
     onDestroy(() => {
+        // Clean up E2E testing hook
+        delete window.__E2E_CLOSE_PROJECT__;
+        
         cleanupProgressListener();
         if (unlistenMenuEvents) {
             unlistenMenuEvents.forEach((unlisten) => unlisten());

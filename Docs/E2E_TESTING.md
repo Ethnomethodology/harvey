@@ -16,27 +16,39 @@ Ensure your `~/.cargo/bin` is in your `PATH` so `tauri-wd` can be executed from 
 
 ## 2. Running Tests Locally
 
-Before running tests, ensure you have compiled a debug build of the application:
+> [!IMPORTANT]
+> **Always rebuild the application in debug mode before running tests.**
+> Unlike `tauri dev` (which serves a live Vite dev server), the e2e tests launch the compiled
+> native binary directly. That binary has the `build/` directory **embedded at compile time**.
+> If you skip this step, the test screenshots will render with stale or missing styles.
+
+### Step 1 — Build the Debug Binary
 ```bash
 npm run tauri build -- --debug
 ```
+This automatically builds the SvelteKit frontend and embeds `build/` into the Tauri debug binary.
 
-### macOS & Linux
-1. Open a terminal and start the Tauri WebDriver server in the background:
-   ```bash
-   tauri-wd --port 4444 &
-   ```
-2. Run the WebdriverIO test suite:
-   ```bash
-   npx wdio run wdio.conf.mjs
-   ```
+### Step 3 — Start the WebDriver server (macOS & Linux)
+```bash
+tauri-wd --port 4444 &
+```
+
+### Step 4 — Run the test suite
+```bash
+nx wdio run wdio.conf.mjs
+```
+
+Or as a single pipeline:
+```bash
+npm run tauri build -- --debug && npx wdio run wdio.conf.mjs
+```
 
 ### Windows
-1. Open PowerShell or Command Prompt and start the Tauri WebDriver server:
+1. Follow Step 1 above, then open PowerShell and start the WebDriver server:
    ```powershell
    Start-Process tauri-wd -ArgumentList "--port 4444" -NoNewWindow
    ```
-2. Run the WebdriverIO test suite:
+2. Run the test suite:
    ```powershell
    npx wdio run wdio.conf.mjs
    ```
@@ -75,7 +87,21 @@ Screenshots taken during the test run will be saved to `e2e-tests/screenshots/`.
 
 ---
 
-## How It Works (Bypassing System Dialogs)
+## 4. Troubleshooting
+
+### Screenshots show no styles (plain unstyled HTML)
+
+**Symptom:** Test screenshots in `e2e-tests/screenshots/` look like raw, unstyled HTML — no colours, no layout, no Tailwind classes applied — even though the running app looks correct.
+
+**Root cause:** The e2e test suite launches the compiled native binary (`src-tauri/target/debug/harvey`) directly via `tauri-wd`. That binary has the entire frontend (`build/`) **embedded inside it at compile time** via Tauri's `frontendDist` setting. If the binary was compiled before (or without) running `npm run build`, it contains an old version of the frontend with no up-to-date CSS.
+
+This is fundamentally different from `tauri dev`, which serves a live Vite dev server on port 1420 that always injects the latest styles. E2e tests never hit that dev server.
+
+**Fix:** Always run `npm run tauri build -- --debug` before executing the test suite. See [Step 1 above](#step-1--build-the-debug-binary) for details.
+
+---
+
+## 5. How It Works (Bypassing System Dialogs)
 
 Web automation tools like WebdriverIO cannot interact with native OS-level file explorer windows (e.g., macOS Finder or Windows Explorer).
 
@@ -88,3 +114,9 @@ await browser.execute((path) => {
 }, dummyPath);
 ```
 The application detects this flag and instantly returns the dummy path, skipping the native dialog entirely and allowing the test flow to continue uninterrupted.
+
+---
+
+## 6. Reference Screenshots
+
+The `e2e-tests/reference-screenshots/` directory contains known-good baseline screenshots captured from a correctly-built binary. If your test screenshots in `e2e-tests/screenshots/` look visually wrong, compare them against the reference set to identify regressions. Update the reference screenshots after any intentional UI change by copying the passing screenshots over.
