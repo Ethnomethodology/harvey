@@ -16,7 +16,7 @@ vite.config.ts.timestamp-*
 # Ignore personal VSCode settings
 /.vscode/
 /.vs/
-.log
+*.log
 /temp/
 /playwright-report/
 /test-results/
