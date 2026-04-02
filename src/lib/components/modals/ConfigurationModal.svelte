@@ -32,7 +32,10 @@
       <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
         <Settings size={20} class="text-blue-600 dark:text-blue-400" />
       </div>
-      <h3 id="configuration-modal-title" class="text-lg font-bold text-gray-900 dark:text-white truncate">
+      <h3
+        id="configuration-modal-title"
+        class="text-lg font-bold text-gray-900 dark:text-white truncate"
+      >
         Configurations
       </h3>
     </div>
