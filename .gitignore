@@ -21,7 +21,7 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /e2e-tests/dummy-project-folder/
-/screenshots/
+/e2e-tests/logs/
 /test-results/
 /notebooks/
 /harvey-sidecars/

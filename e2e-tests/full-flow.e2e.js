@@ -4,29 +4,67 @@ import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const screenshotsDir = path.join(__dirname, '..', 'e2e-tests', 'screenshots');
+const logsDir = path.join(__dirname, '..', 'e2e-tests', 'logs');
 
 describe('Harvey E2E Test Flow', () => {
 
+    async function saveLogs(stageName) {
+        const logs = await browser.execute(() => {
+            const currentLogs = window.__E2E_LOGS__ || [];
+            // Clear logs after reading so we only get new ones for the next stage?
+            // Actually, the user asked for logs in those 5 stages. I'll take all logs so far.
+            return currentLogs;
+        });
+        
+        fs.writeFileSync(path.join(logsDir, `${stageName}.log`), logs.join('\n'));
+    }
+
     before(async () => {
-        // Ensure screenshots directory exists
-        if (!fs.existsSync(screenshotsDir)) {
-            fs.mkdirSync(screenshotsDir, { recursive: true });
+        // Ensure logs directory exists
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
         }
 
         // Delete the dummy project folder if it exists from a previous run.
-        // Do NOT recreate it here — the Rust backend creates the directory itself
-        // when initialising a new project. Pre-creating it triggers E_DIR_EXISTS.
         const dummyProjectDir = path.join(__dirname, '..', 'e2e-tests', 'dummy-project-folder');
         if (fs.existsSync(dummyProjectDir)) {
             fs.rmSync(dummyProjectDir, { recursive: true, force: true });
         }
     });
 
-    it('should launch the app and capture the welcome screen', async () => {
+    it('should launch the app and inject log capture', async () => {
         // Wait 5 seconds for the app to fully load
         await browser.pause(5000);
-        await browser.saveScreenshot(path.join(screenshotsDir, '1-app-launched.png'));
+        
+        // Inject log capture script as early as possible
+        await browser.execute(() => {
+            window.__E2E_LOGS__ = [];
+            const originalConsole = {
+                log: console.log,
+                error: console.error,
+                warn: console.warn,
+                info: console.info
+            };
+            const capture = (type, args) => {
+                const timestamp = new Date().toISOString();
+                const message = args.map(arg => {
+                    try {
+                        return typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }).join(' ');
+                window.__E2E_LOGS__.push(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
+                originalConsole[type].apply(console, args);
+            };
+            console.log = (...args) => capture('log', args);
+            console.error = (...args) => capture('error', args);
+            console.warn = (...args) => capture('warn', args);
+            console.info = (...args) => capture('info', args);
+            console.log("E2E Log Capture Initialized");
+        });
+
+        await saveLogs('1-app-launched');
     });
 
     it('should create a project and switch to Data tab', async () => {
@@ -37,21 +75,17 @@ describe('Harvey E2E Test Flow', () => {
         }, testProjectPath);
 
         // Find and click the "Create Project" button
-        // Looking at common UI patterns, we look for a button containing the text
         const createBtn = await $('button=Create Project');
-        // If exact text match fails, you might need a more resilient selector like $('button:has-text("Create")')
-        // Svelte buttons might just have the text inside
         if (await createBtn.isExisting()) {
             await createBtn.click();
         } else {
-            // Alternative heuristic fallback
             const altBtn = await $("//button[contains(text(), 'Create Project')]");
             await altBtn.click();
         }
 
         // Wait 5 seconds for the project to create, load, and switch to the Data tab
         await browser.pause(5000);
-        await browser.saveScreenshot(path.join(screenshotsDir, '2-project-view-data.png'));
+        await saveLogs('2-project-view-data');
     });
 
     it('should switch to the Transcription tab', async () => {
@@ -60,7 +94,7 @@ describe('Harvey E2E Test Flow', () => {
         await transcriptionTab.click();
 
         await browser.pause(5000);
-        await browser.saveScreenshot(path.join(screenshotsDir, '3-transcription-tab.png'));
+        await saveLogs('3-transcription-tab');
     });
 
     it('should switch to the Tags tab', async () => {
@@ -69,12 +103,10 @@ describe('Harvey E2E Test Flow', () => {
         await tagsTab.click();
 
         await browser.pause(5000);
-        await browser.saveScreenshot(path.join(screenshotsDir, '4-tags-tab.png'));
+        await saveLogs('4-tags-tab');
     });
 
     it('should close the project back to the home screen', async () => {
-        // Since the window controls (close, minimize, maximize) are native OS elements,
-        // WebdriverIO cannot interact with them via CSS selectors.
         // We simulate the native close event by calling the exposed handler directly.
         await browser.execute(() => {
             if (typeof window.__E2E_CLOSE_PROJECT__ === 'function') {
@@ -85,6 +117,6 @@ describe('Harvey E2E Test Flow', () => {
         });
 
         await browser.pause(5000);
-        await browser.saveScreenshot(path.join(screenshotsDir, '5-returned-home.png'));
+        await saveLogs('5-returned-home');
     });
 });
