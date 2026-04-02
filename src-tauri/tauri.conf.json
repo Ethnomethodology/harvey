@@ -57,6 +57,9 @@
       "binaries",
       "python",
       "assets/*"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }
