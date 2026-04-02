@@ -17,11 +17,11 @@
 
   async function toggleDropdown() {
     if (disabled) return;
-    
+
     if (!isOpen) {
       checkPosition();
     }
-    
+
     isOpen = !isOpen;
   }
 
@@ -29,14 +29,14 @@
     if (!dropdownElement) return;
     const rect = dropdownElement.getBoundingClientRect();
     const menuHeight = 192; // max-h-48 is 12rem = 192px
-    
+
     let spaceBelow;
     if (boundaryRect) {
       spaceBelow = boundaryRect.bottom - rect.bottom;
     } else {
       spaceBelow = window.innerHeight - rect.bottom;
     }
-    
+
     openUpward = spaceBelow < menuHeight && rect.top > menuHeight;
   }
 
@@ -71,18 +71,32 @@
     window.removeEventListener('scroll', checkPosition, true);
   });
 
-  $: selectedOption = options.find(opt => opt.value === value);
+  $: selectedOption = options.find((opt) => opt.value === value);
   $: selectedLabel = selectedOption?.label || placeholder;
 
   function isColor(val) {
     if (typeof val !== 'string') return false;
     const lowerVal = val.toLowerCase().trim();
-    return lowerVal.startsWith('rgba(') || 
-           lowerVal.startsWith('rgb(') || 
-           lowerVal.startsWith('#') || 
-           lowerVal === 'transparent' || 
-           lowerVal.startsWith('url(') ||
-           ['black', 'white', 'red', 'blue', 'gray', 'grey', 'green', 'yellow', 'pink', 'purple', 'orange'].includes(lowerVal);
+    return (
+      lowerVal.startsWith('rgba(') ||
+      lowerVal.startsWith('rgb(') ||
+      lowerVal.startsWith('#') ||
+      lowerVal === 'transparent' ||
+      lowerVal.startsWith('url(') ||
+      [
+        'black',
+        'white',
+        'red',
+        'blue',
+        'gray',
+        'grey',
+        'green',
+        'yellow',
+        'pink',
+        'purple',
+        'orange'
+      ].includes(lowerVal)
+    );
   }
 
   function getColorStyle(val) {
@@ -100,7 +114,11 @@
   }
 </script>
 
-<div class="relative inline-block text-left {containerClasses}" on:keydown={handleKeydown} bind:this={dropdownElement}>
+<div
+  class="relative inline-block text-left {containerClasses}"
+  on:keydown={handleKeydown}
+  bind:this={dropdownElement}
+>
   <div>
     <button
       type="button"
@@ -132,9 +150,11 @@
       aria-orientation="vertical"
     >
       <div class="py-1" role="none">
-        {#each options as option}
+        {#each options as option (option.value)}
           <button
-            class="dropdown-option flex items-center {value === option.value ? 'bg-gray-100 dark:bg-gray-700' : ''}"
+            class="dropdown-option flex items-center {value === option.value
+              ? 'bg-gray-100 dark:bg-gray-700'
+              : ''}"
             role="menuitem"
             on:click={() => selectOption(option.value)}
             title={option.label}
@@ -142,7 +162,11 @@
             {#if showColorPreview && isColor(option.value)}
               <span class="color-swatch mr-2" style={getColorStyle(option.value)}></span>
             {/if}
-            <span class="truncate {value === option.value ? 'font-semibold text-blue-600 dark:text-blue-400' : ''}">{option.label}</span>
+            <span
+              class="truncate {value === option.value
+                ? 'font-semibold text-blue-600 dark:text-blue-400'
+                : ''}">{option.label}</span
+            >
           </button>
         {/each}
       </div>
