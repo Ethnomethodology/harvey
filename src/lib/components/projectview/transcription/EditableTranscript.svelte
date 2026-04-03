@@ -988,7 +988,7 @@
 
             <!-- Primary Segment Editor -->
             <div class="flex-shrink-0 py-2">
-              <div class="primary-segment-editor">
+              <div class="primary-segment-editor relative z-10">
                 <!-- Row 1: Num, Time, Speaker -->
                 <div class="flex items-center gap-x-2 flex-shrink-0 mb-2">
                   <!-- Segment Number -->

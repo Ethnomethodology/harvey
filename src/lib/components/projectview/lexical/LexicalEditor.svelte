@@ -116,6 +116,27 @@
   import { $generateHtmlFromNodes as _generateHtmlFromNodes } from '@lexical/html';
   import { createEmptyHistoryState, registerHistory } from '@lexical/history';
   import { createEventDispatcher } from 'svelte';
+  
+  /**
+   * Action to portal an element to the body
+   */
+  function portal(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      }
+    };
+  }
+
+  let dropdownStyle = '';
+  
+  function updateDropdownPosition(ref) {
+    if (!ref) return;
+    const rect = ref.getBoundingClientRect();
+    // Use fixed positioning to escape overflow containers
+    dropdownStyle = `position: fixed; top: ${rect.bottom + 4}px; left: ${rect.left}px; z-index: 10000;`;
+  }
   import { v4 as uuidv4 } from 'uuid';
 
   import {
@@ -541,11 +562,14 @@
     }
   }
 
-  function toggleBlockDropdown() {
+  function toggleBlockDropdown(event) {
     if (!editable) return;
     const nextState = !isBlockDropdownOpen;
     closeAllDropdowns();
     isBlockDropdownOpen = nextState;
+    if (isBlockDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   function selectBlockType(type) {
@@ -553,18 +577,24 @@
     isBlockDropdownOpen = false;
   }
 
-  function toggleInsertDropdown() {
+  function toggleInsertDropdown(event) {
     if (!editable) return;
     const nextState = !isInsertDropdownOpen;
     closeAllDropdowns();
     isInsertDropdownOpen = nextState;
+    if (isInsertDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
-  function toggleTextFormatDropdown() {
+  function toggleTextFormatDropdown(event) {
     if (!editable) return;
     const nextState = !isTextFormatDropdownOpen;
     closeAllDropdowns();
     isTextFormatDropdownOpen = nextState;
+    if (isTextFormatDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   function applyTextFormat(formatType) {
@@ -987,22 +1017,28 @@
 
   let isAlignDropdownOpen = false;
   let alignmentDropdownRef;
-  function toggleAlignDropdown() {
+  function toggleAlignDropdown(event) {
     if (!editable) return;
     const nextState = !isAlignDropdownOpen;
     closeAllDropdowns();
     isAlignDropdownOpen = nextState;
+    if (isAlignDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   let selectedFontFamily = 'Inter';
   let isFontDropdownOpen = false;
   let fontDropdownRef;
 
-  function toggleFontDropdown() {
+  function toggleFontDropdown(event) {
     if (!editable) return;
     const nextState = !isFontDropdownOpen;
     closeAllDropdowns();
     isFontDropdownOpen = nextState;
+    if (isFontDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   function applyFontFamily(fontFamily) {
@@ -1015,11 +1051,14 @@
   let isFontSizeDropdownOpen = false;
   let fontSizeDropdownRef;
 
-  function toggleFontSizeDropdown() {
+  function toggleFontSizeDropdown(event) {
     if (!editable) return;
     const nextState = !isFontSizeDropdownOpen;
     closeAllDropdowns();
     isFontSizeDropdownOpen = nextState;
+    if (isFontSizeDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   function applyFontSize(fontSize) {
@@ -1087,20 +1126,26 @@
   const highlightOptions = HIGHLIGHT_OPTIONS_WITH_NONE;
   let isHighlightDropdownOpen = false;
   let highlightDropdownRef;
-  function toggleHighlightDropdown() {
+  function toggleHighlightDropdown(event) {
     if (!editable && !allowReadModeHighlights) return;
     const nextState = !isHighlightDropdownOpen;
     closeAllDropdowns();
     isHighlightDropdownOpen = nextState;
+    if (isHighlightDropdownOpen) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   let isColorDropdownOpen = false;
   let colorDropdownRef;
-  function toggleColorDropdown() {
+  function toggleColorDropdown(event) {
     if (!editable) return;
     const nextState = !isColorDropdownOpen;
     closeAllDropdowns();
     isColorDropdownOpen = nextState;
+    if (isColorDropdownOpen) {
+      updateDropdownPosition(event.currentTarget);
+    }
   }
 
   import { get } from 'svelte/store';
@@ -4330,7 +4375,9 @@
           </button>
           {#if isBlockDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              use:portal
+              style={dropdownStyle}
+              class="w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each blockTypeOptions as option (option.value)}
                 <div
@@ -4366,7 +4413,9 @@
           </button>
           {#if isFontDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              use:portal
+              style={dropdownStyle}
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
               {#each fontOptions as option (option.value)}
                 <div
@@ -4413,7 +4462,9 @@
           </button>
           {#if isFontSizeDropdownOpen}
             <div
-              class="absolute mt-1 top-full left-0 z-[1000] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              use:portal
+              style={dropdownStyle}
+              class="w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
               {#each fontSizeOptions as size (size)}
                 <div
@@ -4473,7 +4524,9 @@
           </button>
           {#if isTextFormatDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
+              use:portal
+              style={dropdownStyle}
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
             >
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -4556,7 +4609,9 @@
           </button>
           {#if isInsertDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              use:portal
+              style={dropdownStyle}
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each insertOptions as option (option.label)}
                 <div
@@ -4595,7 +4650,9 @@
           </button>
           {#if isAlignDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              use:portal
+              style={dropdownStyle}
+              class="w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each alignmentOptions as option (option.value)}
                 <div
@@ -4662,7 +4719,9 @@
           </button>
           {#if isColorDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              use:portal
+              style={dropdownStyle}
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
               {#each colorOptions as option (option.value)}
                 <div
@@ -4707,7 +4766,9 @@
           </button>
           {#if isHighlightDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[1000] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              use:portal
+              style={dropdownStyle}
+              class="w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
               {#each highlightOptions as option (option.value)}
                 <div
