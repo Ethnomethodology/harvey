@@ -3489,8 +3489,16 @@ export async function checkUnsavedChangesThenProceed(
       resetEditorFunction = projState.activeMediaNoteEditorRef.ref.resetEditorState;
     } else {
       console.warn(
-        `[checkUnsavedChanges] Media note for ${itemPath} is dirty but editor ref missing.`
+        `[checkUnsavedChanges] Media note for ${itemPath} is dirty but editor ref missing. Attempting fallback save from store.`
       );
+      if (projState.activeTranscriptPathInDataTab && projState.currentMediaNoteTranscriptJson) {
+        saveFunction = async () => {
+          await saveDocumentContent(
+            projState.activeTranscriptPathInDataTab,
+            projState.currentMediaNoteTranscriptJson
+          );
+        };
+      }
       discardFunction = () => markMediaNoteTranscriptChangesDiscarded(itemPath);
     }
   } else if (
@@ -3553,6 +3561,17 @@ export async function checkUnsavedChangesThenProceed(
       initialContentForReset = projState.initialStandaloneTranscriptLexicalJson;
       resetEditorFunction = projState.activeStandaloneTranscriptEditorRef.ref.resetEditorState;
     } else {
+      console.warn(
+        `[checkUnsavedChanges] Standalone transcript for ${itemPath} is dirty but editor ref missing. Attempting fallback save from store.`
+      );
+      if (projState.currentStandaloneTranscriptLexicalJson) {
+        saveFunction = async () => {
+          await saveStandaloneTranscriptContent(
+            itemPath,
+            projState.currentStandaloneTranscriptLexicalJson
+          );
+        };
+      }
       discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
     }
   } else if (tsState.currentTranscriptPath && tsState.transcriptDirty) {

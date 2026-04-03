@@ -1824,7 +1824,20 @@ export async function switchTranscriptInDataTab(newTranscriptPath) {
         savedSuccessfully = true;
       } catch (e) {
         console.error('[ProjectStore] Autosave failed during switch:', e);
-        // Proceed to prompt if save failed
+      }
+    } else if (proj.currentMediaNoteTranscriptJson && proj.activeTranscriptPathInDataTab) {
+      console.log(
+        '[ProjectStore] Editor ref missing for dirty transcript. Attempting fallback save from store...'
+      );
+      try {
+        const { saveDocumentContent } = await import('$lib/services/projectService.js');
+        await saveDocumentContent(
+          proj.activeTranscriptPathInDataTab,
+          proj.currentMediaNoteTranscriptJson
+        );
+        savedSuccessfully = true;
+      } catch (e) {
+        console.error('[ProjectStore] Fallback save failed during switch:', e);
       }
     }
 

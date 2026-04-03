@@ -230,6 +230,13 @@
   }
 
   function handleEditorChange(event) {
+    // If the update originated from an 'external' source, ignore it to prevent race conditions
+    const tags = event.detail.tags || [];
+    if (tags.includes('external')) {
+      console.debug('[MediaTranscriptSubPanel] Ignoring external editor update.');
+      return;
+    }
+
     const newJson = event.detail.jsonString;
     if (localEditorJsonState !== newJson) {
       localEditorJsonState = newJson;

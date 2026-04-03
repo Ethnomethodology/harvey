@@ -727,6 +727,14 @@
   let editorUpdateDebounceTimer;
 
   function handleEditorUpdate(event) {
+    // If the update originated from an 'external' source (programmatic updateContent call),
+    // we should NOT update currentEditorJson to avoid race conditions during segment switches.
+    const tags = event.detail.tags || [];
+    if (tags.includes('external')) {
+      console.debug('[EditableTranscript] Ignoring external editor update for primary.');
+      return;
+    }
+
     currentEditorJson = event.detail.jsonString;
 
     if (!editEnabled) {
@@ -740,6 +748,12 @@
 
   // In dual mode, listen to secondary editor updates to trigger auto-save if in read mode
   function handleSecondaryEditorUpdate(event) {
+    const tags = event.detail.tags || [];
+    if (tags.includes('external')) {
+      console.debug('[EditableTranscript] Ignoring external editor update for secondary.');
+      return;
+    }
+
     currentEditorJsonSecondary = event.detail.jsonString;
 
     if (!editEnabled) {

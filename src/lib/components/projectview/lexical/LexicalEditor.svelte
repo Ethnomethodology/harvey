@@ -1310,7 +1310,7 @@
     isReady = true; // Set to true before registering listener and setting state
 
     unregisterListeners = mergeRegister(
-      editor.registerUpdateListener(({ editorState }) => {
+      editor.registerUpdateListener(({ editorState, tags }) => {
         if (isReady) {
           try {
             editorState.read(() => {
@@ -1351,7 +1351,8 @@
             htmlString,
             textContent,
             chars,
-            words
+            words,
+            tags: Array.from(tags)
           });
           dispatch('textcountchange', { chars, words });
         }
