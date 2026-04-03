@@ -1,11 +1,11 @@
 // src-tauri/src/projectview/db_handler.rs
-use rusqlite::{Connection, Result, params, OptionalExtension, ToSql};
-use std::path::PathBuf;
-use std::fs;
+use crate::projectview::shared_types::{FileGroupAssociationFromDb, FileMetadata, Highlight};
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
-use log::{info, debug, error, warn};
-use serde::{Serialize, Deserialize}; // Added for the new struct
-use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb, Highlight}; // For function signatures
+use log::{debug, error, info, warn};
+use rusqlite::{params, Connection, OptionalExtension, Result, ToSql};
+use serde::{Deserialize, Serialize}; // Added for the new struct
+use std::fs;
+use std::path::PathBuf; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
@@ -32,7 +32,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub waveform_data: Option<Vec<u8>>,
     pub language_code: Option<String>,
     pub properties: Option<String>,
-    pub file_type: Option<String>, // Added field
+    pub file_type: Option<String>,  // Added field
     pub thumbnail: Option<Vec<u8>>, // NEW
 }
 
@@ -56,7 +56,12 @@ pub struct MediaTranscriptDataValues {
 }
 
 pub fn get_db_path() -> Result<PathBuf, CommandError> {
-    let config_dir = get_config_dir().map_err(|e| CommandError::Message(format!("Failed to get config dir from welcome/config: {}", e)))?;
+    let config_dir = get_config_dir().map_err(|e| {
+        CommandError::Message(format!(
+            "Failed to get config dir from welcome/config: {}",
+            e
+        ))
+    })?;
     Ok(config_dir.join(DB_FILE_NAME))
 }
 
@@ -148,7 +153,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !doc_type_column_exists {
         info!("[DB] Adding document_type column to pdf_annotations table.");
-        conn.execute("ALTER TABLE pdf_annotations ADD COLUMN document_type TEXT NOT NULL DEFAULT 'pdf'", [])?;
+        conn.execute(
+            "ALTER TABLE pdf_annotations ADD COLUMN document_type TEXT NOT NULL DEFAULT 'pdf'",
+            [],
+        )?;
     }
 
     // Check and add project_id column if missing (for older schemas)
@@ -188,27 +196,27 @@ pub fn init_db() -> Result<(), CommandError> {
         ("file_groups", "file_asset_path"),
         ("attachments", "base_asset_relative_path"),
         ("attachments", "attachment_relative_path"),
-        ("media_transcript_data", "asset_relative_path")
+        ("media_transcript_data", "asset_relative_path"),
     ];
 
     for (table, col) in tables_and_cols {
         let sql_audios = format!(
-            "UPDATE {} 
+            "UPDATE {}
              SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Audios/')
              WHERE {} LIKE 'harvey_files/Media/%'
              AND EXISTS (
-                 SELECT 1 FROM asset_metadata m 
-                 WHERE m.project_id = {}.project_id 
+                 SELECT 1 FROM asset_metadata m
+                 WHERE m.project_id = {}.project_id
                  AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
              );", table, col, col, col, table, table, col
         );
         let sql_videos = format!(
-            "UPDATE {} 
+            "UPDATE {}
              SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Videos/')
              WHERE {} LIKE 'harvey_files/Media/%'
              AND EXISTS (
-                 SELECT 1 FROM asset_metadata m 
-                 WHERE m.project_id = {}.project_id 
+                 SELECT 1 FROM asset_metadata m
+                 WHERE m.project_id = {}.project_id
                  AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
              );", table, col, col, col, table, table, col
         );
@@ -278,10 +286,14 @@ pub fn init_db() -> Result<(), CommandError> {
     }
 
     // Always check for records with missing file_type and attempt to backfill
-    let mut stmt_check_nulls = conn.prepare("SELECT COUNT(*) FROM asset_metadata WHERE file_type IS NULL OR file_type = ''")?;
+    let mut stmt_check_nulls = conn
+        .prepare("SELECT COUNT(*) FROM asset_metadata WHERE file_type IS NULL OR file_type = ''")?;
     let null_count: i64 = stmt_check_nulls.query_row([], |row| row.get(0))?;
     if null_count > 0 {
-        info!("[DB] Found {} records with missing file_type. Backfilling...", null_count);
+        info!(
+            "[DB] Found {} records with missing file_type. Backfilling...",
+            null_count
+        );
         if let Err(e) = backfill_file_type(&conn) {
             error!("[DB] Failed to backfill file_type: {}", e);
         }
@@ -295,7 +307,7 @@ pub fn init_db() -> Result<(), CommandError> {
                 SELECT 1 FROM asset_metadata m
                 WHERE m.project_id = asset_metadata.project_id
                   AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
-                  AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1) 
+                  AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1)
                       = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
                   AND (REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
             )
@@ -329,7 +341,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !orig_import_path_exists {
         info!("[DB] Adding original_import_path column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN original_import_path TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE asset_metadata ADD COLUMN original_import_path TEXT",
+            [],
+        )?;
     }
 
     // Migration for speaker_names_json
@@ -340,7 +355,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !speaker_json_exists {
         info!("[DB] Adding speaker_names_json column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT",
+            [],
+        )?;
     }
 
     // Migration for waveform_data
@@ -351,7 +369,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !waveform_data_exists {
         info!("[DB] Adding waveform_data column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB", [])?;
+        conn.execute(
+            "ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB",
+            [],
+        )?;
     }
 
     // Migration for language_code
@@ -362,7 +383,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !lang_code_exists {
         info!("[DB] Adding language_code column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN language_code TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE asset_metadata ADD COLUMN language_code TEXT",
+            [],
+        )?;
     }
 
     // Migration for properties
@@ -440,14 +464,20 @@ pub fn init_db() -> Result<(), CommandError> {
     info!("[DB] Initialized table_layout_preferences table with composite PK and FK.");
 
     // Check and add project_id column to table_layout_preferences if missing
-    let mut stmt_check_layout_project_id = conn.prepare("PRAGMA table_info(table_layout_preferences)")?;
+    let mut stmt_check_layout_project_id =
+        conn.prepare("PRAGMA table_info(table_layout_preferences)")?;
     let layout_project_id_exists = stmt_check_layout_project_id
         .query_map([], |row| row.get::<_, String>(1))?
         .any(|name_res| name_res.map_or(false, |name| name == "project_id"));
 
     if !layout_project_id_exists {
-        info!("[DB] Adding project_id column to table_layout_preferences table (for older schema).");
-        conn.execute("ALTER TABLE table_layout_preferences ADD COLUMN project_id TEXT", [])?;
+        info!(
+            "[DB] Adding project_id column to table_layout_preferences table (for older schema)."
+        );
+        conn.execute(
+            "ALTER TABLE table_layout_preferences ADD COLUMN project_id TEXT",
+            [],
+        )?;
         info!("[DB] Added project_id column to table_layout_preferences. Existing rows will have NULL. PK and FK not changed for existing tables by this ALTER.");
     }
 
@@ -544,8 +574,14 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !last_opened_col_exists {
         info!("[DB] Adding last_opened_ts column to projects table.");
-        conn.execute("ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP", [])?;
-        conn.execute("UPDATE projects SET last_opened_ts = CURRENT_TIMESTAMP WHERE last_opened_ts IS NULL", [])?;
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN last_opened_ts TIMESTAMP",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE projects SET last_opened_ts = CURRENT_TIMESTAMP WHERE last_opened_ts IS NULL",
+            [],
+        )?;
     }
 
     // Global Settings table
@@ -621,7 +657,11 @@ pub fn init_db() -> Result<(), CommandError> {
                 let type_: String = row.get(2)?;
                 Ok((name, type_))
             })?
-            .any(|res| res.map_or(false, |(name, type_)| name == "id" && type_.to_uppercase() == "INTEGER"));
+            .any(|res| {
+                res.map_or(false, |(name, type_)| {
+                    name == "id" && type_.to_uppercase() == "INTEGER"
+                })
+            });
 
         if is_integer_id {
             info!("[DB] Detected legacy INTEGER id in tag_groups. Migrating to TEXT...");
@@ -832,7 +872,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !lang_code_exists {
         info!("[DB] Adding language_code column to media_transcript_data table.");
-        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT",
+            [],
+        )?;
     }
 
     // Migration for initial_prompt and hotwords
@@ -843,7 +886,10 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !prompt_exists {
         info!("[DB] Adding initial_prompt column to media_transcript_data table.");
-        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN initial_prompt TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE media_transcript_data ADD COLUMN initial_prompt TEXT",
+            [],
+        )?;
     }
 
     let mut stmt_check_hotwords = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
@@ -853,11 +899,17 @@ pub fn init_db() -> Result<(), CommandError> {
 
     if !hotwords_exists {
         info!("[DB] Adding hotwords column to media_transcript_data table.");
-        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN hotwords TEXT", [])?;
+        conn.execute(
+            "ALTER TABLE media_transcript_data ADD COLUMN hotwords TEXT",
+            [],
+        )?;
     }
 
     // Trigger for media_transcript_data updated_at
-    conn.execute("DROP TRIGGER IF EXISTS update_media_transcript_data_updated_at", [])?;
+    conn.execute(
+        "DROP TRIGGER IF EXISTS update_media_transcript_data_updated_at",
+        [],
+    )?;
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_media_transcript_data_updated_at
         AFTER UPDATE ON media_transcript_data
@@ -925,10 +977,12 @@ pub fn init_db() -> Result<(), CommandError> {
 
     // Migration for adding color column to tags table
     let mut stmt = conn.prepare("PRAGMA table_info(tags)")?;
-    let column_exists = stmt.query_map([], |row| {
-        let column_name: String = row.get(1)?;
-        Ok(column_name)
-    })?.any(|col| col.as_deref() == Ok("color"));
+    let column_exists = stmt
+        .query_map([], |row| {
+            let column_name: String = row.get(1)?;
+            Ok(column_name)
+        })?
+        .any(|col| col.as_deref() == Ok("color"));
 
     if !column_exists {
         info!("[DB] Adding color column to tags table.");
@@ -954,7 +1008,9 @@ pub fn init_db() -> Result<(), CommandError> {
 
     // Migration for adding columns to highlights table
     let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
-    let columns: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     if !columns.contains(&"asset_id".to_string()) {
         info!("[DB] Adding asset_id column to highlights table.");
@@ -997,10 +1053,10 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 1. Documents
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'document' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'document'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (
-             asset_type IN ('document', 'doc') 
+             asset_type IN ('document', 'doc')
              OR file_name LIKE '%.pdf' OR file_name LIKE '%.docx' OR file_name LIKE '%.txt' OR file_name LIKE '%.rtf' OR file_name LIKE '%.md'
              OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Documents/attachments/%')
          )",
@@ -1009,16 +1065,16 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 2. Tables
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'table' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'table'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (asset_type = 'table' OR file_name LIKE '%.csv' OR file_name LIKE '%.xlsx')",
-        []
+        [],
     )?;
 
     // 3. Transcripts (Imported)
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'transcript' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'transcript'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (
              asset_type IN ('transcript', 'standalone_transcript')
              OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
@@ -1028,18 +1084,18 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 4. Images
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'image' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'image'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (asset_type = 'image' OR file_name LIKE '%.png' OR file_name LIKE '%.jpg' OR file_name LIKE '%.jpeg' OR file_name LIKE '%.gif' OR file_name LIKE '%.bmp' OR file_name LIKE '%.webp')",
         []
     )?;
 
     // 5. Media - Audio
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'audio' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'audio'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (
-             asset_type = 'audio' 
+             asset_type = 'audio'
              OR file_name LIKE '%.mp3' OR file_name LIKE '%.wav' OR file_name LIKE '%.m4a' OR file_name LIKE '%.ogg' OR file_name LIKE '%.aac' OR file_name LIKE '%.flac' OR file_name LIKE '%.wma'
              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%'
          )",
@@ -1048,10 +1104,10 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 6. Media - Video
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'video' 
-         WHERE (file_type IS NULL OR file_type = '') 
+        "UPDATE asset_metadata SET file_type = 'video'
+         WHERE (file_type IS NULL OR file_type = '')
          AND (
-             asset_type = 'video' 
+             asset_type = 'video'
              OR file_name LIKE '%.mp4' OR file_name LIKE '%.mov' OR file_name LIKE '%.avi' OR file_name LIKE '%.mkv' OR file_name LIKE '%.webm' OR file_name LIKE '%.wmv' OR file_name LIKE '%.flv'
              OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%'
          )",
@@ -1062,18 +1118,18 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     // Heuristic: If it's in Media folder and asset_type is transcript-related or it's in a transcripts subfolder
     conn.execute(
         "UPDATE asset_metadata SET file_type = COALESCE((
-            SELECT CASE 
+            SELECT CASE
                 WHEN m.asset_type = 'video' OR m.file_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi' THEN 'video-transcript'
                 ELSE 'audio-transcript'
             END
             FROM asset_metadata m
-            WHERE m.project_id = asset_metadata.project_id 
+            WHERE m.project_id = asset_metadata.project_id
               AND (m.asset_type IN ('audio', 'video', 'media') OR m.file_type IN ('audio', 'video'))
-              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 20), '/') - 1) 
+              AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 20), '/') - 1)
                   = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 20), '/') - 1)
             LIMIT 1
         ), 'audio-transcript')
-        WHERE (file_type IS NULL OR file_type = '') 
+        WHERE (file_type IS NULL OR file_type = '')
         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
         AND (asset_type IN ('transcript', 'audio_transcript', 'video_transcript') OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/transcripts/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/transcripts/%')",
         []
@@ -1081,19 +1137,19 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
     // 8. Document Attachments
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'document-attachment' 
-         WHERE (file_type IS NULL OR file_type = '') 
-         AND asset_type = 'attachment' 
+        "UPDATE asset_metadata SET file_type = 'document-attachment'
+         WHERE (file_type IS NULL OR file_type = '')
+         AND asset_type = 'attachment'
          AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/attachments/%')",
-        []
+        [],
     )?;
 
     // 9. Transcript Attachments
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'transcript-attachment' 
-         WHERE (file_type IS NULL OR file_type = '') 
-         AND asset_type = 'attachment' 
-         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%' 
+        "UPDATE asset_metadata SET file_type = 'transcript-attachment'
+         WHERE (file_type IS NULL OR file_type = '')
+         AND asset_type = 'attachment'
+         AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/attachments/%'
               OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%/attachments/%'
               OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%/attachments/%'
               OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%/attachments/%')",
@@ -1106,7 +1162,7 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     for prefix in &["Media", "Audios", "Videos"] {
         let start_idx = if *prefix == "Media" { 21 } else { 22 };
         let pattern = format!("harvey_files/{}/%", prefix);
-        
+
         conn.execute(
             &format!(
                 "UPDATE asset_metadata SET file_type = 'video-transcript'
@@ -1115,7 +1171,7 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
                     SELECT 1 FROM asset_metadata m
                     WHERE m.project_id = asset_metadata.project_id
                       AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
-                      AND substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}), '/') - 1) 
+                      AND substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), {0}), '/') - 1)
                           = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), {0}), '/') - 1)
                       AND REPLACE(m.asset_relative_path, '\\', '/') LIKE '{1}'
                  )
@@ -1132,62 +1188,108 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
 
 // --- Group Functions ---
 
-pub fn create_group(conn: &Connection, project_id: &str, group_id: &str, name: &str, description: Option<&str>) -> Result<(), CommandError> {
-    debug!("[DB] Creating group for project_id {}: id={}, name={}", project_id, group_id, name);
+pub fn create_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    name: &str,
+    description: Option<&str>,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Creating group for project_id {}: id={}, name={}",
+        project_id, group_id, name
+    );
     conn.execute(
         "INSERT INTO groups (id, project_id, name, description) VALUES (?1, ?2, ?3, ?4)",
         params![group_id, project_id, name, to_sql_optional_str(description)],
     )
     .map_err(|e| CommandError::Message(format!("Failed to create group {}: {}", name, e)))?;
-    info!("[DB] Group created successfully: id={}, name={}", group_id, name);
+    info!(
+        "[DB] Group created successfully: id={}, name={}",
+        group_id, name
+    );
     Ok(())
 }
 
-pub fn get_groups_for_project(conn: &Connection, project_id: &str) -> Result<Vec<GroupDataFromDb>, CommandError> {
+pub fn get_groups_for_project(
+    conn: &Connection,
+    project_id: &str,
+) -> Result<Vec<GroupDataFromDb>, CommandError> {
     debug!("[DB] Loading groups for project_id {}", project_id);
     let mut stmt = conn.prepare("SELECT id, project_id, name, description, created_at, updated_at FROM groups WHERE project_id = ?1 ORDER BY name ASC")
         .map_err(|e| CommandError::Message(format!("Failed to prepare statement for getting groups: {}", e)))?;
 
-    let group_iter = stmt.query_map(params![project_id], |row| {
-        Ok(GroupDataFromDb {
-            id: row.get(0)?,
-            project_id: row.get(1)?,
-            name: row.get(2)?,
-            description: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+    let group_iter = stmt
+        .query_map(params![project_id], |row| {
+            Ok(GroupDataFromDb {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
         })
-    })
-    .map_err(|e| CommandError::Message(format!("Failed to query groups for project {}: {}", project_id, e)))?;
+        .map_err(|e| {
+            CommandError::Message(format!(
+                "Failed to query groups for project {}: {}",
+                project_id, e
+            ))
+        })?;
 
     let mut groups = Vec::new();
     for group_result in group_iter {
-        groups.push(group_result.map_err(|e| CommandError::Message(format!("Failed to map group row: {}", e)))?);
+        groups.push(
+            group_result
+                .map_err(|e| CommandError::Message(format!("Failed to map group row: {}", e)))?,
+        );
     }
-    info!("[DB] Loaded {} groups for project_id {}", groups.len(), project_id);
+    info!(
+        "[DB] Loaded {} groups for project_id {}",
+        groups.len(),
+        project_id
+    );
     Ok(groups)
 }
 
-pub fn add_file_to_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_relative_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Adding file {} to group {} for project_id {}", file_asset_relative_path, group_id, project_id);
+pub fn add_file_to_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    file_asset_relative_path: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Adding file {} to group {} for project_id {}",
+        file_asset_relative_path, group_id, project_id
+    );
     info!("[DB EXEC] INSERT INTO file_groups with project_id: '{}', group_id: '{}', file_asset_path: '{}'", project_id, group_id, file_asset_relative_path);
     conn.execute(
         "INSERT INTO file_groups (project_id, group_id, file_asset_path) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
         params![project_id, group_id, file_asset_relative_path],
     )
     .map_err(|e| CommandError::Message(format!("Failed to add file {} to group {}: {}", file_asset_relative_path, group_id, e)))?;
-    info!("[DB] File {} added to group {} successfully (if not already present).", file_asset_relative_path, group_id);
+    info!(
+        "[DB] File {} added to group {} successfully (if not already present).",
+        file_asset_relative_path, group_id
+    );
     Ok(())
 }
 
-pub fn get_groups_for_file_asset(conn: &Connection, project_id: &str, file_asset_path: &str) -> Result<Vec<GroupDataFromDb>, rusqlite::Error> {
-    debug!("[DB] Loading groups for file_asset_path {} in project_id {}", file_asset_path, project_id);
+pub fn get_groups_for_file_asset(
+    conn: &Connection,
+    project_id: &str,
+    file_asset_path: &str,
+) -> Result<Vec<GroupDataFromDb>, rusqlite::Error> {
+    debug!(
+        "[DB] Loading groups for file_asset_path {} in project_id {}",
+        file_asset_path, project_id
+    );
     let mut stmt = conn.prepare(
         "SELECT g.id, g.project_id, g.name, g.description, g.created_at, g.updated_at
          FROM groups g
          JOIN file_groups fg ON g.id = fg.group_id
          WHERE fg.project_id = ?1 AND fg.file_asset_path = ?2
-         ORDER BY g.name ASC"
+         ORDER BY g.name ASC",
     )?;
 
     let group_iter = stmt.query_map(params![project_id, file_asset_path], |row| {
@@ -1205,31 +1307,57 @@ pub fn get_groups_for_file_asset(conn: &Connection, project_id: &str, file_asset
     for group_result in group_iter {
         groups.push(group_result?);
     }
-    info!("[DB] Loaded {} groups for file_asset_path {} in project_id {}", groups.len(), file_asset_path, project_id);
+    info!(
+        "[DB] Loaded {} groups for file_asset_path {} in project_id {}",
+        groups.len(),
+        file_asset_path,
+        project_id
+    );
     Ok(groups)
 }
 
-pub fn remove_file_from_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_path: &str) -> Result<usize, rusqlite::Error> {
-    debug!("[DB] Removing file {} from group {} for project_id {}", file_asset_path, group_id, project_id);
+pub fn remove_file_from_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    file_asset_path: &str,
+) -> Result<usize, rusqlite::Error> {
+    debug!(
+        "[DB] Removing file {} from group {} for project_id {}",
+        file_asset_path, group_id, project_id
+    );
     let rows_affected = conn.execute(
         "DELETE FROM file_groups
          WHERE project_id = ?1 AND group_id = ?2 AND file_asset_path = ?3",
         params![project_id, group_id, file_asset_path],
     )?;
     if rows_affected > 0 {
-        info!("[DB] File {} removed from group {} successfully.", file_asset_path, group_id);
+        info!(
+            "[DB] File {} removed from group {} successfully.",
+            file_asset_path, group_id
+        );
     } else {
-        info!("[DB] No association found for file {} in group {} (project_id {}). Nothing removed.", file_asset_path, group_id, project_id);
+        info!(
+            "[DB] No association found for file {} in group {} (project_id {}). Nothing removed.",
+            file_asset_path, group_id, project_id
+        );
     }
     Ok(rows_affected)
 }
 
-pub fn get_files_for_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<Vec<FileGroupAssociationFromDb>, rusqlite::Error> {
-    debug!("[DB] Loading files for group_id {} in project_id {}", group_id, project_id);
+pub fn get_files_for_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+) -> Result<Vec<FileGroupAssociationFromDb>, rusqlite::Error> {
+    debug!(
+        "[DB] Loading files for group_id {} in project_id {}",
+        group_id, project_id
+    );
     let mut stmt = conn.prepare(
         "SELECT fg.file_asset_path FROM file_groups fg
          WHERE fg.project_id = ?1 AND fg.group_id = ?2
-         ORDER BY fg.file_asset_path ASC" // Added ORDER BY for consistency
+         ORDER BY fg.file_asset_path ASC", // Added ORDER BY for consistency
     )?;
 
     let rows = stmt.query_map(params![project_id, group_id], |row| {
@@ -1242,7 +1370,12 @@ pub fn get_files_for_group(conn: &Connection, project_id: &str, group_id: &str) 
     for file_result in rows {
         files.push(file_result?);
     }
-    info!("[DB] Loaded {} files for group_id {} in project_id {}", files.len(), group_id, project_id);
+    info!(
+        "[DB] Loaded {} files for group_id {} in project_id {}",
+        files.len(),
+        group_id,
+        project_id
+    );
     Ok(files)
 }
 
@@ -1251,14 +1384,20 @@ pub fn update_group_details(
     project_id: &str,
     group_id: &str,
     new_name: &str,
-    new_description: Option<&str>
+    new_description: Option<&str>,
 ) -> Result<usize, rusqlite::Error> {
     // chrono::Utc should be in scope from the top of shared_types.rs or directly here if needed.
     // For db_handler.rs, we might need to add `use chrono::Utc;` if it's not already implicitly available.
     // Assuming Utc is available for now as per its usage in FileMetadata default.
     // If not, the compiler will tell us, and we can add `use chrono::Utc;`
     let current_timestamp = chrono::Utc::now().to_rfc3339();
-    debug!("[DB] Updating group details for group_id {} in project_id {}: name={}, desc_is_some={}", group_id, project_id, new_name, new_description.is_some());
+    debug!(
+        "[DB] Updating group details for group_id {} in project_id {}: name={}, desc_is_some={}",
+        group_id,
+        project_id,
+        new_name,
+        new_description.is_some()
+    );
     conn.execute(
         "UPDATE groups SET name = ?1, description = ?2, updated_at = ?3 WHERE project_id = ?4 AND id = ?5",
         params![new_name, new_description, current_timestamp, project_id, group_id],
@@ -1270,12 +1409,15 @@ pub fn rename_group_in_db(
     project_id: &str,
     group_id: &str,
     new_name: &str,
-    new_description: Option<&str>
+    new_description: Option<&str>,
 ) -> Result<usize, rusqlite::Error> {
     let current_timestamp = chrono::Utc::now().to_rfc3339();
     debug!(
         "[DB] Renaming group for group_id {} in project_id {}: new_name={}, new_desc_is_some={}",
-        group_id, project_id, new_name, new_description.is_some()
+        group_id,
+        project_id,
+        new_name,
+        new_description.is_some()
     );
     conn.execute(
         "UPDATE groups SET name = ?1, description = ?2, updated_at = ?3 WHERE project_id = ?4 AND id = ?5",
@@ -1286,9 +1428,12 @@ pub fn rename_group_in_db(
 pub fn delete_group_from_db(
     conn: &Connection,
     project_id: &str,
-    group_id: &str
+    group_id: &str,
 ) -> Result<usize, rusqlite::Error> {
-    debug!("[DB] Deleting group for group_id {} in project_id {}", group_id, project_id);
+    debug!(
+        "[DB] Deleting group for group_id {} in project_id {}",
+        group_id, project_id
+    );
 
     // First, delete associations from file_groups.
     // It's important to do this first if there are foreign key constraints,
@@ -1311,9 +1456,15 @@ pub fn delete_group_from_db(
     )?;
 
     if group_rows_deleted > 0 {
-        info!("[DB] Group group_id {} in project_id {} deleted successfully.", group_id, project_id);
+        info!(
+            "[DB] Group group_id {} in project_id {} deleted successfully.",
+            group_id, project_id
+        );
     } else {
-        warn!("[DB] No group found with group_id {} in project_id {} to delete.", group_id, project_id);
+        warn!(
+            "[DB] No group found with group_id {} in project_id {} to delete.",
+            group_id, project_id
+        );
     }
     // Return the number of rows deleted from the 'groups' table.
     // The command expects Result<(), String> so the exact number isn't directly passed up,
@@ -1412,7 +1563,7 @@ pub fn update_media_additional_parameters(
             to_sql_optional_str(hotwords),
             project_id,
             asset_relative_path
-        ]
+        ],
     )?;
 
     if rows_affected == 0 {
@@ -1426,7 +1577,7 @@ pub fn update_media_additional_parameters(
                 asset_relative_path,
                 to_sql_optional_str(initial_prompt),
                 to_sql_optional_str(hotwords)
-            ]
+            ],
         )?;
     }
 
@@ -1445,42 +1596,68 @@ pub fn load_media_transcript_data(
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
-    let mut stmt = conn.prepare("
+    let mut stmt = conn.prepare(
+        "
         SELECT original_import_path, speaker_names_json, language_code, initial_prompt, hotwords
         FROM media_transcript_data
         WHERE project_id = ?1 AND asset_relative_path = ?2
-    ")?;
+    ",
+    )?;
 
-    let result = stmt.query_row(params![project_id, asset_relative_path], |row| {
-        Ok(MediaTranscriptDataValues {
-            original_import_path: row.get(0)?,
-            speaker_names_json: row.get(1)?,
-            language_code: row.get(2)?,
-            initial_prompt: row.get(3)?,
-            hotwords: row.get(4)?,
+    let result = stmt
+        .query_row(params![project_id, asset_relative_path], |row| {
+            Ok(MediaTranscriptDataValues {
+                original_import_path: row.get(0)?,
+                speaker_names_json: row.get(1)?,
+                language_code: row.get(2)?,
+                initial_prompt: row.get(3)?,
+                hotwords: row.get(4)?,
+            })
         })
-    }).optional()?;
+        .optional()?;
 
     debug!(
         "[DB] Load media transcript data result for project_id {} - {}: {}",
-        project_id, asset_relative_path, if result.is_some() { "Some(...)" } else { "None" }
+        project_id,
+        asset_relative_path,
+        if result.is_some() {
+            "Some(...)"
+        } else {
+            "None"
+        }
     );
     Ok(result)
 }
 
 // --- Table Layout Preferences Functions ---
 
-pub fn save_table_layout_preferences(project_id: &str, table_asset_relative_path: &str, layout_json: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving table layout preferences for project_id {}: {}", project_id, table_asset_relative_path);
+pub fn save_table_layout_preferences(
+    project_id: &str,
+    table_asset_relative_path: &str,
+    layout_json: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Saving table layout preferences for project_id {}: {}",
+        project_id, table_asset_relative_path
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     // Check if asset metadata exists for the given project_id and path
-    let mut stmt = conn.prepare("SELECT 1 FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2")?;
-    let exists: Option<i32> = stmt.query_row(params![project_id, table_asset_relative_path], |row| row.get(0)).optional()?;
+    let mut stmt = conn.prepare(
+        "SELECT 1 FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2",
+    )?;
+    let exists: Option<i32> = stmt
+        .query_row(params![project_id, table_asset_relative_path], |row| {
+            row.get(0)
+        })
+        .optional()?;
 
     if exists.is_none() {
-        let error_msg = format!("Asset metadata not found for project_id {} and table: {}", project_id, table_asset_relative_path);
+        let error_msg = format!(
+            "Asset metadata not found for project_id {} and table: {}",
+            project_id, table_asset_relative_path
+        );
         error!("[DB] {}", error_msg);
         return Err(CommandError::AssetMetadataNotFound(error_msg));
     }
@@ -1493,36 +1670,65 @@ pub fn save_table_layout_preferences(project_id: &str, table_asset_relative_path
              updated_at = CURRENT_TIMESTAMP",
         params![project_id, table_asset_relative_path, layout_json],
     )?;
-    info!("[DB] Table layout preferences saved successfully for project_id {}: {}", project_id, table_asset_relative_path);
+    info!(
+        "[DB] Table layout preferences saved successfully for project_id {}: {}",
+        project_id, table_asset_relative_path
+    );
     Ok(())
 }
 
-pub fn load_table_layout_preferences(project_id: &str, table_asset_relative_path: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading table layout preferences for project_id {}: {}", project_id, table_asset_relative_path);
+pub fn load_table_layout_preferences(
+    project_id: &str,
+    table_asset_relative_path: &str,
+) -> Result<Option<String>, CommandError> {
+    debug!(
+        "[DB] Loading table layout preferences for project_id {}: {}",
+        project_id, table_asset_relative_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None for table layout: project_id {}, path {}", db_path.display(), project_id, table_asset_relative_path);
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("
+    let mut stmt = conn.prepare(
+        "
         SELECT layout_json
         FROM table_layout_preferences
         WHERE project_id = ?1 AND table_asset_relative_path = ?2
-    ")?;
+    ",
+    )?;
 
-    let result = stmt.query_row(params![project_id, table_asset_relative_path], |row| {
-        row.get(0)
-    }).optional()?;
+    let result = stmt
+        .query_row(params![project_id, table_asset_relative_path], |row| {
+            row.get(0)
+        })
+        .optional()?;
 
-    debug!("[DB] Load table layout prefs result for project_id {} - {}: {}", project_id, table_asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    debug!(
+        "[DB] Load table layout prefs result for project_id {} - {}: {}",
+        project_id,
+        table_asset_relative_path,
+        if result.is_some() {
+            "Some(...)"
+        } else {
+            "None"
+        }
+    );
     Ok(result)
 }
 
 // --- End Table Layout Preferences Functions ---
 
-pub fn save_table_styles(project_id: &str, table_path: &str, styles: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving table styles for project_id {}: {}", project_id, table_path);
+pub fn save_table_styles(
+    project_id: &str,
+    table_path: &str,
+    styles: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Saving table styles for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
@@ -1534,46 +1740,83 @@ pub fn save_table_styles(project_id: &str, table_path: &str, styles: &str) -> Re
              updated_at = CURRENT_TIMESTAMP",
         params![project_id, table_path, styles],
     )?;
-    info!("[DB] Table styles saved successfully for project_id {}: {}", project_id, table_path);
+    info!(
+        "[DB] Table styles saved successfully for project_id {}: {}",
+        project_id, table_path
+    );
     Ok(())
 }
 
-pub fn load_table_styles(project_id: &str, table_path: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading table styles for project_id {}: {}", project_id, table_path);
+pub fn load_table_styles(
+    project_id: &str,
+    table_path: &str,
+) -> Result<Option<String>, CommandError> {
+    debug!(
+        "[DB] Loading table styles for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None for table styles: project_id {}, path {}", db_path.display(), project_id, table_path);
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("
+    let mut stmt = conn.prepare(
+        "
         SELECT styles
         FROM table_styles
         WHERE project_id = ?1 AND table_path = ?2
-    ")?;
+    ",
+    )?;
 
-    let result = stmt.query_row(params![project_id, table_path], |row| {
-        row.get(0)
-    }).optional()?;
+    let result = stmt
+        .query_row(params![project_id, table_path], |row| row.get(0))
+        .optional()?;
 
-    debug!("[DB] Load table styles result for project_id {} - {}: {}", project_id, table_path, if result.is_some() { "Some(...)" } else { "None" });
+    debug!(
+        "[DB] Load table styles result for project_id {} - {}: {}",
+        project_id,
+        table_path,
+        if result.is_some() {
+            "Some(...)"
+        } else {
+            "None"
+        }
+    );
     Ok(result)
 }
 
 pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting table styles for project_id {}: {}", project_id, table_path);
+    debug!(
+        "[DB] Deleting table styles for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, path {}", db_path.display(), project_id, table_path);
+        debug!(
+            "[DB] Database file not found at {}. Nothing to delete for project_id {}, path {}",
+            db_path.display(),
+            project_id,
+            table_path
+        );
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    let changes = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, table_path])?;
+    let changes = conn.execute(
+        "DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, table_path],
+    )?;
 
     if changes > 0 {
-        info!("[DB] Table styles deleted successfully for project_id {}: {} ({} rows affected)", project_id, table_path, changes);
+        info!(
+            "[DB] Table styles deleted successfully for project_id {}: {} ({} rows affected)",
+            project_id, table_path, changes
+        );
     } else {
-        debug!("[DB] No table styles found to delete for project_id {}: {}", project_id, table_path);
+        debug!(
+            "[DB] No table styles found to delete for project_id {}: {}",
+            project_id, table_path
+        );
     }
     Ok(())
 }
@@ -1601,7 +1844,6 @@ pub fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
     }
 }
 
-
 pub fn save_asset_metadata(
     project_id: &str, // New parameter
     metadata: &FileMetadata,
@@ -1618,11 +1860,13 @@ pub fn save_asset_metadata(
 
     if let Some(parent_dir) = db_path.parent() {
         if !parent_dir.exists() {
-            fs::create_dir_all(parent_dir).map_err(|e| CommandError::Io(format!("Failed to create db directory: {}", e)))?;
+            fs::create_dir_all(parent_dir)
+                .map_err(|e| CommandError::Io(format!("Failed to create db directory: {}", e)))?;
         }
     }
 
-    let speaker_names_json_str: Option<String> = metadata.speaker_names
+    let speaker_names_json_str: Option<String> = metadata
+        .speaker_names
         .as_ref()
         .and_then(|names| serde_json::to_string(names).ok());
 
@@ -1687,7 +1931,7 @@ pub fn save_asset_metadata(
             to_sql_optional_blob(metadata.waveform_data.as_deref()),
             to_sql_optional_str(metadata.language_code.as_deref()),
             to_sql_optional_str(metadata.properties.as_deref()),
-            metadata.file_type, // Parameter 24
+            metadata.file_type,                                  // Parameter 24
             to_sql_optional_blob(metadata.thumbnail.as_deref()), // Parameter 25
         ],
     )?;
@@ -1699,11 +1943,22 @@ pub fn save_asset_metadata(
     Ok(())
 }
 
-pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
-    debug!("[DB] Loading asset metadata for project_id {}: {}", project_id, asset_relative_path);
+pub fn load_asset_metadata(
+    project_id: &str,
+    asset_relative_path: &str,
+) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
+    debug!(
+        "[DB] Loading asset metadata for project_id {}: {}",
+        project_id, asset_relative_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Returning None for project_id {}, asset: {}", db_path.display(), project_id, asset_relative_path);
+        debug!(
+            "[DB] Database file not found at {}. Returning None for project_id {}, asset: {}",
+            db_path.display(),
+            project_id,
+            asset_relative_path
+        );
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
@@ -1716,73 +1971,125 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
 
-    let result = stmt.query_row(params![project_id, asset_relative_path], |row| {
-        Ok(FileMetadataWithCustomFieldsFromDb {
-            file_name: row.get(0)?,
-            file_path: row.get(1)?,
-            last_modified: row.get(2)?,
-            title: row.get(3)?,
-            description: row.get(4)?,
-            summary: row.get(5)?,
-            duration_seconds: row.get(6)?,
-            width: row.get(7)?,
-            height: row.get(8)?,
-            frame_rate: row.get(9)?,
-            bit_rate: row.get(10)?,
-            audio_codec: row.get(11)?,
-            video_codec: row.get(12)?,
-            creation_time: row.get(13)?,
-            custom_fields_json: row.get(14)?,
-            asset_type: row.get(15)?,
-            original_import_path: row.get(16)?,
-            speaker_names_json: row.get(17)?,
-            waveform_data: row.get(18)?,
-            language_code: row.get(19)?,
-            properties: row.get(20)?,
-            file_type: row.get(21)?,
-            thumbnail: row.get(22)?,
+    let result = stmt
+        .query_row(params![project_id, asset_relative_path], |row| {
+            Ok(FileMetadataWithCustomFieldsFromDb {
+                file_name: row.get(0)?,
+                file_path: row.get(1)?,
+                last_modified: row.get(2)?,
+                title: row.get(3)?,
+                description: row.get(4)?,
+                summary: row.get(5)?,
+                duration_seconds: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                frame_rate: row.get(9)?,
+                bit_rate: row.get(10)?,
+                audio_codec: row.get(11)?,
+                video_codec: row.get(12)?,
+                creation_time: row.get(13)?,
+                custom_fields_json: row.get(14)?,
+                asset_type: row.get(15)?,
+                original_import_path: row.get(16)?,
+                speaker_names_json: row.get(17)?,
+                waveform_data: row.get(18)?,
+                language_code: row.get(19)?,
+                properties: row.get(20)?,
+                file_type: row.get(21)?,
+                thumbnail: row.get(22)?,
+            })
         })
-    }).optional()?;
+        .optional()?;
 
-    debug!("[DB] Load asset metadata result for project_id {} - {}: {}", project_id, asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    debug!(
+        "[DB] Load asset metadata result for project_id {} - {}: {}",
+        project_id,
+        asset_relative_path,
+        if result.is_some() {
+            "Some(...)"
+        } else {
+            "None"
+        }
+    );
     Ok(result)
 }
 
-pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting asset metadata and associated items for project_id {}: {}", project_id, asset_relative_path);
+pub fn delete_asset_metadata(
+    project_id: &str,
+    asset_relative_path: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Deleting asset metadata and associated items for project_id {}: {}",
+        project_id, asset_relative_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, asset: {}", db_path.display(), project_id, asset_relative_path);
+        debug!(
+            "[DB] Database file not found at {}. Nothing to delete for project_id {}, asset: {}",
+            db_path.display(),
+            project_id,
+            asset_relative_path
+        );
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
 
     // Check if table schema/chart configs/styles exist and drop them
-    let _ = conn.execute("DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
-    let _ = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
-    let _ = conn.execute("DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, asset_relative_path],
+    );
+    let _ = conn.execute(
+        "DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, asset_relative_path],
+    );
+    let _ = conn.execute(
+        "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Delete associated table views
-    let _ = conn.execute("DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Highlights reference 'asset_id' based on the schema, but could be 'document_path' in old logic. Delete from both to be safe.
-    let _ = conn.execute("DELETE FROM highlights WHERE project_id = ?1 AND asset_id = ?2", params![project_id, asset_relative_path]);
-    let _ = conn.execute("DELETE FROM highlights WHERE project_id = ?1 AND document_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM highlights WHERE project_id = ?1 AND asset_id = ?2",
+        params![project_id, asset_relative_path],
+    );
+    let _ = conn.execute(
+        "DELETE FROM highlights WHERE project_id = ?1 AND document_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Delete PDF annotations (they use 'pdf_document_path')
-    let _ = conn.execute("DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Delete Layout Preferences
     let _ = conn.execute("DELETE FROM table_layout_preferences WHERE project_id = ?1 AND table_asset_relative_path = ?2", params![project_id, asset_relative_path]);
 
     // Delete File Group mappings
-    let _ = conn.execute("DELETE FROM file_groups WHERE project_id = ?1 AND file_asset_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM file_groups WHERE project_id = ?1 AND file_asset_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Delete Media Transcript Data
-    let _ = conn.execute("DELETE FROM media_transcript_data WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute(
+        "DELETE FROM media_transcript_data WHERE project_id = ?1 AND asset_relative_path = ?2",
+        params![project_id, asset_relative_path],
+    );
 
     // Finally Delete Metadata (since other tables might rely on FKs pointing to it, though PRAGMA foreign_keys = ON should cascade natively, executing it explicitly ensures full cleanup across all DB versions)
-    let changes = conn.execute("DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path])?;
+    let changes = conn.execute(
+        "DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2",
+        params![project_id, asset_relative_path],
+    )?;
     if changes > 0 {
         info!("[DB] Asset metadata and relations deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
     }
@@ -1795,13 +2102,16 @@ pub fn save_pdf_metadata_to_db(
     asset_relative_path: &str,
     thumbnail: &[u8],
 ) -> Result<(), CommandError> {
-    debug!("[DB] Saving PDF metadata for project_id {}: {}", project_id, asset_relative_path);
+    debug!(
+        "[DB] Saving PDF metadata for project_id {}: {}",
+        project_id, asset_relative_path
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     conn.execute(
-        "UPDATE asset_metadata 
-         SET thumbnail = ?1, updated_at = CURRENT_TIMESTAMP 
+        "UPDATE asset_metadata
+         SET thumbnail = ?1, updated_at = CURRENT_TIMESTAMP
          WHERE project_id = ?2 AND asset_relative_path = ?3",
         params![thumbnail, project_id, asset_relative_path],
     )?;
@@ -1823,7 +2133,12 @@ pub fn rename_asset_metadata_key(
 
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {}", db_path.display(), project_id, old_relative_path);
+        debug!(
+            "[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {}",
+            db_path.display(),
+            project_id,
+            old_relative_path
+        );
         return Ok(());
     }
 
@@ -1833,12 +2148,19 @@ pub fn rename_asset_metadata_key(
     let tx = conn.transaction().map_err(CommandError::from)?;
 
     // 1. Disable foreign key constraints
-    debug!("[DB TX] Disabling foreign keys for rename operation on project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
-    tx.execute("PRAGMA foreign_keys = OFF;", params![]).map_err(|e| {
-        error!("[DB TX] Failed to disable foreign keys: {}. Operation aborted.", e);
-        // No need to manually re-enable FKs here as the transaction will rollback.
-        CommandError::from(e)
-    })?;
+    debug!(
+        "[DB TX] Disabling foreign keys for rename operation on project_id {}: from {} to {}",
+        project_id, old_relative_path, new_relative_path
+    );
+    tx.execute("PRAGMA foreign_keys = OFF;", params![])
+        .map_err(|e| {
+            error!(
+                "[DB TX] Failed to disable foreign keys: {}. Operation aborted.",
+                e
+            );
+            // No need to manually re-enable FKs here as the transaction will rollback.
+            CommandError::from(e)
+        })?;
 
     // 2. Update Parent Table First: asset_metadata
     debug!(
@@ -1886,19 +2208,27 @@ pub fn rename_asset_metadata_key(
     for (table, col) in child_tables {
         // Safe check: Only attempt update if the table exists in the current DB schema.
         // This avoids RusqliteError: no such table: ... for optional/legacy tables like 'attachments'.
-        let table_exists: bool = tx.query_row(
-            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
-            params![table],
-            |row| row.get(0),
-        ).unwrap_or(false);
+        let table_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                params![table],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
 
         if !table_exists {
             debug!("[DB TX] Skipping rename update for child table '{}' as it does not exist in this database.", table);
             continue;
         }
 
-        let sql = format!("UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3", table, col, col);
-        match tx.execute(&sql, params![new_relative_path, project_id, old_relative_path]) {
+        let sql = format!(
+            "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
+            table, col, col
+        );
+        match tx.execute(
+            &sql,
+            params![new_relative_path, project_id, old_relative_path],
+        ) {
             Ok(changes) if changes > 0 => {
                 info!("[DB TX] Updated child table {} for project_id {} from {} to {} ({} rows affected)", table, project_id, old_relative_path, new_relative_path, changes);
             }
@@ -1908,7 +2238,10 @@ pub fn rename_asset_metadata_key(
             Err(e) => {
                 error!("[DB TX] Error updating child table {} for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", table, project_id, old_relative_path, new_relative_path, e);
                 if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
-                    error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+                    error!(
+                        "[DB TX] Failed to re-enable foreign keys during error handling: {}",
+                        fk_err
+                    );
                 }
                 return Err(CommandError::from(e));
             }
@@ -1916,7 +2249,10 @@ pub fn rename_asset_metadata_key(
     }
 
     // 4. Re-enable foreign key constraints before committing
-    debug!("[DB TX] Re-enabling foreign keys for project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
+    debug!(
+        "[DB TX] Re-enabling foreign keys for project_id {}: from {} to {}",
+        project_id, old_relative_path, new_relative_path
+    );
     tx.execute("PRAGMA foreign_keys = ON;", params![]).map_err(|e| {
         error!("[DB TX] CRITICAL: Failed to re-enable foreign keys for project_id {} after updates. Transaction will be rolled back. Error: {}", project_id, e);
         CommandError::from(e)
@@ -1935,8 +2271,14 @@ pub fn rename_asset_metadata_key(
 
 use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope};
 
-pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDefinition) -> Result<(), CommandError> {
-    debug!("[DB] Adding custom field definition for project_id {}: {}", project_id, definition.field_key);
+pub fn add_custom_field_definition(
+    project_id: &str,
+    definition: &CustomFieldDefinition,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Adding custom field definition for project_id {}: {}",
+        project_id, definition.field_key
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
@@ -1954,14 +2296,20 @@ pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDef
             definition.updated_at
         ],
     )?;
-    info!("[DB] Custom field definition added successfully for project_id {}: {}", project_id, definition.field_key);
+    info!(
+        "[DB] Custom field definition added successfully for project_id {}: {}",
+        project_id, definition.field_key
+    );
     Ok(())
 }
 
-
-
-pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFieldDefinition>, CommandError> {
-    debug!("[DB] Getting all custom field definitions for project_id {}", project_id);
+pub fn get_all_custom_field_definitions(
+    project_id: &str,
+) -> Result<Vec<CustomFieldDefinition>, CommandError> {
+    debug!(
+        "[DB] Getting all custom field definitions for project_id {}",
+        project_id
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
@@ -1974,9 +2322,9 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
         let scope_str: String = row.get(4)?; // Adjusted index
         Ok(CustomFieldDefinition {
             project_id: row.get(0)?, // Added project_id
-            field_key: row.get(1)?,    // Adjusted index
-            field_name: row.get(2)?,   // Adjusted index
-            field_type: row.get(3)?,   // Adjusted index
+            field_key: row.get(1)?,  // Adjusted index
+            field_name: row.get(2)?, // Adjusted index
+            field_type: row.get(3)?, // Adjusted index
             scope: CustomFieldScope::from_db_string(&scope_str),
             default_value: row.get(5)?, // Adjusted index
             created_at: row.get(6)?,    // Adjusted index
@@ -1988,14 +2336,22 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
     for def in def_iter {
         definitions.push(def?);
     }
-    info!("[DB] Retrieved {} custom field definitions for project_id {}.", definitions.len(), project_id);
+    info!(
+        "[DB] Retrieved {} custom field definitions for project_id {}.",
+        definitions.len(),
+        project_id
+    );
     Ok(definitions)
 }
 
-
-
-pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting custom field definition for project_id {}: {}", project_id, field_key);
+pub fn delete_custom_field_definition(
+    project_id: &str,
+    field_key: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Deleting custom field definition for project_id {}: {}",
+        project_id, field_key
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
@@ -2005,9 +2361,15 @@ pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Resu
     )?;
 
     if changes > 0 {
-        info!("[DB] Custom field definition deleted successfully for project_id {}: {}", project_id, field_key);
+        info!(
+            "[DB] Custom field definition deleted successfully for project_id {}: {}",
+            project_id, field_key
+        );
     } else {
-        info!("[DB] No custom field definition found to delete for project_id {} and key: {}", project_id, field_key);
+        info!(
+            "[DB] No custom field definition found to delete for project_id {} and key: {}",
+            project_id, field_key
+        );
     }
     Ok(())
 }
@@ -2016,8 +2378,16 @@ pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Resu
 
 // --- Project Table Functions ---
 
-pub fn add_project_to_db(id: &str, name: &str, root_path: &str, xml_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Adding project to db: id={}, name={}, root_path={}, xml_path={}", id, name, root_path, xml_path);
+pub fn add_project_to_db(
+    id: &str,
+    name: &str,
+    root_path: &str,
+    xml_path: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Adding project to db: id={}, name={}, root_path={}, xml_path={}",
+        id, name, root_path, xml_path
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
@@ -2035,13 +2405,15 @@ pub fn add_project_to_db(id: &str, name: &str, root_path: &str, xml_path: &str) 
     Ok(())
 }
 
-
-
 pub fn delete_project_from_db(project_id: &str) -> Result<(), CommandError> {
     info!("[DB] Attempting to delete project with id: {}", project_id);
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        warn!("[DB] Database file not found at {}. Cannot delete project {}.", db_path.display(), project_id);
+        warn!(
+            "[DB] Database file not found at {}. Cannot delete project {}.",
+            db_path.display(),
+            project_id
+        );
         return Ok(()); // Or an error if project should always exist in DB if config exists
     }
     let conn = Connection::open(&db_path)?;
@@ -2050,35 +2422,71 @@ pub fn delete_project_from_db(project_id: &str) -> Result<(), CommandError> {
     if changes > 0 {
         info!("[DB] Successfully deleted project with id: {} ({} rows affected). Associated data should be removed by CASCADE.", project_id, changes);
     } else {
-        warn!("[DB] No project found in 'projects' table with id: {} to delete.", project_id);
+        warn!(
+            "[DB] No project found in 'projects' table with id: {} to delete.",
+            project_id
+        );
     }
     Ok(())
 }
 
 // --- End Project Table Functions ---
 
-pub fn load_annotations_from_db(project_id: &str, document_path: &str, doc_type: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
+pub fn load_annotations_from_db(
+    project_id: &str,
+    document_path: &str,
+    doc_type: &str,
+) -> Result<Option<String>, CommandError> {
+    debug!(
+        "[DB] Loading annotations for project_id {}: {} (type: {})",
+        project_id, document_path, doc_type
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Returning None.", db_path.display());
+        debug!(
+            "[DB] Database file not found at {}. Returning None.",
+            db_path.display()
+        );
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
     let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3")?;
-    let result = stmt.query_row(params![project_id, document_path, doc_type], |row| row.get(0)).optional()?;
-    debug!("[DB] Load result for project_id {} - {} (type: {}): {}", project_id, document_path, doc_type, if result.is_some() { "Some(...)" } else { "None" });
+    let result = stmt
+        .query_row(params![project_id, document_path, doc_type], |row| {
+            row.get(0)
+        })
+        .optional()?;
+    debug!(
+        "[DB] Load result for project_id {} - {} (type: {}): {}",
+        project_id,
+        document_path,
+        doc_type,
+        if result.is_some() {
+            "Some(...)"
+        } else {
+            "None"
+        }
+    );
     Ok(result)
 }
 
-pub fn save_annotations_to_db(project_id: &str, document_path: &str, annotations_json: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
+pub fn save_annotations_to_db(
+    project_id: &str,
+    document_path: &str,
+    annotations_json: &str,
+    doc_type: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Saving annotations for project_id {}: {} (type: {})",
+        project_id, document_path, doc_type
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     if let Some(parent_dir) = db_path.parent() {
         if !parent_dir.exists() {
-            fs::create_dir_all(parent_dir).map_err(|e| CommandError::Io(format!("Failed to create db directory: {}",e)))?;
+            fs::create_dir_all(parent_dir)
+                .map_err(|e| CommandError::Io(format!("Failed to create db directory: {}", e)))?;
         }
     }
 
@@ -2092,14 +2500,24 @@ pub fn save_annotations_to_db(project_id: &str, document_path: &str, annotations
                        updated_at = CURRENT_TIMESTAMP",
         params![project_id, document_path, annotations_json, doc_type],
     )?;
-    info!("[DB] Annotations saved successfully for project_id {}: {} (type: {})", project_id, document_path, doc_type);
+    info!(
+        "[DB] Annotations saved successfully for project_id {}: {} (type: {})",
+        project_id, document_path, doc_type
+    );
     Ok(())
 }
 
-pub fn delete_annotations_from_db(project_id: &str, document_path: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
+pub fn delete_annotations_from_db(
+    project_id: &str,
+    document_path: &str,
+    doc_type: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Deleting annotations for project_id {}: {} (type: {})",
+        project_id, document_path, doc_type
+    );
     let db_path = get_db_path()?;
-     if !db_path.exists() {
+    if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to delete for project_id {} - {} (type: {}).", db_path.display(), project_id, document_path, doc_type);
         return Ok(());
     }
@@ -2108,13 +2526,24 @@ pub fn delete_annotations_from_db(project_id: &str, document_path: &str, doc_typ
     if changes > 0 {
         info!("[DB] Annotations deleted successfully for project_id {}: {} (type: {}) ({} rows affected)", project_id, document_path, doc_type, changes);
     } else {
-        debug!("[DB] No annotations found to delete for project_id {}: {} (type: {})", project_id, document_path, doc_type);
+        debug!(
+            "[DB] No annotations found to delete for project_id {}: {} (type: {})",
+            project_id, document_path, doc_type
+        );
     }
     Ok(())
 }
 
-pub fn rename_annotations_in_db(project_id: &str, old_document_path: &str, new_document_path: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Renaming annotations for project_id {} from {} to {} (type: {})", project_id, old_document_path, new_document_path, doc_type);
+pub fn rename_annotations_in_db(
+    project_id: &str,
+    old_document_path: &str,
+    new_document_path: &str,
+    doc_type: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Renaming annotations for project_id {} from {} to {} (type: {})",
+        project_id, old_document_path, new_document_path, doc_type
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to rename for project_id {} - {} (type: {}).", db_path.display(), project_id, old_document_path, doc_type);
@@ -2131,22 +2560,35 @@ pub fn rename_annotations_in_db(project_id: &str, old_document_path: &str, new_d
     if changes > 0 {
         info!("[DB] Annotations renamed successfully for project_id {} from {} to {} (type: {}) ({} rows affected)", project_id, old_document_path, new_document_path, doc_type, changes);
     } else {
-        debug!("[DB] No annotations found to rename for project_id {} - old path: {} (type: {})", project_id, old_document_path, doc_type);
+        debug!(
+            "[DB] No annotations found to rename for project_id {} - old path: {} (type: {})",
+            project_id, old_document_path, doc_type
+        );
     }
     Ok(())
 }
 
 // --- Lexical Highlights Functions ---
 
-pub fn save_lexical_highlights_to_db(project_id: &str, document_path: &str, highlights_json: &str) -> Result<(), CommandError> {
+pub fn save_lexical_highlights_to_db(
+    project_id: &str,
+    document_path: &str,
+    highlights_json: &str,
+) -> Result<(), CommandError> {
     save_annotations_to_db(project_id, document_path, highlights_json, "lexical")
 }
 
-pub fn load_lexical_highlights_from_db(project_id: &str, document_path: &str) -> Result<Option<String>, CommandError> {
+pub fn load_lexical_highlights_from_db(
+    project_id: &str,
+    document_path: &str,
+) -> Result<Option<String>, CommandError> {
     load_annotations_from_db(project_id, document_path, "lexical")
 }
 
-pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) -> Result<(), CommandError> {
+pub fn delete_lexical_highlights_from_db(
+    project_id: &str,
+    document_path: &str,
+) -> Result<(), CommandError> {
     delete_annotations_from_db(project_id, document_path, "lexical")
 }
 
@@ -2178,9 +2620,12 @@ pub fn add_tag(
     name: &str,
     color: Option<&str>,
     description: Option<&str>,
-    tag_group_id: Option<&str>
+    tag_group_id: Option<&str>,
 ) -> Result<i64, CommandError> {
-    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}, group={:?}", project_id, name, color, tag_group_id);
+    debug!(
+        "[DB] Adding tag to project_id {}: name={}, color={:?}, group={:?}",
+        project_id, name, color, tag_group_id
+    );
     let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color, description, tag_group_id) VALUES (?1, ?2, ?3, ?4, ?5)")?;
     let id = stmt.insert(params![project_id, name, color, description, tag_group_id])?;
     info!("[DB] Tag added successfully with id {}: name={}", id, name);
@@ -2188,8 +2633,14 @@ pub fn add_tag(
 }
 
 pub fn delete_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<(), CommandError> {
-    debug!("[DB] Deleting tag with id {} from project_id {}", tag_id, project_id);
-    conn.execute("DELETE FROM tags WHERE id = ?1 AND project_id = ?2", params![tag_id, project_id])?;
+    debug!(
+        "[DB] Deleting tag with id {} from project_id {}",
+        tag_id, project_id
+    );
+    conn.execute(
+        "DELETE FROM tags WHERE id = ?1 AND project_id = ?2",
+        params![tag_id, project_id],
+    )?;
     info!("[DB] Tag with id {} deleted successfully.", tag_id);
     Ok(())
 }
@@ -2201,9 +2652,12 @@ pub fn update_tag(
     name: &str,
     color: Option<&str>,
     description: Option<&str>,
-    tag_group_id: Option<&str>
+    tag_group_id: Option<&str>,
 ) -> Result<(), CommandError> {
-    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}, group={:?}", tag_id, project_id, name, color, tag_group_id);
+    debug!(
+        "[DB] Updating tag with id {} in project_id {}: name={}, color={:?}, group={:?}",
+        tag_id, project_id, name, color, tag_group_id
+    );
     conn.execute(
         "UPDATE tags SET name = ?1, color = ?2, description = ?3, tag_group_id = ?4, updated_at = CURRENT_TIMESTAMP WHERE id = ?5 AND project_id = ?6",
         params![name, color, description, tag_group_id, tag_id, project_id],
@@ -2231,7 +2685,11 @@ pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, Com
     for tag_result in tag_iter {
         tags.push(tag_result?);
     }
-    info!("[DB] Loaded {} tags for project_id {}", tags.len(), project_id);
+    info!(
+        "[DB] Loaded {} tags for project_id {}",
+        tags.len(),
+        project_id
+    );
     Ok(tags)
 }
 
@@ -2242,15 +2700,21 @@ pub fn create_tag_group(
     project_id: &str,
     group_id: &str,
     name: &str,
-    description: Option<&str>
+    description: Option<&str>,
 ) -> Result<(), CommandError> {
-    debug!("[DB] Creating tag group for project_id {}: id={}, name={}", project_id, group_id, name);
+    debug!(
+        "[DB] Creating tag group for project_id {}: id={}, name={}",
+        project_id, group_id, name
+    );
     conn.execute(
         "INSERT INTO tag_groups (id, project_id, name, description) VALUES (?1, ?2, ?3, ?4)",
         params![group_id, project_id, name, description],
     )
     .map_err(|e| CommandError::Message(format!("Failed to create tag group {}: {}", name, e)))?;
-    info!("[DB] Tag group created successfully: id={}, name={}", group_id, name);
+    info!(
+        "[DB] Tag group created successfully: id={}, name={}",
+        group_id, name
+    );
     Ok(())
 }
 
@@ -2269,9 +2733,17 @@ pub fn get_tag_groups(conn: &Connection, project_id: &str) -> Result<Vec<TagGrou
 
     let mut groups = Vec::new();
     for group_result in group_iter {
-        groups.push(group_result.map_err(|e| CommandError::Message(format!("Failed to map tag group row: {}", e)))?);
+        groups.push(
+            group_result.map_err(|e| {
+                CommandError::Message(format!("Failed to map tag group row: {}", e))
+            })?,
+        );
     }
-    info!("[DB] Loaded {} tag groups for project_id {}", groups.len(), project_id);
+    info!(
+        "[DB] Loaded {} tag groups for project_id {}",
+        groups.len(),
+        project_id
+    );
     Ok(groups)
 }
 
@@ -2280,9 +2752,12 @@ pub fn update_tag_group(
     project_id: &str,
     group_id: &str,
     name: &str,
-    description: Option<&str>
+    description: Option<&str>,
 ) -> Result<(), CommandError> {
-    debug!("[DB] Updating tag group with id {} in project_id {}: name={}", group_id, project_id, name);
+    debug!(
+        "[DB] Updating tag group with id {} in project_id {}: name={}",
+        group_id, project_id, name
+    );
     conn.execute(
         "UPDATE tag_groups SET name = ?1, description = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
         params![name, description, group_id, project_id],
@@ -2291,17 +2766,30 @@ pub fn update_tag_group(
     Ok(())
 }
 
-pub fn delete_tag_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting tag group with id {} from project_id {}", group_id, project_id);
+pub fn delete_tag_group(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Deleting tag group with id {} from project_id {}",
+        group_id, project_id
+    );
 
     // Delete child tags instead of ungrouping them.
     conn.execute(
         "DELETE FROM tags WHERE tag_group_id = ?1 AND project_id = ?2",
-        params![group_id, project_id]
+        params![group_id, project_id],
     )?;
 
-    conn.execute("DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2", params![group_id, project_id])?;
-    info!("[DB] Tag group with id {} deleted successfully (and its child tags deleted).", group_id);
+    conn.execute(
+        "DELETE FROM tag_groups WHERE id = ?1 AND project_id = ?2",
+        params![group_id, project_id],
+    )?;
+    info!(
+        "[DB] Tag group with id {} deleted successfully (and its child tags deleted).",
+        group_id
+    );
     Ok(())
 }
 
@@ -2322,15 +2810,20 @@ pub fn get_all_annotations_for_project(
     conn: &Connection,
     project_id: &str,
 ) -> Result<Vec<(String, String, String)>, CommandError> {
-    debug!("[DB] Getting all annotations for project_id '{}'", project_id);
+    debug!(
+        "[DB] Getting all annotations for project_id '{}'",
+        project_id
+    );
     let mut all_annotations = Vec::new();
 
     // Fetch from pdf_annotations
-    let mut stmt_pdf = conn.prepare("
+    let mut stmt_pdf = conn.prepare(
+        "
         SELECT pdf_document_path, annotations_json, document_type
         FROM pdf_annotations
         WHERE project_id = ?1
-    ")?;
+    ",
+    )?;
     let pdf_rows = stmt_pdf.query_map(params![project_id], |row| {
         Ok((row.get(0)?, row.get(1)?, row.get(2)?))
     })?;
@@ -2339,11 +2832,13 @@ pub fn get_all_annotations_for_project(
     }
 
     // Fetch from table_styles
-    let mut stmt_table = conn.prepare("
+    let mut stmt_table = conn.prepare(
+        "
         SELECT table_path, styles, 'table' as document_type
         FROM table_styles
         WHERE project_id = ?1
-    ")?;
+    ",
+    )?;
     let table_rows = stmt_table.query_map(params![project_id], |row| {
         Ok((row.get(0)?, row.get(1)?, row.get(2)?))
     })?;
@@ -2351,7 +2846,11 @@ pub fn get_all_annotations_for_project(
         all_annotations.push(row?);
     }
 
-    info!("[DB] Found {} total annotation entries for project_id '{}'", all_annotations.len(), project_id);
+    info!(
+        "[DB] Found {} total annotation entries for project_id '{}'",
+        all_annotations.len(),
+        project_id
+    );
     Ok(all_annotations)
 }
 
@@ -2360,7 +2859,10 @@ pub fn get_highlights_by_tag(
     project_id: &str,
     tag_name: &str,
 ) -> Result<Vec<(Highlight, String, Vec<String>, Option<String>)>, CommandError> {
-    debug!("[DB] Aggregating highlights for project_id {} with tag_name '{}'", project_id, tag_name);
+    debug!(
+        "[DB] Aggregating highlights for project_id {} with tag_name '{}'",
+        project_id, tag_name
+    );
     let mut all_highlights = Vec::new();
 
     // 1. Get highlights from pdf_annotations (covers PDFs, images, lexical docs)
@@ -2381,34 +2883,55 @@ pub fn get_highlights_by_tag(
             Err(_) => continue,
         };
 
-        let annotations = annotations_val.as_array().map_or(Vec::new(), |arr| arr.clone());
+        let annotations = annotations_val
+            .as_array()
+            .map_or(Vec::new(), |arr| arr.clone());
 
         for annotation_val in annotations {
             if let Some(annotation_obj) = annotation_val.as_object() {
-                let tags_vec: Vec<String> = annotation_obj.get("tags")
+                let tags_vec: Vec<String> = annotation_obj
+                    .get("tags")
                     .and_then(|t| t.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
 
                 if tags_vec.contains(&tag_name.to_string()) {
-                    let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let id = annotation_obj
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
                     let text = if asset_type.as_deref() == Some("image") {
-                        let title = annotation_obj.get("body")
+                        let title = annotation_obj
+                            .get("body")
                             .and_then(|b| b.as_array())
-                            .and_then(|bodies| bodies.iter().find(|body| 
-                                body.get("purpose").and_then(|p| p.as_str()) == Some("commenting") &&
-                                body.get("type").and_then(|t| t.as_str()) == Some("Title")
-                            ))
+                            .and_then(|bodies| {
+                                bodies.iter().find(|body| {
+                                    body.get("purpose").and_then(|p| p.as_str())
+                                        == Some("commenting")
+                                        && body.get("type").and_then(|t| t.as_str())
+                                            == Some("Title")
+                                })
+                            })
                             .and_then(|title_body| title_body.get("value"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("");
 
-                        let description = annotation_obj.get("body")
+                        let description = annotation_obj
+                            .get("body")
                             .and_then(|b| b.as_array())
-                            .and_then(|bodies| bodies.iter().find(|body| 
-                                body.get("purpose").and_then(|p| p.as_str()) == Some("commenting") &&
-                                body.get("type").and_then(|t| t.as_str()) == Some("Description")
-                            ))
+                            .and_then(|bodies| {
+                                bodies.iter().find(|body| {
+                                    body.get("purpose").and_then(|p| p.as_str())
+                                        == Some("commenting")
+                                        && body.get("type").and_then(|t| t.as_str())
+                                            == Some("Description")
+                                })
+                            })
                             .and_then(|desc_body| desc_body.get("value"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("");
@@ -2423,20 +2946,29 @@ pub fn get_highlights_by_tag(
                             "[Image Highlight]".to_string()
                         }
                     } else {
-                        annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                        annotation_obj
+                            .get("text")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string()
                     };
-                    let color = annotation_obj.get("color").and_then(|v| v.as_str())
+                    let color = annotation_obj
+                        .get("color")
+                        .and_then(|v| v.as_str())
                         .or_else(|| {
-                            annotation_obj.get("body")
+                            annotation_obj
+                                .get("body")
                                 .and_then(|b| b.as_array())
                                 .and_then(|b| b.get(0))
                                 .and_then(|first_body| first_body.get("value"))
                                 .and_then(|v| v.as_str())
                         })
-                        .unwrap_or_default().to_string();
+                        .unwrap_or_default()
+                        .to_string();
 
                     let comments_val = annotation_obj.get("comments").cloned();
-                    let comments: Option<Vec<serde_json::Value>> = comments_val.and_then(|v| serde_json::from_value(v).ok());
+                    let comments: Option<Vec<serde_json::Value>> =
+                        comments_val.and_then(|v| serde_json::from_value(v).ok());
 
                     let highlight = Highlight {
                         id,
@@ -2446,7 +2978,12 @@ pub fn get_highlights_by_tag(
                         comments,
                         timestamp: None,
                     };
-                    all_highlights.push((highlight, doc_path.clone(), tags_vec, asset_type.clone()));
+                    all_highlights.push((
+                        highlight,
+                        doc_path.clone(),
+                        tags_vec,
+                        asset_type.clone(),
+                    ));
                 }
             }
         }
@@ -2466,24 +3003,33 @@ pub fn get_highlights_by_tag(
     for row in table_style_rows {
         let (table_path, styles_json, asset_type): (String, String, Option<String>) = row?;
         let table_highlights: Vec<Highlight> = serde_json::from_str(&styles_json)
-            .or_else(|_| serde_json::from_str(&styles_json).and_then(|s: String| serde_json::from_str(&s)))
+            .or_else(|_| {
+                serde_json::from_str(&styles_json).and_then(|s: String| serde_json::from_str(&s))
+            })
             .unwrap_or_else(|_| Vec::new());
 
         for highlight in table_highlights {
             if let Some(tags) = &highlight.tags {
                 if tags.contains(&tag_name.to_string()) {
-                    all_highlights.push((highlight.clone(), table_path.clone(), tags.clone(), asset_type.clone()));
+                    all_highlights.push((
+                        highlight.clone(),
+                        table_path.clone(),
+                        tags.clone(),
+                        asset_type.clone(),
+                    ));
                 }
             }
         }
     }
 
-    info!("[DB] Found a total of {} highlights for project_id {} with tag_name '{}'", all_highlights.len(), project_id, tag_name);
+    info!(
+        "[DB] Found a total of {} highlights for project_id {} with tag_name '{}'",
+        all_highlights.len(),
+        project_id,
+        tag_name
+    );
     Ok(all_highlights)
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -2554,7 +3100,6 @@ mod tests {
         Ok(())
     }
 
-
     // Helper function to create a temporary DB with the new schema for isolated testing.
     // It also creates a dummy project for FK satisfaction.
     fn setup_test_db() -> (tempfile::TempDir, PathBuf, String) {
@@ -2566,9 +3111,16 @@ mod tests {
         init_pdf_annotations_table_for_test(&conn).unwrap();
 
         let test_project_id = "test_project_uuid_123";
-        conn.execute("INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
-            params![test_project_id, "Test Project", "/fake/root", "/fake/project.xml"]
-        ).unwrap();
+        conn.execute(
+            "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                test_project_id,
+                "Test Project",
+                "/fake/root",
+                "/fake/project.xml"
+            ],
+        )
+        .unwrap();
 
         (temp_dir, db_path, test_project_id.to_string())
     }
@@ -2581,7 +3133,9 @@ mod tests {
         let temp_base_dir = tempdir().unwrap();
         let test_db_path = temp_base_dir.path().join("test_init_project_id.sqlite");
 
-        if test_db_path.exists() { fs::remove_file(&test_db_path).unwrap(); }
+        if test_db_path.exists() {
+            fs::remove_file(&test_db_path).unwrap();
+        }
 
         // 1. Initialize DB with an older schema (with document_type but without project_id)
         {
@@ -2597,8 +3151,9 @@ mod tests {
                     UNIQUE (pdf_document_path, document_type)
                 )", // Old unique constraint for test setup
                 [],
-            ).unwrap();
-             // Also need projects table for the FK that the full init_db will try to create if pdf_annotations is new
+            )
+            .unwrap();
+            // Also need projects table for the FK that the full init_db will try to create if pdf_annotations is new
             init_projects_table_for_test(&conn).unwrap();
         }
 
@@ -2626,9 +3181,18 @@ mod tests {
         assert!(simulate_init_logic_for_pdf_annotations_project_id(&conn_check).is_ok());
 
         {
-            let mut stmt_verify = conn_check.prepare("PRAGMA table_info(pdf_annotations)").unwrap();
-            let columns: Vec<String> = stmt_verify.query_map([], |row| row.get(1)).unwrap().map(|r| r.unwrap()).collect();
-            assert!(columns.contains(&"project_id".to_string()), "project_id column should have been added");
+            let mut stmt_verify = conn_check
+                .prepare("PRAGMA table_info(pdf_annotations)")
+                .unwrap();
+            let columns: Vec<String> = stmt_verify
+                .query_map([], |row| row.get(1))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
+            assert!(
+                columns.contains(&"project_id".to_string()),
+                "project_id column should have been added"
+            );
         }
 
         // Clean up
@@ -2636,13 +3200,18 @@ mod tests {
         fs::remove_file(&test_db_path).unwrap();
     }
 
-
     #[test]
     fn test_save_and_load_annotations_with_project_id() {
         let (_temp_dir, db_path, project_id) = setup_test_db();
 
         // Use direct path for test functions
-        fn save_annotations(db_p: &PathBuf, proj_id: &str, doc_path: &str, json: &str, doc_type: &str) -> Result<()> {
+        fn save_annotations(
+            db_p: &PathBuf,
+            proj_id: &str,
+            doc_path: &str,
+            json: &str,
+            doc_type: &str,
+        ) -> Result<()> {
             let conn = Connection::open(db_p)?;
             conn.execute(
                 "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)
@@ -2651,10 +3220,16 @@ mod tests {
             )?;
             Ok(())
         }
-        fn load_annotations(db_p: &PathBuf, proj_id: &str, doc_path: &str, doc_type: &str) -> Result<Option<String>> {
+        fn load_annotations(
+            db_p: &PathBuf,
+            proj_id: &str,
+            doc_path: &str,
+            doc_type: &str,
+        ) -> Result<Option<String>> {
             let conn = Connection::open(db_p)?;
             let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3")?;
-            stmt.query_row(params![proj_id, doc_path, doc_type], |row| row.get(0)).optional()
+            stmt.query_row(params![proj_id, doc_path, doc_type], |row| row.get(0))
+                .optional()
         }
 
         let doc_path1 = "test/doc1.pdf";
@@ -2667,26 +3242,45 @@ mod tests {
 
         // Update
         let annots1_updated = "[{\"id\":\"1\", \"text\":\"updated\"}]";
-        assert!(save_annotations(&db_path, &project_id, doc_path1, annots1_updated, doc_type1).is_ok());
-        let loaded_annots1_updated = load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
+        assert!(
+            save_annotations(&db_path, &project_id, doc_path1, annots1_updated, doc_type1).is_ok()
+        );
+        let loaded_annots1_updated =
+            load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
         assert_eq!(loaded_annots1_updated, Some(annots1_updated.to_string()));
 
         // Different project_id, same doc_path and doc_type - should be a new record
         let other_project_id = "other_project_uuid_456";
-         Connection::open(&db_path).unwrap().execute("INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
-            params![other_project_id, "Other Project", "/other/root", "/other/project.xml"]
-        ).unwrap();
+        Connection::open(&db_path)
+            .unwrap()
+            .execute(
+                "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    other_project_id,
+                    "Other Project",
+                    "/other/root",
+                    "/other/project.xml"
+                ],
+            )
+            .unwrap();
 
-        assert!(save_annotations(&db_path, other_project_id, doc_path1, annots1, doc_type1).is_ok());
-        let loaded_other_project_annots = load_annotations(&db_path, other_project_id, doc_path1, doc_type1).unwrap();
+        assert!(
+            save_annotations(&db_path, other_project_id, doc_path1, annots1, doc_type1).is_ok()
+        );
+        let loaded_other_project_annots =
+            load_annotations(&db_path, other_project_id, doc_path1, doc_type1).unwrap();
         assert_eq!(loaded_other_project_annots, Some(annots1.to_string()));
 
         // Ensure original project's annotation is still there and unchanged
-        let original_project_annots_after_other_insert = load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
-        assert_eq!(original_project_annots_after_other_insert, Some(annots1_updated.to_string()));
+        let original_project_annots_after_other_insert =
+            load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
+        assert_eq!(
+            original_project_annots_after_other_insert,
+            Some(annots1_updated.to_string())
+        );
 
-
-        let loaded_non_existent = load_annotations(&db_path, &project_id, "other.pdf", "pdf").unwrap();
+        let loaded_non_existent =
+            load_annotations(&db_path, &project_id, "other.pdf", "pdf").unwrap();
         assert!(loaded_non_existent.is_none());
     }
 
@@ -2697,10 +3291,20 @@ mod tests {
         fn save_direct(conn: &Connection, proj_id: &str, doc_p: &str, json: &str, doc_t: &str) {
             conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1,?2,?3,?4)", params![proj_id, doc_p, json, doc_t]).unwrap();
         }
-        fn delete_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Result<usize> {
+        fn delete_direct(
+            conn: &Connection,
+            proj_id: &str,
+            doc_p: &str,
+            doc_t: &str,
+        ) -> Result<usize> {
             conn.execute("DELETE FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t])
         }
-        fn load_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Option<String> {
+        fn load_direct(
+            conn: &Connection,
+            proj_id: &str,
+            doc_p: &str,
+            doc_t: &str,
+        ) -> Option<String> {
             conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t], |r| r.get(0)).optional().unwrap()
         }
 
@@ -2712,7 +3316,10 @@ mod tests {
         assert!(load_direct(&conn, &project_id, "doc1.pdf", "pdf").is_none());
 
         // Try deleting non-existent
-        assert_eq!(delete_direct(&conn, &project_id, "non_existent.pdf", "pdf").unwrap(), 0);
+        assert_eq!(
+            delete_direct(&conn, &project_id, "non_existent.pdf", "pdf").unwrap(),
+            0
+        );
     }
 
     #[test]
@@ -2722,10 +3329,21 @@ mod tests {
         fn save_direct(conn: &Connection, proj_id: &str, doc_p: &str, json: &str, doc_t: &str) {
             conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1,?2,?3,?4)", params![proj_id, doc_p, json, doc_t]).unwrap();
         }
-        fn rename_direct(conn: &Connection, proj_id: &str, old_doc_p: &str, new_doc_p: &str, doc_t: &str) -> Result<usize> {
+        fn rename_direct(
+            conn: &Connection,
+            proj_id: &str,
+            old_doc_p: &str,
+            new_doc_p: &str,
+            doc_t: &str,
+        ) -> Result<usize> {
             conn.execute("UPDATE pdf_annotations SET pdf_document_path=?1 WHERE project_id=?2 AND pdf_document_path=?3 AND document_type=?4", params![new_doc_p, proj_id, old_doc_p, doc_t])
         }
-        fn load_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Option<String> {
+        fn load_direct(
+            conn: &Connection,
+            proj_id: &str,
+            doc_p: &str,
+            doc_t: &str,
+        ) -> Option<String> {
             conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t], |r| r.get(0)).optional().unwrap()
         }
 
@@ -2734,12 +3352,17 @@ mod tests {
         assert!(rename_direct(&conn, &project_id, "old.pdf", "new.pdf", "pdf").unwrap() > 0);
 
         assert!(load_direct(&conn, &project_id, "old.pdf", "pdf").is_none());
-        assert_eq!(load_direct(&conn, &project_id, "new.pdf", "pdf"), Some("[old]".to_string()));
+        assert_eq!(
+            load_direct(&conn, &project_id, "new.pdf", "pdf"),
+            Some("[old]".to_string())
+        );
 
         // Try renaming non-existent
-        assert_eq!(rename_direct(&conn, &project_id, "non_existent.pdf", "another.pdf", "pdf").unwrap(), 0);
+        assert_eq!(
+            rename_direct(&conn, &project_id, "non_existent.pdf", "another.pdf", "pdf").unwrap(),
+            0
+        );
     }
-
 }
 
 #[cfg(test)]
@@ -2990,8 +3613,14 @@ pub fn setup_test_db_in_memory() -> (Connection, String) {
     let project_id = "test_project_1".to_string();
     conn.execute(
         "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
-        params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
-    ).expect("Failed to insert test project");
+        params![
+            &project_id,
+            "Test Project",
+            "/fake/path",
+            "/fake/path/project.xml"
+        ],
+    )
+    .expect("Failed to insert test project");
 
     (conn, project_id)
 }
@@ -3009,8 +3638,14 @@ mod get_highlights_by_tag_tests {
         let project_id = "test_project_1".to_string();
         conn.execute(
             "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
-            params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
-        ).expect("Failed to insert test project");
+            params![
+                &project_id,
+                "Test Project",
+                "/fake/path",
+                "/fake/path/project.xml"
+            ],
+        )
+        .expect("Failed to insert test project");
 
         // Insert mock data
         let pdf_ann_json = json!([
@@ -3024,18 +3659,17 @@ mod get_highlights_by_tag_tests {
             params![&project_id, "path/to/my.pdf", "my.pdf", "/abs/path/to/my.pdf", "0", "pdf"]
         ).unwrap();
 
-
         let lexical_ann_json = json!([
             {"id": "uuid-lex-1", "text": "Lexical highlight", "tags": ["tag2"], "color": "#00FF00"}
-        ]).to_string();
+        ])
+        .to_string();
         conn.execute(
             "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
             params![&project_id, "path/to/lexical.json", &lexical_ann_json, "lexical"],
         ).unwrap();
-         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![&project_id, "path/to/lexical.json", "lexical.json", "/abs/path/to/lexical.json", "0", "lexical"]
         ).unwrap();
-
 
         let image_ann_json = json!([
             {"id": "uuid-img-1", "text": "[Image Highlight]", "tags": ["tag1"], "body": [{"value": "#0000FF"}]}
@@ -3044,7 +3678,7 @@ mod get_highlights_by_tag_tests {
             "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
             params![&project_id, "path/to/image.png", &image_ann_json, "image"],
         ).unwrap();
-         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![&project_id, "path/to/image.png", "image.png", "/abs/path/to/image.png", "0", "image"]
         ).unwrap();
 
@@ -3055,11 +3689,11 @@ mod get_highlights_by_tag_tests {
         conn.execute(
             "INSERT INTO table_styles (project_id, table_path, styles) VALUES (?1, ?2, ?3)",
             params![&project_id, "path/to/table.csv", &table_styles_outer],
-        ).unwrap();
-         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        )
+        .unwrap();
+        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![&project_id, "path/to/table.csv", "table.csv", "/abs/path/to/table.csv", "0", "table"]
         ).unwrap();
-
 
         (conn, project_id)
     }
@@ -3119,13 +3753,21 @@ mod get_highlights_by_tag_tests {
     #[test]
     fn test_get_highlights_for_non_existent_tag() {
         let (conn, project_id) = setup_test_db_with_data();
-        let highlights = get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
+        let highlights =
+            get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
         assert_eq!(highlights.len(), 0);
     }
 }
 
-pub fn save_table_schema(project_id: &str, table_path: &str, schema_json: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving table schema for project_id {}: {}", project_id, table_path);
+pub fn save_table_schema(
+    project_id: &str,
+    table_path: &str,
+    schema_json: &str,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Saving table schema for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
@@ -3137,32 +3779,46 @@ pub fn save_table_schema(project_id: &str, table_path: &str, schema_json: &str) 
              updated_at = CURRENT_TIMESTAMP",
         params![project_id, table_path, schema_json],
     )?;
-    info!("[DB] Table schema saved successfully for project_id {}: {}", project_id, table_path);
+    info!(
+        "[DB] Table schema saved successfully for project_id {}: {}",
+        project_id, table_path
+    );
     Ok(())
 }
 
-pub fn load_table_schema(project_id: &str, table_path: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading table schema for project_id {}: {}", project_id, table_path);
+pub fn load_table_schema(
+    project_id: &str,
+    table_path: &str,
+) -> Result<Option<String>, CommandError> {
+    debug!(
+        "[DB] Loading table schema for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("
+    let mut stmt = conn.prepare(
+        "
         SELECT schema_json
         FROM table_schemas
         WHERE project_id = ?1 AND table_path = ?2
-    ")?;
+    ",
+    )?;
 
-    let result = stmt.query_row(params![project_id, table_path], |row| {
-        row.get(0)
-    }).optional()?;
+    let result = stmt
+        .query_row(params![project_id, table_path], |row| row.get(0))
+        .optional()?;
 
     Ok(result)
 }
 
 pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting table schema for project_id {}: {}", project_id, table_path);
+    debug!(
+        "[DB] Deleting table schema for project_id {}: {}",
+        project_id, table_path
+    );
     let db_path = get_db_path()?;
     if !db_path.exists() {
         return Ok(());
@@ -3182,16 +3838,18 @@ pub struct ProjectAssetLinkOption {
     pub file_type: Option<String>,
 }
 
-pub fn get_project_assets_for_link(project_id: &str) -> Result<Vec<ProjectAssetLinkOption>, CommandError> {
+pub fn get_project_assets_for_link(
+    project_id: &str,
+) -> Result<Vec<ProjectAssetLinkOption>, CommandError> {
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT file_name, asset_relative_path, file_type 
-         FROM asset_metadata 
-         WHERE project_id = ? 
+        "SELECT file_name, asset_relative_path, file_type
+         FROM asset_metadata
+         WHERE project_id = ?
          AND (file_type NOT LIKE '%attachment%' OR file_type IS NULL)
-         ORDER BY file_type, file_name"
+         ORDER BY file_type, file_name",
     )?;
 
     let asset_iter = stmt.query_map([project_id], |row| {

@@ -1,20 +1,20 @@
 // src-tauri/src/lib.rs
 use dashmap::DashMap;
-use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
-use tauri::Manager; // Added Manager import
-use tauri::Emitter; // For app.emit()
+use std::sync::{atomic::AtomicBool, Arc};
+use tauri::Emitter;
+use tauri::Manager; // Added Manager import // For app.emit()
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 
 // --- Declare top-level modules ---
-mod welcome;
-mod projectview; 
+mod projectview;
 pub mod transcription;
 pub mod utils;
+mod welcome;
 
 // Define the state for managing download cancellation flags
 #[derive(Default)]
@@ -28,17 +28,20 @@ pub struct TranscriptionCancellationState(pub Arc<DashMap<String, Arc<AtomicBool
 #[derive(Default)]
 pub struct TranslationCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
 
-
 // Define state for managing live transcription
 #[derive(Default)]
-pub struct LiveTranscriptionState(pub Arc<projectview::transcription_commands::LiveTranscriptionState>);
-
+pub struct LiveTranscriptionState(
+    pub Arc<projectview::transcription_commands::LiveTranscriptionState>,
+);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Err(e) = crate::welcome::config::ensure_config_dir_exists() {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-        log::error!("Fatal Error: Failed to ensure config directory exists: {}", e);
+        log::error!(
+            "Fatal Error: Failed to ensure config directory exists: {}",
+            e
+        );
     } else {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     }
@@ -187,13 +190,13 @@ pub fn run() {
             {
                 use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
                 let app_handle = app_mut_ref.handle();
-                
+
                 // 1. App Menu (Harvey)
                 let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>)?;
                 let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,"))?;
                 let sep = PredefinedMenuItem::separator(app_handle)?;
                 let quit = PredefinedMenuItem::quit(app_handle, None)?;
-                
+
                 let app_menu = Submenu::with_items(
                     app_handle,
                     "Harvey",
@@ -209,7 +212,7 @@ pub fn run() {
                 let paste = PredefinedMenuItem::paste(app_handle, None)?;
                 let select_all = PredefinedMenuItem::select_all(app_handle, None)?;
                 let sep2 = PredefinedMenuItem::separator(app_handle)?;
-                
+
                 let edit_menu = Submenu::with_items(
                     app_handle,
                     "Edit",
@@ -245,7 +248,7 @@ pub fn run() {
 
                 let menu = Menu::with_items(app_handle, &[&app_menu, &edit_menu, &window_menu, &help_menu])?;
                 app_mut_ref.set_menu(menu)?;
-            
+
             use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 
@@ -340,7 +343,7 @@ pub fn run() {
             welcome::diarization::delete_diarization_model,
             welcome::diarization::get_diarization_cache_path,
             welcome::status::check_config_status,
-            
+
             welcome::commands::set_selected_translation_family,
             welcome::commands::get_selected_translation_family,
             welcome::commands::set_selected_transcription_engine,
@@ -429,7 +432,7 @@ pub fn run() {
             projectview::transcription_commands::stop_live_transcription,
             projectview::transcription_commands::load_media_additional_parameters,
             projectview::transcription_commands::save_media_additional_parameters,
-            
+
             // --- Project view TRANSLATION commands ---
             projectview::translation_commands::translate_transcript_command,
             projectview::translation_commands::translate_document_command,
@@ -446,7 +449,7 @@ pub fn run() {
             projectview::document_commands::delete_temporary_file,
             projectview::document_commands::get_unique_document_path,
             projectview::document_commands::create_new_document,
-            
+
             // --- Project view PDF ANNOTATION commands --- ADDED
             projectview::pdf_annotation_handler::load_pdf_annotations,
             projectview::pdf_annotation_handler::save_pdf_annotations,
@@ -473,7 +476,7 @@ pub fn run() {
             projectview::local_handler::transcription::run_transcription,
             // projectview::local_handler::transcription::cancel_transcription, // Moved
             projectview::transcription_commands::cancel_transcription, // New location
-            
+
 
             // --- Project view TABLE commands ---
             projectview::table_handler::create_new_table,

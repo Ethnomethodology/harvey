@@ -1,14 +1,14 @@
-use crate::welcome::config::CommandError;
 use crate::projectview::db_handler::{self, get_db_path};
 use crate::projectview::shared_types::FileMetadata;
 use crate::projectview::table_handler;
 use crate::projectview::transcription_commands::create_lexical_paragraph_json_value;
+use crate::welcome::config::CommandError;
+use log::{debug, error, info};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use log::{info, debug, error};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ViewConfig {
@@ -32,7 +32,10 @@ pub fn save_table_view(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Saving table view '{}' for table '{}' in project '{}'", view_name, table_path, project_id);
+    info!(
+        "[DB] Saving table view '{}' for table '{}' in project '{}'",
+        view_name, table_path, project_id
+    );
 
     conn.execute(
         "INSERT INTO table_views (project_id, table_path, view_name, view_type, config_json)
@@ -73,20 +76,33 @@ pub async fn generate_survey_documents(
     config_json: &str,
     project_xml_path_str: &str,
 ) -> Result<Vec<String>, CommandError> {
-    info!("[Survey] Generating survey documents for project_id={}, table_path={}, view_name={}", project_id, table_path, view_name);
+    info!(
+        "[Survey] Generating survey documents for project_id={}, table_path={}, view_name={}",
+        project_id, table_path, view_name
+    );
 
     let config: Value = serde_json::from_str(config_json)
         .map_err(|e| CommandError::Io(format!("Failed to parse config_json: {}", e)))?;
 
-    let survey_group_by_type = config.get("surveyGroupByType").and_then(|v: &Value| v.as_str()).unwrap_or("Participants");
-    let survey_unique_identifier_field = config.get("surveyUniqueIdentifierField").and_then(|v: &Value| v.as_str()).unwrap_or("");
+    let survey_group_by_type = config
+        .get("surveyGroupByType")
+        .and_then(|v: &Value| v.as_str())
+        .unwrap_or("Participants");
+    let survey_unique_identifier_field = config
+        .get("surveyUniqueIdentifierField")
+        .and_then(|v: &Value| v.as_str())
+        .unwrap_or("");
 
     let project_xml_path = PathBuf::from(project_xml_path_str);
-    let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::Path("Could not get project base directory.".to_string()))?;
+    let project_base_dir = project_xml_path
+        .parent()
+        .ok_or_else(|| CommandError::Path("Could not get project base directory.".to_string()))?;
 
     // Determine the base attachments directory for this table
     let table_path_buf = PathBuf::from(table_path);
-    let table_dir = table_path_buf.parent().ok_or_else(|| CommandError::Path("Invalid table path".to_string()))?;
+    let table_dir = table_path_buf
+        .parent()
+        .ok_or_else(|| CommandError::Path("Invalid table path".to_string()))?;
 
     let rel_base_attachments_dir = table_dir.join("attachments");
     let abs_base_attachments_dir = project_base_dir.join(&rel_base_attachments_dir);
@@ -98,12 +114,17 @@ pub async fn generate_survey_documents(
 
     // Load table data - ensure absolute path is passed
     let abs_table_path = project_base_dir.join(table_path);
-    let table_data: Value = table_handler::load_table_data(abs_table_path.to_string_lossy().to_string())
-        .await
-        .map_err(|e| {
-            error!("[Survey Generation] Failed to load table data from abs_table_path='{}': {:?}", abs_table_path.display(), e);
-            e
-        })?;
+    let table_data: Value =
+        table_handler::load_table_data(abs_table_path.to_string_lossy().to_string())
+            .await
+            .map_err(|e| {
+                error!(
+                    "[Survey Generation] Failed to load table data from abs_table_path='{}': {:?}",
+                    abs_table_path.display(),
+                    e
+                );
+                e
+            })?;
 
     // table_data from load_table_data is typically an object: { "headers": [...], "data": [...] }
     let rows = table_data.get("data")
@@ -116,9 +137,14 @@ pub async fn generate_survey_documents(
     let mut generated_files = Vec::new();
 
     if survey_group_by_type == "Participants" {
-        let survey_participant_included_fields = config.get("surveyParticipantIncludedFields")
+        let survey_participant_included_fields = config
+            .get("surveyParticipantIncludedFields")
             .and_then(|v: &Value| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v: &Value| v.as_str()).collect::<Vec<_>>())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v: &Value| v.as_str())
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let target_dir_name = format!("{}_participants", view_name);
@@ -135,14 +161,20 @@ pub async fn generate_survey_documents(
             let participant_id = if !survey_unique_identifier_field.is_empty() {
                 row.get(survey_unique_identifier_field)
                     .and_then(|v: &Value| {
-                        if v.is_string() { Some(v.as_str().unwrap().to_string()) }
-                        else if v.is_null() { None }
-                        else if v.is_f64() {
+                        if v.is_string() {
+                            Some(v.as_str().unwrap().to_string())
+                        } else if v.is_null() {
+                            None
+                        } else if v.is_f64() {
                             let f = v.as_f64().unwrap();
-                            if f.fract() == 0.0 { Some((f as i64).to_string()) }
-                            else { Some(f.to_string()) }
+                            if f.fract() == 0.0 {
+                                Some((f as i64).to_string())
+                            } else {
+                                Some(f.to_string())
+                            }
+                        } else {
+                            Some(v.to_string())
                         }
-                        else { Some(v.to_string()) }
                     })
                     .unwrap_or_else(|| format!("{}", index + 1))
             } else {
@@ -150,23 +182,31 @@ pub async fn generate_survey_documents(
             };
 
             // Sanitize filename
-            let safe_filename = participant_id.replace(&['/', '\\', ':', '*', '?', '"', '<', '>', '|'][..], "_");
+            let safe_filename =
+                participant_id.replace(&['/', '\\', ':', '*', '?', '"', '<', '>', '|'][..], "_");
             let rel_file_path = rel_target_dir.join(format!("{}.json", safe_filename));
             let abs_file_path = project_base_dir.join(&rel_file_path);
 
             let mut lexical_children = Vec::new();
 
             for field in &survey_participant_included_fields {
-                let value_str = row.get(*field)
+                let value_str = row
+                    .get(*field)
                     .map(|v: &Value| {
-                        if v.is_string() { v.as_str().unwrap().to_string() }
-                        else if v.is_null() { "".to_string() }
-                        else if v.is_f64() {
+                        if v.is_string() {
+                            v.as_str().unwrap().to_string()
+                        } else if v.is_null() {
+                            "".to_string()
+                        } else if v.is_f64() {
                             let f = v.as_f64().unwrap();
-                            if f.fract() == 0.0 { (f as i64).to_string() }
-                            else { f.to_string() }
+                            if f.fract() == 0.0 {
+                                (f as i64).to_string()
+                            } else {
+                                f.to_string()
+                            }
+                        } else {
+                            v.to_string()
                         }
-                        else { v.to_string() }
                     })
                     .unwrap_or_default();
 
@@ -204,22 +244,46 @@ pub async fn generate_survey_documents(
                 }
             });
 
-            fs::write(&abs_file_path, serde_json::to_string_pretty(&doc_json).unwrap())
-                .map_err(|e| CommandError::Io(format!("Failed to write document {}: {}", abs_file_path.display(), e)))?;
+            fs::write(
+                &abs_file_path,
+                serde_json::to_string_pretty(&doc_json).unwrap(),
+            )
+            .map_err(|e| {
+                CommandError::Io(format!(
+                    "Failed to write document {}: {}",
+                    abs_file_path.display(),
+                    e
+                ))
+            })?;
 
             // Store relative path in DB
-            generated_files.push(rel_file_path.to_string_lossy().to_string().replace("\\", "/"));
+            generated_files.push(
+                rel_file_path
+                    .to_string_lossy()
+                    .to_string()
+                    .replace("\\", "/"),
+            );
         }
     } else {
         // "Questions"
-        let survey_selected_questions = config.get("surveySelectedQuestions")
+        let survey_selected_questions = config
+            .get("surveySelectedQuestions")
             .and_then(|v: &Value| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v: &Value| v.as_str()).collect::<Vec<_>>())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v: &Value| v.as_str())
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
-        let survey_included_other_fields = config.get("surveyIncludedOtherFields")
+        let survey_included_other_fields = config
+            .get("surveyIncludedOtherFields")
             .and_then(|v: &Value| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v: &Value| v.as_str()).collect::<Vec<_>>())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v: &Value| v.as_str())
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let target_dir_name = format!("{}_questions", view_name);
@@ -232,7 +296,8 @@ pub async fn generate_survey_documents(
         }
 
         for question in survey_selected_questions {
-            let safe_filename = question.replace(&['/', '\\', ':', '*', '?', '"', '<', '>', '|'][..], "_");
+            let safe_filename =
+                question.replace(&['/', '\\', ':', '*', '?', '"', '<', '>', '|'][..], "_");
             let rel_file_path = rel_target_dir.join(format!("{}.json", safe_filename));
             let abs_file_path = project_base_dir.join(&rel_file_path);
 
@@ -261,16 +326,23 @@ pub async fn generate_survey_documents(
             for (index, row_val) in rows.iter().enumerate() {
                 let row = row_val.as_object().unwrap();
                 let participant_id_text = if !survey_unique_identifier_field.is_empty() {
-                    let val = row.get(survey_unique_identifier_field)
+                    let val = row
+                        .get(survey_unique_identifier_field)
                         .and_then(|v: &Value| {
-                            if v.is_string() { Some(v.as_str().unwrap().to_string()) }
-                            else if v.is_null() { None }
-                            else if v.is_f64() {
+                            if v.is_string() {
+                                Some(v.as_str().unwrap().to_string())
+                            } else if v.is_null() {
+                                None
+                            } else if v.is_f64() {
                                 let f = v.as_f64().unwrap();
-                                if f.fract() == 0.0 { Some((f as i64).to_string()) }
-                                else { Some(f.to_string()) }
+                                if f.fract() == 0.0 {
+                                    Some((f as i64).to_string())
+                                } else {
+                                    Some(f.to_string())
+                                }
+                            } else {
+                                Some(v.to_string())
                             }
-                            else { Some(v.to_string()) }
                         })
                         .unwrap_or_else(|| format!("{}", index + 1));
                     format!("{}: {}", survey_unique_identifier_field, val)
@@ -300,20 +372,30 @@ pub async fn generate_survey_documents(
 
                 // Add other included fields if any
                 for other_field in &survey_included_other_fields {
-                    let other_val = row.get(*other_field)
+                    let other_val = row
+                        .get(*other_field)
                         .map(|v: &Value| {
-                            if v.is_string() { v.as_str().unwrap().to_string() }
-                            else if v.is_null() { "".to_string() }
-                            else if v.is_f64() {
+                            if v.is_string() {
+                                v.as_str().unwrap().to_string()
+                            } else if v.is_null() {
+                                "".to_string()
+                            } else if v.is_f64() {
                                 let f = v.as_f64().unwrap();
-                                if f.fract() == 0.0 { (f as i64).to_string() }
-                                else { f.to_string() }
+                                if f.fract() == 0.0 {
+                                    (f as i64).to_string()
+                                } else {
+                                    f.to_string()
+                                }
+                            } else {
+                                v.to_string()
                             }
-                            else { v.to_string() }
                         })
                         .unwrap_or_default();
 
-                    lexical_children.push(create_lexical_paragraph_json_value(&format!("{}: {}", other_field, other_val)));
+                    lexical_children.push(create_lexical_paragraph_json_value(&format!(
+                        "{}: {}",
+                        other_field, other_val
+                    )));
                 }
 
                 // Add 'Answer' in bold
@@ -336,16 +418,23 @@ pub async fn generate_survey_documents(
                 }));
 
                 // Add actual answer response
-                let response_val = row.get(question)
+                let response_val = row
+                    .get(question)
                     .map(|v: &Value| {
-                        if v.is_string() { v.as_str().unwrap().to_string() }
-                        else if v.is_null() { "".to_string() }
-                        else if v.is_f64() {
+                        if v.is_string() {
+                            v.as_str().unwrap().to_string()
+                        } else if v.is_null() {
+                            "".to_string()
+                        } else if v.is_f64() {
                             let f = v.as_f64().unwrap();
-                            if f.fract() == 0.0 { (f as i64).to_string() }
-                            else { f.to_string() }
+                            if f.fract() == 0.0 {
+                                (f as i64).to_string()
+                            } else {
+                                f.to_string()
+                            }
+                        } else {
+                            v.to_string()
                         }
-                        else { v.to_string() }
                     })
                     .unwrap_or_default();
 
@@ -369,21 +458,37 @@ pub async fn generate_survey_documents(
                 }
             });
 
-            fs::write(&abs_file_path, serde_json::to_string_pretty(&doc_json).unwrap())
-                .map_err(|e| CommandError::Io(format!("Failed to write document {}: {}", abs_file_path.display(), e)))?;
+            fs::write(
+                &abs_file_path,
+                serde_json::to_string_pretty(&doc_json).unwrap(),
+            )
+            .map_err(|e| {
+                CommandError::Io(format!(
+                    "Failed to write document {}: {}",
+                    abs_file_path.display(),
+                    e
+                ))
+            })?;
 
-            generated_files.push(rel_file_path.to_string_lossy().to_string().replace("\\", "/"));
+            generated_files.push(
+                rel_file_path
+                    .to_string_lossy()
+                    .to_string()
+                    .replace("\\", "/"),
+            );
         }
     }
 
     // Now update asset_metadata to include these as attachments for the table
     if let Ok(Some(metadata_from_db)) = db_handler::load_asset_metadata(project_id, table_path) {
-        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db.custom_fields_json
+        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db
+            .custom_fields_json
             .as_deref()
             .and_then(|json| serde_json::from_str(json).ok())
             .unwrap_or_else(Vec::new);
 
-        let mut attachments: Vec<String> = custom_fields.iter()
+        let mut attachments: Vec<String> = custom_fields
+            .iter()
             .find(|f: &&Value| f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments"))
             .and_then(|f: &Value| f.get("value").and_then(|v: &Value| v.as_str()))
             .and_then(|v| serde_json::from_str(v).ok())
@@ -394,7 +499,11 @@ pub async fn generate_survey_documents(
                 attachments.push(new_file.clone());
             }
 
-            let file_name = PathBuf::from(new_file).file_name().unwrap().to_string_lossy().to_string();
+            let file_name = PathBuf::from(new_file)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
             // Register each attachment individually
             let attachment_metadata = FileMetadata {
                 file_name: file_name,
@@ -409,13 +518,15 @@ pub async fn generate_survey_documents(
                 &attachment_metadata,
                 new_file,
                 "attachment",
-                None
+                None,
             );
         }
 
         let attachments_json_string = json!(attachments).to_string();
 
-        if let Some(existing_field) = custom_fields.iter_mut().find(|f: &&mut Value| f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments")) {
+        if let Some(existing_field) = custom_fields.iter_mut().find(|f: &&mut Value| {
+            f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments")
+        }) {
             if let Some(obj) = existing_field.as_object_mut() {
                 obj.insert("value".to_string(), json!(attachments_json_string));
             }
@@ -427,7 +538,8 @@ pub async fn generate_survey_documents(
             custom_fields.push(new_field);
         }
 
-        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+        let updated_custom_fields_json_str =
+            serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
 
         let file_metadata = FileMetadata {
             file_name: metadata_from_db.file_name,
@@ -445,7 +557,9 @@ pub async fn generate_survey_documents(
             video_codec: metadata_from_db.video_codec,
             created_at: metadata_from_db.creation_time,
             original_import_path: metadata_from_db.original_import_path,
-            speaker_names: metadata_from_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+            speaker_names: metadata_from_db
+                .speaker_names_json
+                .and_then(|s| serde_json::from_str(&s).ok()),
             waveform_data: metadata_from_db.waveform_data,
             language_code: metadata_from_db.language_code,
             properties: metadata_from_db.properties,
@@ -458,7 +572,7 @@ pub async fn generate_survey_documents(
             &file_metadata,
             table_path,
             &metadata_from_db.asset_type,
-            Some(&updated_custom_fields_json_str)
+            Some(&updated_custom_fields_json_str),
         );
     }
 
@@ -472,7 +586,10 @@ pub fn load_table_views(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    debug!("[DB] Loading table views for table '{}' in project '{}'", table_path, project_id);
+    debug!(
+        "[DB] Loading table views for table '{}' in project '{}'",
+        table_path, project_id
+    );
 
     let mut stmt = conn.prepare(
         "SELECT id, project_id, table_path, view_name, view_type, config_json, created_at, updated_at
@@ -511,24 +628,34 @@ pub fn delete_table_view(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Deleting table view '{}' for table '{}' in project '{}'", view_name, table_path, project_id);
+    info!(
+        "[DB] Deleting table view '{}' for table '{}' in project '{}'",
+        view_name, table_path, project_id
+    );
 
     // Fetch the view to see if it's a survey view that needs file cleanup
     let mut stmt = conn.prepare("SELECT view_type, config_json FROM table_views WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3")?;
-    let view_data = stmt.query_row(params![project_id, table_path, view_name], |row| {
-        let view_type: String = row.get(0)?;
-        let config_json: String = row.get(1)?;
-        Ok((view_type, config_json))
-    }).optional()?;
+    let view_data = stmt
+        .query_row(params![project_id, table_path, view_name], |row| {
+            let view_type: String = row.get(0)?;
+            let config_json: String = row.get(1)?;
+            Ok((view_type, config_json))
+        })
+        .optional()?;
 
     if let Some((view_type, config_json)) = view_data {
         if view_type == "survey" {
             info!("Deleting files for survey view: {}", view_name);
             let config: Value = serde_json::from_str(&config_json).unwrap_or(json!({}));
-            let group_by_type = config.get("surveyGroupByType").and_then(|v: &Value| v.as_str()).unwrap_or("Participants");
+            let group_by_type = config
+                .get("surveyGroupByType")
+                .and_then(|v: &Value| v.as_str())
+                .unwrap_or("Participants");
 
             let project_xml_path = PathBuf::from(project_xml_path_str);
-            let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::Path("Could not get project base directory.".to_string()))?;
+            let project_base_dir = project_xml_path.parent().ok_or_else(|| {
+                CommandError::Path("Could not get project base directory.".to_string())
+            })?;
             let table_path_buf = PathBuf::from(table_path);
 
             if let Some(table_dir) = table_path_buf.parent() {
@@ -548,7 +675,11 @@ pub fn delete_table_view(
                     if let Ok(entries) = fs::read_dir(&abs_target_dir) {
                         for entry in entries.filter_map(Result::ok) {
                             if let Some(file_name) = entry.file_name().to_str() {
-                                let rel_file_path = rel_target_dir.join(file_name).to_string_lossy().to_string().replace("\\", "/");
+                                let rel_file_path = rel_target_dir
+                                    .join(file_name)
+                                    .to_string_lossy()
+                                    .to_string()
+                                    .replace("\\", "/");
                                 files_to_remove.push(rel_file_path);
                             }
                         }
@@ -556,18 +687,28 @@ pub fn delete_table_view(
 
                     // Delete from disk using absolute path
                     if let Err(e) = fs::remove_dir_all(&abs_target_dir) {
-                        error!("Failed to remove survey directory {}: {}", abs_target_dir.display(), e);
+                        error!(
+                            "Failed to remove survey directory {}: {}",
+                            abs_target_dir.display(),
+                            e
+                        );
                     }
 
                     // Remove from DB asset_metadata attachments
-                    if let Ok(Some(metadata_from_db)) = db_handler::load_asset_metadata(project_id, table_path) {
-                        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db.custom_fields_json
+                    if let Ok(Some(metadata_from_db)) =
+                        db_handler::load_asset_metadata(project_id, table_path)
+                    {
+                        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db
+                            .custom_fields_json
                             .as_deref()
                             .and_then(|json| serde_json::from_str(json).ok())
                             .unwrap_or_else(Vec::new);
 
-                        let mut attachments: Vec<String> = custom_fields.iter()
-                            .find(|f: &&Value| f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments"))
+                        let mut attachments: Vec<String> = custom_fields
+                            .iter()
+                            .find(|f: &&Value| {
+                                f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments")
+                            })
                             .and_then(|f: &Value| f.get("value").and_then(|v: &Value| v.as_str()))
                             .and_then(|v| serde_json::from_str(v).ok())
                             .unwrap_or_else(Vec::new);
@@ -584,13 +725,18 @@ pub fn delete_table_view(
 
                         let attachments_json_string = json!(attachments).to_string();
 
-                        if let Some(existing_field) = custom_fields.iter_mut().find(|f: &&mut Value| f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments")) {
+                        if let Some(existing_field) =
+                            custom_fields.iter_mut().find(|f: &&mut Value| {
+                                f.get("key").and_then(|k: &Value| k.as_str()) == Some("attachments")
+                            })
+                        {
                             if let Some(obj) = existing_field.as_object_mut() {
                                 obj.insert("value".to_string(), json!(attachments_json_string));
                             }
                         }
 
-                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields)
+                            .unwrap_or_else(|_| "[]".to_string());
 
                         // We must manually execute the update here to avoid borrowing issues or just update the field
                         let _ = conn.execute(
@@ -618,7 +764,10 @@ pub fn delete_all_table_views_for_table(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Deleting all table views for table '{}' in project '{}'", table_path, project_id);
+    info!(
+        "[DB] Deleting all table views for table '{}' in project '{}'",
+        table_path, project_id
+    );
 
     conn.execute(
         "DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2",
@@ -637,18 +786,23 @@ pub fn rename_table_view(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Renaming table view from '{}' to '{}' for table '{}' in project '{}'", old_view_name, new_view_name, table_path, project_id);
+    info!(
+        "[DB] Renaming table view from '{}' to '{}' for table '{}' in project '{}'",
+        old_view_name, new_view_name, table_path, project_id
+    );
 
     // Get the view type and config
     let mut stmt = conn.prepare(
         "SELECT view_type, config_json
          FROM table_views
-         WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3"
+         WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3",
     )?;
 
-    let (view_type, config_json_str): (String, String) = stmt.query_row(params![project_id, table_path, old_view_name], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    }).map_err(|e| CommandError::from(format!("Failed to find view to rename: {}", e)))?;
+    let (view_type, config_json_str): (String, String) = stmt
+        .query_row(params![project_id, table_path, old_view_name], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .map_err(|e| CommandError::from(format!("Failed to find view to rename: {}", e)))?;
 
     conn.execute(
         "UPDATE table_views SET view_name = ?1, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?2 AND table_path = ?3 AND view_name = ?4",
@@ -657,9 +811,16 @@ pub fn rename_table_view(
 
     if view_type == "survey" {
         let config: Value = serde_json::from_str(&config_json_str).unwrap_or(json!({}));
-        let survey_group_by_type = config.get("surveyGroupByType").and_then(|v| v.as_str()).unwrap_or("Participants");
+        let survey_group_by_type = config
+            .get("surveyGroupByType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Participants");
 
-        let target_dir_suffix = if survey_group_by_type == "Participants" { "participants" } else { "questions" };
+        let target_dir_suffix = if survey_group_by_type == "Participants" {
+            "participants"
+        } else {
+            "questions"
+        };
         let old_target_dir_name = format!("{}_{}", old_view_name, target_dir_suffix);
         let new_target_dir_name = format!("{}_{}", new_view_name, target_dir_suffix);
 
@@ -680,30 +841,60 @@ pub fn rename_table_view(
                         error!("[Survey Rename] Failed to rename directory on disk: {}", e);
                     } else {
                         // Update asset metadata
-                        if let Ok(Some(metadata_from_db)) = db_handler::load_asset_metadata(project_id, table_path) {
-                            if let Some(custom_fields_json_str) = metadata_from_db.custom_fields_json {
-                                if let Ok(mut custom_fields) = serde_json::from_str::<Vec<Value>>(&custom_fields_json_str) {
-                                    if let Some(attachments_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
-                                        if let Some(attachments_str) = attachments_field.get("value").and_then(|v| v.as_str()) {
-                                            if let Ok(mut attachments) = serde_json::from_str::<Vec<String>>(attachments_str) {
-                                                let old_prefix = rel_old_target_dir.to_string_lossy().to_string().replace("\\", "/");
-                                                let new_prefix = rel_new_target_dir.to_string_lossy().to_string().replace("\\", "/");
+                        if let Ok(Some(metadata_from_db)) =
+                            db_handler::load_asset_metadata(project_id, table_path)
+                        {
+                            if let Some(custom_fields_json_str) =
+                                metadata_from_db.custom_fields_json
+                            {
+                                if let Ok(mut custom_fields) =
+                                    serde_json::from_str::<Vec<Value>>(&custom_fields_json_str)
+                                {
+                                    if let Some(attachments_field) =
+                                        custom_fields.iter_mut().find(|f| {
+                                            f.get("key").and_then(|k| k.as_str())
+                                                == Some("attachments")
+                                        })
+                                    {
+                                        if let Some(attachments_str) =
+                                            attachments_field.get("value").and_then(|v| v.as_str())
+                                        {
+                                            if let Ok(mut attachments) =
+                                                serde_json::from_str::<Vec<String>>(attachments_str)
+                                            {
+                                                let old_prefix = rel_old_target_dir
+                                                    .to_string_lossy()
+                                                    .to_string()
+                                                    .replace("\\", "/");
+                                                let new_prefix = rel_new_target_dir
+                                                    .to_string_lossy()
+                                                    .to_string()
+                                                    .replace("\\", "/");
 
                                                 for path in &mut attachments {
                                                     if path.starts_with(&old_prefix) {
-                                                        *path = path.replace(&old_prefix, &new_prefix);
+                                                        *path =
+                                                            path.replace(&old_prefix, &new_prefix);
                                                     }
                                                 }
 
-                                                let new_attachments_str = serde_json::to_string(&attachments).unwrap_or_else(|_| "[]".to_string());
-                                                if let Some(obj) = attachments_field.as_object_mut() {
-                                                    obj.insert("value".to_string(), json!(new_attachments_str));
+                                                let new_attachments_str =
+                                                    serde_json::to_string(&attachments)
+                                                        .unwrap_or_else(|_| "[]".to_string());
+                                                if let Some(obj) = attachments_field.as_object_mut()
+                                                {
+                                                    obj.insert(
+                                                        "value".to_string(),
+                                                        json!(new_attachments_str),
+                                                    );
                                                 }
                                             }
                                         }
                                     }
 
-                                    let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+                                    let updated_custom_fields_json_str =
+                                        serde_json::to_string(&custom_fields)
+                                            .unwrap_or_else(|_| "[]".to_string());
                                     let _ = conn.execute(
                                         "UPDATE asset_metadata SET custom_fields_json = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
                                         params![updated_custom_fields_json_str, project_id, table_path],

@@ -1,15 +1,18 @@
-use crate::welcome::config::{CommandError, read_config};
-use crate::welcome::python_env::get_python_path;
 use super::TranslationEngine;
-use tauri::{AppHandle, Runtime, Manager};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
+use crate::welcome::config::{read_config, CommandError};
+use crate::welcome::python_env::get_python_path;
 use async_trait::async_trait;
-use std::path::Path;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use log::{debug, error, info, warn};
-use tokio::sync::Mutex;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::Duration;
+use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 pub struct PythonTranslationEngine<R: Runtime> {
@@ -40,10 +43,17 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
 
         let python_path = get_python_path()
             .map_err(|e| CommandError::from(format!("Failed to get python path: {}", e)))?;
-        
-        let script_path = self.app_handle.path()
-            .resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
-            .map_err(|e| CommandError::from(format!("Failed to resolve translation script path: {}", e)))?;
+
+        let script_path = self
+            .app_handle
+            .path()
+            .resolve(
+                "scripts/run_translation.py",
+                tauri::path::BaseDirectory::Resource,
+            )
+            .map_err(|e| {
+                CommandError::from(format!("Failed to resolve translation script path: {}", e))
+            })?;
 
         let input_json = serde_json::to_string(&texts)
             .map_err(|e| CommandError::from(format!("Failed to serialize texts: {}", e)))?;
@@ -51,8 +61,12 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
         // Create a temporary file for the input text to avoid CLI argument length limits
         let temp_dir = std::env::temp_dir();
         let temp_file_path = temp_dir.join(format!("translation_input_{}.json", job_id));
-        std::fs::write(&temp_file_path, input_json)
-            .map_err(|e| CommandError::from(format!("Failed to write temporary translation input file: {}", e)))?;
+        std::fs::write(&temp_file_path, input_json).map_err(|e| {
+            CommandError::from(format!(
+                "Failed to write temporary translation input file: {}",
+                e
+            ))
+        })?;
 
         let mut python_args: Vec<String> = vec![
             script_path.to_string_lossy().to_string(),
@@ -97,10 +111,14 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
             }
         }
 
-        info!("[PythonEngine][{}] Executing python script: {:?}", job_id, python_args);
+        info!(
+            "[PythonEngine][{}] Executing python script: {:?}",
+            job_id, python_args
+        );
 
         let shell_scope = self.app_handle.shell();
-        let (mut rx, child) = shell_scope.command(python_path.to_string_lossy().to_string())
+        let (mut rx, child) = shell_scope
+            .command(python_path.to_string_lossy().to_string())
             .args(python_args)
             .spawn()
             .map_err(|e| CommandError::from(format!("Failed to spawn Python script: {}", e)))?;
@@ -114,7 +132,10 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
         tokio::spawn(async move {
             loop {
                 if cancel_flag_clone.load(Ordering::Relaxed) {
-                    warn!("[PythonEngine][{}] Cancellation requested. Killing process...", job_id_clone);
+                    warn!(
+                        "[PythonEngine][{}] Cancellation requested. Killing process...",
+                        job_id_clone
+                    );
                     if let Some(child) = shared_child_clone.lock().await.take() {
                         let _ = child.kill();
                     }
@@ -132,25 +153,33 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    debug!("[PythonEngine][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
+                    debug!(
+                        "[PythonEngine][stdout][{}] {}",
+                        job_id,
+                        String::from_utf8_lossy(&line).trim_end()
+                    );
                     python_stdout.extend_from_slice(&line);
-                },
+                }
                 CommandEvent::Stderr(line) => {
-                    debug!("[PythonEngine][stderr][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end());
+                    debug!(
+                        "[PythonEngine][stderr][{}] {}",
+                        job_id,
+                        String::from_utf8_lossy(&line).trim_end()
+                    );
                     python_stderr.extend_from_slice(&line);
-                },
+                }
                 CommandEvent::Error(msg) => {
                     error!("[PythonEngine][error][{}] {}", job_id, msg);
                     python_error = Some(msg);
                     break;
-                },
+                }
                 CommandEvent::Terminated(payload) => {
                     python_exit_code = payload.code;
                     if payload.signal.is_some() && python_exit_code.is_none() {
                         python_exit_code = Some(-1);
                     }
                     break;
-                },
+                }
                 _ => {}
             }
         }
@@ -163,15 +192,20 @@ impl<R: Runtime> TranslationEngine for PythonTranslationEngine<R> {
             let stderr_output = String::from_utf8_lossy(&python_stderr);
             // Cleanup temp file even on error
             let _ = std::fs::remove_file(&temp_file_path);
-            return Err(CommandError::from(format!("Translation script failed. Code: {:?}. Error: {:?}. Stderr: {}", python_exit_code, python_error, stderr_output)));
+            return Err(CommandError::from(format!(
+                "Translation script failed. Code: {:?}. Error: {:?}. Stderr: {}",
+                python_exit_code, python_error, stderr_output
+            )));
         }
 
         // Cleanup temp file after success
         let _ = std::fs::remove_file(&temp_file_path);
 
         let translated_output = String::from_utf8_lossy(&python_stdout);
-        let translated_texts: Vec<String> = serde_json::from_str(&translated_output)
-            .map_err(|e| CommandError::from(format!("Failed to parse translation output: {}", e)))?;
+        let translated_texts: Vec<String> =
+            serde_json::from_str(&translated_output).map_err(|e| {
+                CommandError::from(format!("Failed to parse translation output: {}", e))
+            })?;
 
         Ok(translated_texts)
     }
