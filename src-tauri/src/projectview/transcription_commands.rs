@@ -340,8 +340,9 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
     let media_stem_dir = media_subdir.parent().ok_or_else(|| CommandError::from("Could not get media stem dir"))?;
     let original_media_identifier = media_stem_dir.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get media identifier"))?;
     let media_asset_dir = media_stem_dir.parent().ok_or_else(|| CommandError::from("Could not get Media asset dir"))?;
-    if media_asset_dir.file_name().and_then(|n| n.to_str()) != Some(MEDIA_DIR) {
-        return Err(CommandError::from(format!("Media stem not in '{}' dir", MEDIA_DIR)));
+    let parent_name = media_asset_dir.file_name().and_then(|n| n.to_str());
+    if parent_name != Some(MEDIA_DIR) && parent_name != Some(AUDIOS_DIR) && parent_name != Some(VIDEOS_DIR) {
+        return Err(CommandError::from(format!("Media stem not in expected directory (Media, Audios, or Videos). Found: {:?}", parent_name)));
     }
     let harvey_files_dir = media_asset_dir.parent().ok_or_else(|| CommandError::from(format!("Could not get '{}' dir", HARVEY_FILES_DIR)))?;
     if harvey_files_dir.file_name().and_then(|n| n.to_str()) != Some(HARVEY_FILES_DIR) {

@@ -1906,7 +1906,14 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                             }
                         }
                     }
-                    (path.unwrap_or_else(|| project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(media_stem)), rel)
+                    (path.unwrap_or_else(|| {
+                        // Fallback order: Audios, Videos, then legacy Media
+                        let audios_path = project_base_dir.join(HARVEY_FILES_DIR).join(AUDIOS_DIR).join(media_stem);
+                        if audios_path.exists() { return audios_path; }
+                        let videos_path = project_base_dir.join(HARVEY_FILES_DIR).join(VIDEOS_DIR).join(media_stem);
+                        if videos_path.exists() { return videos_path; }
+                        project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(media_stem)
+                    }), rel)
                 };
 
                 // Cleanup highlights for all associated transcripts before deleting

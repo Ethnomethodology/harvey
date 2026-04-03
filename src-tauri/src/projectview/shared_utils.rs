@@ -216,8 +216,8 @@ pub fn save_project_xml(xml_path: &Path, project_data: &ProjectXml) -> Result<()
 
 pub fn ensure_base_asset_dirs(project_base_dir: &Path) -> Result<(), CommandError> {
     let base_path = project_base_dir.join(HARVEY_FILES_DIR);
-    // Note: We don't remove MEDIA_DIR for backward compatibility, but we primarily use AUDIOS_DIR and VIDEOS_DIR now.
-    fs::create_dir_all(base_path.join(MEDIA_DIR))?;
+    // Note: We no longer create MEDIA_DIR as it is replaced by AUDIOS_DIR and VIDEOS_DIR.
+    // Existing projects might still have it, but new ones won't.
     fs::create_dir_all(base_path.join(AUDIOS_DIR))?;
     fs::create_dir_all(base_path.join(VIDEOS_DIR))?;
     fs::create_dir_all(base_path.join(IMAGES_DIR))?;
