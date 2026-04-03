@@ -5,6 +5,7 @@ use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
 use crate::utils::canonicalize_path;
 use crate::welcome::config::{
     add_or_update_project_in_config,
+    get_config_dir,
     get_default_download_location,
     read_config,
     write_config, // Keep these config functions
@@ -2815,4 +2816,11 @@ pub async fn fetch_available_models_command(
             stderr_str
         )))
     }
+}
+
+#[command]
+pub async fn get_logs_dir_path() -> Result<String, CommandError> {
+    let config_dir = get_config_dir()?;
+    let logs_dir = config_dir.join("logs");
+    Ok(logs_dir.to_string_lossy().into_owned())
 }

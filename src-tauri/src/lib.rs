@@ -1,7 +1,8 @@
 // src-tauri/src/lib.rs
 use dashmap::DashMap;
-use tauri_plugin_log::{Target, TargetKind, RotationStrategy};
+use tauri_plugin_log::{Target, TargetKind};
 use log; // Added log import
+use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::Emitter;
 use tauri::Manager; // Added Manager import // For app.emit()
@@ -52,18 +53,26 @@ pub fn run() {
 
     log::info!("Starting Harvey application...");
 
+    let logs_dir = crate::welcome::config::get_config_dir()
+        .map(|p| p.join("logs"))
+        .unwrap_or_else(|_| PathBuf::from(".harvey/logs"));
+
+    if !logs_dir.exists() {
+        let _ = std::fs::create_dir_all(&logs_dir);
+    }
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
                     Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir {
+                    Target::new(TargetKind::Folder {
+                        path: logs_dir,
                         file_name: Some("harvey".into()),
                     })
                     .filter(|metadata| metadata.level() <= log::LevelFilter::Warn),
                 ])
                 .level(log::LevelFilter::Info) // Global default for stdout
-                .rotation_strategy(RotationStrategy::KeepCount(7)) // Keep exactly 7 log files
                 .build(),
         )
         .manage(DownloadCancellationState::default())
@@ -372,6 +381,7 @@ pub fn run() {
             welcome::commands::get_advanced_transcription_config, // Added
             welcome::commands::set_advanced_transcription_config, // Added
             welcome::commands::set_menu_context, // Added
+            welcome::commands::get_logs_dir_path,
 
             // --- Project view CORE commands ---
             projectview::core_commands::load_project_data,

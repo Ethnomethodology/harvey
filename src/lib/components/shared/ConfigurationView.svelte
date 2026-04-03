@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { type } from '@tauri-apps/plugin-os';
   import { listen } from '@tauri-apps/api/event';
   import { open } from '@tauri-apps/plugin-dialog';
   import { ask } from '@tauri-apps/plugin-dialog';
@@ -16,6 +17,7 @@
   import { Input, Label, Button, Select, Accordion, AccordionItem } from 'flowbite-svelte';
   import {
     FolderOpen,
+    ExternalLink,
     Settings2,
     MonitorCog,
     MessageSquareText,
@@ -35,30 +37,42 @@
   import HuggingFacePanel from './HuggingFacePanel.svelte';
   import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
-  let activeTab = 'application'; // 'application', 'transcription', 'diarization', 'translation', 'advanced'
+  let activeTab = $state('application'); // 'application', 'transcription', 'diarization', 'translation', 'advanced'
   let isWinArm64 = false;
   let isFFmpegInstalled = false;
-  let downloadLocation = '';
-  let isLoadingConfig = true;
-  let configError = '';
-  let isMovingModels = false;
-  let statusMessage = '';
+  let downloadLocation = $state('');
+  let logsDirPath = $state('');
+  let isLoadingConfig = $state(true);
+  let configError = $state('');
+  let isMovingModels = $state(false);
+  let statusMessage = $state('');
+  let isGeneralOpen = $state(false);
+  let revealLabel = $state('Reveal in File Explorer');
 
-  let isGeneralOpen = false;
-
-  let isTranscriptionBusy = false;
-  let isTranslationBusy = false;
-  let isAdvancedBusy = false;
-  let translationModelCount = 0;
-  $: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy || isAdvancedBusy;
+  let isTranscriptionBusy = $state(false);
+  let isTranslationBusy = $state(false);
+  let isAdvancedBusy = $state(false);
+  let translationModelCount = $state(0);
+  let isBusy = $derived(isMovingModels || isTranscriptionBusy || isTranslationBusy || isAdvancedBusy);
 
   onMount(async () => {
     updateConfigStatus(true); // Force a refresh when the component mounts
     isLoadingConfig = true;
     configError = '';
     statusMessage = '';
+
+    const osType = type();
+    if (osType === 'macos') {
+      revealLabel = 'Reveal in Finder';
+    } else {
+      revealLabel = 'Reveal in File Explorer';
+    }
+
     try {
-      downloadLocation = await getDownloadLocation();
+      [downloadLocation, logsDirPath] = await Promise.all([
+        getDownloadLocation(),
+        invoke('get_logs_dir_path')
+      ]);
     } catch (e) {
       console.error('Error loading configuration:', e);
       configError = `Failed to load configuration: ${e.message || e}`;
@@ -162,7 +176,7 @@
       <li class="me-2">
         <button
           type="button"
-          on:click={() => (activeTab = 'application')}
+          onclick={() => (activeTab = 'application')}
           class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab ===
           'application'
             ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500'
@@ -183,7 +197,7 @@
       <li class="me-2">
         <button
           type="button"
-          on:click={() => (activeTab = 'transcription')}
+          onclick={() => (activeTab = 'transcription')}
           class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab ===
           'transcription'
             ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500'
@@ -206,7 +220,7 @@
       <li class="me-2">
         <button
           type="button"
-          on:click={() => (activeTab = 'diarization')}
+          onclick={() => (activeTab = 'diarization')}
           class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab ===
           'diarization'
             ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500'
@@ -233,7 +247,7 @@
       <li class="me-2">
         <button
           type="button"
-          on:click={() => (activeTab = 'translation')}
+          onclick={() => (activeTab = 'translation')}
           class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab ===
           'translation'
             ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500'
@@ -260,7 +274,7 @@
       <li class="me-2">
         <button
           type="button"
-          on:click={() => (activeTab = 'advanced')}
+          onclick={() => (activeTab = 'advanced')}
           class="inline-flex items-center justify-center p-4 border-b-2 rounded-t-lg group transition-all {activeTab ===
           'advanced'
             ? 'text-blue-600 border-blue-600 active dark:text-blue-500 dark:border-blue-500'
@@ -337,7 +351,7 @@
                     <Button
                       color="alternative"
                       class="px-3"
-                      on:click={pickDownloadLocation}
+                      onclick={pickDownloadLocation}
                       disabled={isBusy}
                       title={isBusy ? 'Operation in progress...' : 'Select model download folder'}
                     >
@@ -356,6 +370,30 @@
                   {#if statusMessage}
                     <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
                   {/if}
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="application-logs-input">Application Logs</Label>
+                  <div class="flex items-center gap-2 max-w-2xl">
+                    <Input
+                      id="application-logs-input"
+                      type="text"
+                      bind:value={logsDirPath}
+                      class="flex-grow cursor-not-allowed bg-gray-50 dark:bg-gray-800"
+                      readonly
+                      title={logsDirPath || 'No logs directory found'}
+                      autocomplete="off"
+                      autocorrect="off"
+                    />
+                    <Button
+                      color="alternative"
+                      class="px-3"
+                      onclick={() => invoke('reveal_in_file_explorer', { filePathStr: logsDirPath })}
+                      title={revealLabel}
+                    >
+                      <ExternalLink size={18} />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </AccordionItem>
