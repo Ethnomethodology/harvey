@@ -1252,14 +1252,16 @@
         }));
 
         // Determine if we are already viewing this path
-        const isAlreadyViewing =
+        const isAlreadyViewingBase =
             normalizePath(proj.selectedDocumentPath) === path ||
             normalizePath(proj.currentStandaloneTranscriptPath) === path ||
             normalizePath(proj.selectedMediaNotePath) === path;
 
-        if (isAlreadyViewing) {
+        const isTrulyViewingSubItem = !attachmentToOpen || (activeSubItemPath && normalizePath(activeSubItemPath) === normalizePath(attachmentToOpen));
+
+        if (isAlreadyViewingBase && isTrulyViewingSubItem) {
             console.log(
-                `[ProjectView] Already viewing ${itemLogName}. Just ensuring correct tab.`,
+                `[ProjectView] Already viewing ${itemLogName} and requested sub-item. Just ensuring correct tab.`,
             );
             if (selectedTab !== tabName) {
                 await handleTabClick(tabName);
@@ -1268,124 +1270,134 @@
             return;
         }
 
-        // Not already viewing, proceed with full load
-        let canProceed = await checkUnsavedChangesThenProceed(
-            path,
-            "opening item",
-        );
-        if (!canProceed) {
-            project.update((p) => ({ ...p, isLoading: false }));
-            return;
-        }
+        if (isAlreadyViewingBase && !isTrulyViewingSubItem) {
+            console.log(
+                `[ProjectView] Already viewing base ${itemLogName}, but switching to sub-item: ${attachmentToOpen}`,
+            );
+            if (selectedTab !== tabName) {
+                await handleTabClick(tabName);
+                await tick();
+            }
+        } else {
+            // Not already viewing base document, proceed with full load
+            let canProceed = await checkUnsavedChangesThenProceed(
+                path,
+                "opening item",
+            );
+            if (!canProceed) {
+                project.update((p) => ({ ...p, isLoading: false }));
+                return;
+            }
 
-        if (selectedTab !== tabName) {
-            await handleTabClick(tabName);
-            await tick();
-        }
+            if (selectedTab !== tabName) {
+                await handleTabClick(tabName);
+                await tick();
+            }
 
-        // Determine type and prepare view
-        if (tabName === "data") {
-            const isStandaloneTranscript =
-                viewType === "standalone_transcript" ||
-                originalDocType === "standalone_transcript" ||
-                proj.standaloneTranscriptFiles?.some(
-                    (f) =>
-                        normalizePath(
-                            `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
-                        ) === path,
-                );
-
-            const isMediaTranscript =
-                viewType === "audio_transcript" ||
-                viewType === "video_transcript" ||
-                originalDocType === "audio_transcript" ||
-                originalDocType === "video_transcript";
-
-            if (isStandaloneTranscript) {
-                prepareStandaloneTranscriptView(path);
-            } else if (isMediaTranscript) {
-                function findMediaByTranscriptPathRecursive(
-                    nodes,
-                    transcriptPath,
-                ) {
-                    if (!Array.isArray(nodes)) return null;
-                    const normTranscriptPath = transcriptPath.replace(
-                        /\\/g,
-                        "/",
+            // Determine type and prepare view
+            if (tabName === "data") {
+                const isStandaloneTranscript =
+                    viewType === "standalone_transcript" ||
+                    originalDocType === "standalone_transcript" ||
+                    proj.standaloneTranscriptFiles?.some(
+                        (f) =>
+                            normalizePath(
+                                `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
+                            ) === path,
                     );
-                    for (const node of nodes) {
-                        if (
-                            node.file_type === "media" &&
-                            node.associated_transcripts?.some(
-                                (t) =>
-                                    t.path.replace(/\\/g, "/") ===
-                                    normTranscriptPath,
-                            )
-                        )
-                            return node;
-                        const found = findMediaByTranscriptPathRecursive(
-                            node.children || [],
-                            transcriptPath,
+
+                const isMediaTranscript =
+                    viewType === "audio_transcript" ||
+                    viewType === "video_transcript" ||
+                    originalDocType === "audio_transcript" ||
+                    originalDocType === "video_transcript";
+
+                if (isStandaloneTranscript) {
+                    prepareStandaloneTranscriptView(path);
+                } else if (isMediaTranscript) {
+                    function findMediaByTranscriptPathRecursive(
+                        nodes,
+                        transcriptPath,
+                    ) {
+                        if (!Array.isArray(nodes)) return null;
+                        const normTranscriptPath = transcriptPath.replace(
+                            /\\/g,
+                            "/",
                         );
-                        if (found) return found;
+                        for (const node of nodes) {
+                            if (
+                                node.file_type === "media" &&
+                                node.associated_transcripts?.some(
+                                    (t) =>
+                                        t.path.replace(/\\/g, "/") ===
+                                        normTranscriptPath,
+                                )
+                            )
+                                return node;
+                            const found = findMediaByTranscriptPathRecursive(
+                                node.children || [],
+                                transcriptPath,
+                            );
+                            if (found) return found;
+                        }
+                        return null;
                     }
-                    return null;
-                }
-                const mediaNode = findMediaByTranscriptPathRecursive(
-                    proj.files,
-                    path,
-                );
-                if (mediaNode) {
-                    console.log(
-                        `[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`,
+                    const mediaNode = findMediaByTranscriptPathRecursive(
+                        proj.files,
+                        path,
                     );
-                    prepareMediaNoteView(mediaNode.path, path); // dual-path call
-                    // Selection highlighting in Left Panel
-                    project.update((p) => ({
-                        ...p,
-                        activeTranscriptPathInDataTab: path,
-                    }));
-                } else {
-                    console.warn(
-                        `[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`,
-                    );
-                    prepareDocumentView(path, "documents");
-                }
-            } else if (
-                viewType === "media_note" ||
-                viewType === "media" ||
-                [
-                    "mp3",
-                    "wav",
-                    "m4a",
-                    "ogg",
-                    "aac",
-                    "flac",
-                    "mp4",
-                    "mov",
-                    "avi",
-                    "mkv",
-                    "webm",
-                ].includes(path.split(".").pop()?.toLowerCase())
-            ) {
-                prepareMediaNoteView(path);
-            } else {
-                const ext = path.split(".").pop()?.toLowerCase();
-                let type = "documents";
-                if (["csv", "xlsx"].includes(ext)) type = "tables";
-                else if (
+                    if (mediaNode) {
+                        console.log(
+                            `[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`,
+                        );
+                        prepareMediaNoteView(mediaNode.path, path); // dual-path call
+                        // Selection highlighting in Left Panel
+                        project.update((p) => ({
+                            ...p,
+                            activeTranscriptPathInDataTab: path,
+                        }));
+                    } else {
+                        console.warn(
+                            `[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`,
+                        );
+                        prepareDocumentView(path, "documents");
+                    }
+                } else if (
+                    viewType === "media_note" ||
+                    viewType === "media" ||
                     [
-                        "jpg",
-                        "jpeg",
-                        "png",
-                        "gif",
-                        "bmp",
-                        "webp",
-                        "tiff",
-                    ].includes(ext)
-                )
-                    type = "images";
-                prepareDocumentView(path, type);
+                        "mp3",
+                        "wav",
+                        "m4a",
+                        "ogg",
+                        "aac",
+                        "flac",
+                        "mp4",
+                        "mov",
+                        "avi",
+                        "mkv",
+                        "webm",
+                    ].includes(path.split(".").pop()?.toLowerCase())
+                ) {
+                    prepareMediaNoteView(path);
+                } else {
+                    const ext = path.split(".").pop()?.toLowerCase();
+                    let type = "documents";
+                    if (["csv", "xlsx"].includes(ext)) type = "tables";
+                    else if (
+                        [
+                            "jpg",
+                            "jpeg",
+                            "png",
+                            "gif",
+                            "bmp",
+                            "webp",
+                            "tiff",
+                        ].includes(ext)
+                    )
+                        type = "images";
+                    prepareDocumentView(path, type);
+                }
             }
         }
 
