@@ -62,11 +62,19 @@ Before submitting any changes, ensure the following checks pass:
     ```bash
     npm run check
     ```
-2.  **Linting Check**:
+2.  **Frontend Linting**:
     ```bash
     npm run lint
     ```
-3.  **Cargo Check**:
+3.  **Backend Formatting**:
+    ```bash
+    cd src-tauri && cargo fmt --all -- --check
+    ```
+4.  **Backend Linting (Clippy)**:
+    ```bash
+    cd src-tauri && cargo clippy -- -D warnings
+    ```
+5.  **Cargo Check**:
     ```bash
     cd src-tauri && cargo check
     ```
