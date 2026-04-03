@@ -38,11 +38,24 @@ struct WhisperJsonOutput {
 struct WhisperJsonSegment {
     timestamps: WhisperJsonTimestamps,
     text: String,
+    #[serde(default)]
+    words: Vec<WhisperJsonWord>,
 }
 #[derive(Deserialize, Debug)]
 struct WhisperJsonTimestamps {
     from: String,
     to: String,
+}
+#[derive(Deserialize, Debug)]
+struct WhisperJsonWord {
+    #[serde(alias = "word")]
+    text: String,
+    #[serde(alias = "t0")]
+    start: i64, // centiseconds (1/100s)
+    #[serde(alias = "t1")]
+    end: i64,
+    #[serde(alias = "p", default)]
+    confidence: f64,
 }
 
 // Helper function to normalize paths for the CLI, inspired by shared_utils
@@ -98,6 +111,7 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             "-l".into(),
             lang_arg.to_string(),
             "-oj".into(), // Output JSON
+            "-owts".into(), // Output Word Timestamps
             "-of".into(),
             output_base_path_str,
         ];
@@ -322,11 +336,23 @@ fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, Comman
                 }
             }
 
+            let mut segment_words = Vec::new();
+            for w in &w_seg.words {
+                segment_words.push(crate::projectview::shared_types::Word {
+                    start: w.start as f64 / 100.0,
+                    end: w.end as f64 / 100.0,
+                    text: w.text.clone(),
+                    speaker: None,
+                    probability: w.confidence,
+                });
+            }
+
             segments.push(TranscriptSegment {
                 start_time,
                 end_time,
                 speaker: "Unknown".to_string(),
                 text: w_seg.text.trim().to_string(),
+                words: Some(segment_words),
             });
         }
     }

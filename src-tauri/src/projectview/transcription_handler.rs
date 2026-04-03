@@ -136,6 +136,7 @@ fn parse_transcript_block(
                 end_time: 0.0,
                 speaker: speaker_str,
                 text: String::new(),
+                words: None,
             });
         } else if let Some(caps_time_only) = re_timestamp_only.captures(trimmed_line) {
             // Case 2: Timestamp only line
@@ -174,6 +175,7 @@ fn parse_transcript_block(
                     end_time: 0.0,
                     speaker: speaker_str,
                     text: String::new(),
+                    words: None,
                 });
             } else {
                 // Speaker line without a preceding timestamp.
@@ -856,6 +858,7 @@ mod tests {
             end_time: 1.0,
             speaker: "S1".to_string(),
             text: "Test Content".to_string(),
+            words: None,
         }];
         let lexical_json = create_lexical_table_from_segments(&segments);
         let json_content_segments = serde_json::to_string_pretty(&lexical_json)?;

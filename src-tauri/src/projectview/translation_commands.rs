@@ -651,6 +651,7 @@ async fn run_translation_process<R: Runtime>(
                                                                 text: String::new(),
                                                                 speaker: current_speaker_name
                                                                     .clone(),
+                                                                words: None,
                                                             }];
 
                                                         // We need to map generic IDs if present, or find by name.

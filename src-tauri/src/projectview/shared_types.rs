@@ -304,12 +304,24 @@ mod tests {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Word {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    #[serde(default)]
+    pub speaker: Option<String>,
+    pub probability: f64,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TranscriptSegment {
     pub start_time: f64,
     pub end_time: f64,
     pub speaker: String,
     pub text: String,
+    #[serde(default)]
+    pub words: Option<Vec<Word>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

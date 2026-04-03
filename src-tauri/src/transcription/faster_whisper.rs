@@ -39,6 +39,8 @@ struct FasterWhisperSegment {
     end: f64,
     text: String,
     speaker: String,
+    #[serde(default)]
+    words: Vec<crate::projectview::shared_types::Word>,
 }
 
 #[async_trait]
@@ -251,6 +253,7 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
                 end_time: s.end,
                 text: s.text,
                 speaker: s.speaker,
+                words: Some(s.words),
             })
             .collect();
 

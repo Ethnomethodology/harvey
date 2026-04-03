@@ -21,21 +21,18 @@ def run_transcription(audio_path, model_path, language=None, task="transcribe", 
     elif device == "cuda":
         compute_type = "float16"
 
-    # Load model
+    # Load and run transcription
     try:
         # logging.info(f"Loading model from {model_path} on {device} with {compute_type}")
         model = WhisperModel(model_path, device=device, compute_type=compute_type, cpu_threads=threads if threads else 4)
-    except Exception as e:
-        print(json.dumps({"error": f"Failed to load model: {str(e)}"}), flush=True)
-        return
 
-    # Transcribe
-    try:
+        # Transcribe
         transcribe_args = {
             "audio": audio_path,
             "language": language,
             "task": task,
-            "beam_size": beam_size
+            "beam_size": beam_size,
+            "word_timestamps": True
         }
 
         if prompt is not None:
@@ -49,11 +46,22 @@ def run_transcription(audio_path, model_path, language=None, task="transcribe", 
 
         results = []
         for segment in segments:
+            segment_words = []
+            if segment.words:
+                for w in segment.words:
+                    segment_words.append({
+                        "start": w.start,
+                        "end": w.end,
+                        "text": w.word.strip(),
+                        "probability": w.probability
+                    })
+
             results.append({
                 "start": segment.start,
                 "end": segment.end,
                 "text": segment.text.strip(),
-                "speaker": "Unknown"
+                "speaker": "Unknown",
+                "words": segment_words
             })
 
         print(json.dumps({"segments": results}), flush=True)

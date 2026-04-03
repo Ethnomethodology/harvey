@@ -82,7 +82,7 @@ flowchart LR
 *   **`save_speaker_config(payload)`** -> `Result<(), CommandError>`: Updates speaker maps and custom names in the manifest.
 *   **`load_transcript_json(transcript_path)`** -> `Result<String, CommandError>`: Specialized reader that validates Lexical JSON structure for transcripts.
 *   **`save_transcript_json(...)`** -> `Result<(), CommandError>`: Specialized writer that parses Lexical JSON and maps its metadata appropriately.
-*   **`transcribe_media_command(app_handle, payload, cancel_state)`** -> `Result<TranscriptionInitiatedPayload, CommandError>`: Complex orchestrator that converts media to WAV, invokes Python transcription engines (Whisper/Faster-Whisper), performs diarization via RTTM, aligns speakers, and saves the output.
+*   **`transcribe_media_command(app_handle, payload, cancel_state)`** -> `Result<TranscriptionInitiatedPayload, CommandError>`: Complex orchestrator that converts media to WAV, invokes Python or Sidecar transcription engines (Whisper/Faster-Whisper) to generate word-level timestamps, performs high-precision diarization by re-clustering words into new segments based on speaker changes, and saves the output.
 *   **`list_subtitle_files_command(media_path_str)`** -> `Result<Vec<SubtitleFileEntry>, CommandError>`: Scans for `.srt` and `.vtt` files.
 *   **`convert_srt_to_vtt_command(srt_path_str)`** -> `Result<String, CommandError>`: Converts standard SubRip text to WebVTT.
 *   **`convert_ass_to_vtt_command(ass_path_str)`** -> `Result<String, CommandError>`: Complex state machine converting Advanced SubStation Alpha styling and color tags into CSS-mapped WebVTT.
