@@ -35,6 +35,7 @@ use tauri::{command, AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
+use rusqlite::Connection; // Added for DB operations
 
 use crate::welcome::python_env;
 use walkdir::WalkDir;
@@ -1393,7 +1394,6 @@ pub async fn rename_project(
     log::info!("rename_project: New XML path string: {}", new_xml_path_str);
     log::info!("rename_project: Checking if target directory exists and differs...");
     if new_project_dir.exists() && new_project_dir != old_project_dir {
-        log::info!("rename_project: Target directory '{}' exists and is different. Checking if same entry...", new_project_dir.display());
         let are_same_entry = || -> std::io::Result<bool> {
             #[cfg(unix)]
             {
@@ -1611,6 +1611,58 @@ pub async fn rename_project(
     }
     Ok(new_xml_path_str)
 }
+
+#[command]
+pub async fn suggest_project_name(parent_dir: String) -> Result<String, CommandError> {
+    log::info!(
+        "---- suggest_project_name: Start. ParentDir='{}' ----",
+        parent_dir
+    );
+    let parent_path = PathBuf::from(&parent_dir);
+
+    // 1. Get all project names from the database
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    let mut stmt = conn
+        .prepare("SELECT name FROM projects")
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    
+    // Using a HashSet for efficient name lookup
+    let existing_names: HashSet<String> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?
+        .flatten()
+        .collect();
+
+    let mut i = 0;
+    loop {
+        let candidate = if i == 0 {
+            "Untitled".to_string()
+        } else {
+            format!("Untitled_{}", i)
+        };
+
+        // Rule 1: Name must not already exist in the database
+        let in_db = existing_names.contains(&candidate);
+
+        // Rule 2: Folder must not already exist on disk at the target location
+        let project_dir = parent_path.join(&candidate);
+        let on_disk = project_dir.exists();
+
+        // If neither exists, this is a safe recommendation
+        if !in_db && !on_disk {
+            log::info!("suggest_project_name: Suggesting: {}", candidate);
+            return Ok(candidate);
+        }
+
+        i += 1;
+        // Safety limit to prevent infinite loops in pathological environments
+        if i > 5000 {
+            return Ok(format!("Untitled_{}", i));
+        }
+    }
+}
+
 #[command]
 pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> {
     /* ... */

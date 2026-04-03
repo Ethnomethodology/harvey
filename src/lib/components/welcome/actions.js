@@ -1,7 +1,7 @@
 // src/lib/components/welcome/actions.js
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog, save as saveDialog, ask, message } from '@tauri-apps/plugin-dialog';
-import { homeDir, basename, dirname } from '@tauri-apps/api/path';
+import { homeDir, basename, dirname, join } from '@tauri-apps/api/path';
 import { project as projectStore } from '$lib/stores/projectStore.js';
 import { getErrorMessage, isDirExistsError } from '$lib/utils/errorUtils.js';
 import { get } from 'svelte/store';
@@ -66,7 +66,10 @@ export async function handleCreateProject({ setRecentProjects, setIsLoading }) {
       console.log(`[E2E] Bypassing saveDialog, using path: ${desiredProjectPath}`);
     } else {
       // Modified defaultPath to open at the user's home directory
-      const defaultPath = await homeDir();
+      const home = await homeDir();
+      const suggestedName = await invoke('suggest_project_name', { parentDir: home });
+      const defaultPath = await join(home, suggestedName);
+      
       desiredProjectPath = await saveDialog({
         title: 'Create New Project Folder',
         defaultPath: defaultPath

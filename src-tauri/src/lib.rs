@@ -308,6 +308,7 @@ pub fn run() {
             // --- Welcome screen commands ---
             welcome::commands::load_recent_projects,
             welcome::commands::create_project,
+            welcome::commands::suggest_project_name,
             welcome::commands::locate_in_finder,
             welcome::commands::rename_project,
             welcome::commands::remove_project_from_list,
