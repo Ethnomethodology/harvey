@@ -4330,7 +4330,7 @@
           </button>
           {#if isBlockDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="absolute top-full left-0 mt-1 z-[1000] w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each blockTypeOptions as option (option.value)}
                 <div
@@ -4366,7 +4366,7 @@
           </button>
           {#if isFontDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
               {#each fontOptions as option (option.value)}
                 <div
@@ -4413,7 +4413,7 @@
           </button>
           {#if isFontSizeDropdownOpen}
             <div
-              class="absolute mt-1 top-full left-0 z-[200] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="absolute mt-1 top-full left-0 z-[1000] w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
             >
               {#each fontSizeOptions as size (size)}
                 <div
@@ -4473,7 +4473,7 @@
           </button>
           {#if isTextFormatDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
+              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
             >
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -4556,7 +4556,7 @@
           </button>
           {#if isInsertDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each insertOptions as option (option.label)}
                 <div
@@ -4595,7 +4595,7 @@
           </button>
           {#if isAlignDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="absolute top-full left-0 mt-1 z-[1000] w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
             >
               {#each alignmentOptions as option (option.value)}
                 <div
@@ -4662,7 +4662,7 @@
           </button>
           {#if isColorDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="absolute top-full left-0 mt-1 z-[1000] w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
               {#each colorOptions as option (option.value)}
                 <div
@@ -4707,7 +4707,7 @@
           </button>
           {#if isHighlightDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-[200] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="absolute top-full left-0 mt-1 z-[1000] w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
             >
               {#each highlightOptions as option (option.value)}
                 <div
