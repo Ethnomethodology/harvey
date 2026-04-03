@@ -41,7 +41,7 @@
   import TableThumbnail from './TableThumbnail.svelte';
   import AudioThumbnail from './AudioThumbnail.svelte';
   import PdfThumbnail from './PdfThumbnail.svelte'; // NEW
-  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
+  import panelStateStore, { panelState } from '$lib/stores/panelStateStore.svelte.js';
   import {
     Table,
     TableBody,
@@ -352,9 +352,9 @@
 
   // Reactive watch on groupData and specific project properties
   $effect(() => {
-    if (groupData && groupData.id && projectStore.id && projectStore.xmlPath) {
+    if (groupData && groupData.id && $projectStore.id && $projectStore.xmlPath) {
       fetchGroupContents();
-    } else if (!groupData || !projectStore.id || !projectStore.xmlPath) {
+    } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) {
       // Added condition to clear if context is lost
       categorizedFiles = {
         audios: [],
