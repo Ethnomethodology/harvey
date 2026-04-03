@@ -110,16 +110,6 @@
     } else if (currentGroup) {
       await selectTagGroup(currentGroup);
     }
-
-    $effect(() => {
-      if (panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance && tableReady) {
-        if (tableContainer) {
-          tabulatorInstance.redraw(true);
-          window.dispatchEvent(new Event('resize'));
-        }
-      }
-    });
-
     let isFirstRun = true;
     unsubscribeRefresher = refresher.subscribe(async () => {
       if (isFirstRun) {
@@ -196,8 +186,17 @@
   // --- Table & Data Logic ---
   let description = $state('');
   let tableContainer = $state();
-  let tabulatorInstance = null;
+  let tabulatorInstance = $state(null);
   let tableReady = $state(false);
+
+  $effect(() => {
+    if (panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance && tableReady) {
+      if (tableContainer) {
+        tabulatorInstance.redraw(true);
+        window.dispatchEvent(new Event('resize'));
+      }
+    }
+  });
   let processedHighlights = $state([]);
   let selectedHighlight = $state(null);
 
