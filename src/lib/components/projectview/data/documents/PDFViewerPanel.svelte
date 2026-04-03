@@ -69,6 +69,7 @@
     initialHighlights: initialHighlightsProp = []
   } = $props();
 
+  /* eslint-disable svelte/prefer-writable-derived */
   let initialHighlights = $state(initialHighlightsProp);
 
   $effect(() => {
@@ -137,7 +138,12 @@
   let isZoomDropdownOpen = $state(false);
 
   let pageRendering = $state(false);
+  /* eslint-disable svelte/prefer-writable-derived */
   let pageNumInput = $state(currentPageNum);
+  
+  $effect(() => {
+    pageNumInput = currentPageNum;
+  });
   let pdfjsLib = null;
   let PDFViewer = null;
   let EventBus = null;

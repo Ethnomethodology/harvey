@@ -85,6 +85,7 @@
   }
 
   let dots = $derived('.'.repeat(dotCount));
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let showTranslateDocumentModal = $state(false);
   let showDocumentExportModal = $state(false);
   let showTableExportModal = $state(false);
@@ -146,6 +147,7 @@
     }
   }
 
+  // eslint-disable-next-line svelte/prefer-writable-derived
   $effect(() => {
     showTranslateDocumentModal = $transcriptStore.showTranslateModal;
   });

@@ -34,7 +34,13 @@ export default tseslint.config(
       'dist/',
       'src-tauri/target/',
       'node_modules/',
-      '.DS_Store'
+      '.DS_Store',
+      'website/',
+      'static/',
+      'Docs/',
+      'scripts/',
+      '**/*.svelte.js',
+      '**/*.svelte.ts'
     ]
   },
   {
