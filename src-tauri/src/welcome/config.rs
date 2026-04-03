@@ -23,6 +23,8 @@ pub const PROJECT_FILE_EXTENSION: &str = "harvey";
 pub struct ProjectInfo {
     pub name: String,
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>, // Project UUID from its harvey.xml manifest
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_ts: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_seconds")]
@@ -361,17 +363,18 @@ pub fn read_config() -> Result<Config, CommandError> {
 
     // Load projects
     if let Ok(mut stmt) =
-        conn.prepare("SELECT name, xml_path, created_at, last_opened_ts FROM projects")
+        conn.prepare("SELECT name, xml_path, created_at, last_opened_ts, id FROM projects WHERE is_recent = 1")
     {
         if let Ok(projects_iter) = stmt.query_map([], |row| {
             let name: String = row.get(0)?;
             let path: String = row.get(1)?;
             let created_at: String = row.get(2)?;
             let last_opened_ts: String = row.get(3)?;
-            Ok((name, path, created_at, last_opened_ts))
+            let id: String = row.get(4)?;
+            Ok((name, path, created_at, last_opened_ts, id))
         }) {
             for result in projects_iter.flatten() {
-                let (name, path, created_at, last_opened_ts) = result;
+                let (name, path, created_at, last_opened_ts, id) = result;
                 let created_ts = chrono::DateTime::parse_from_rfc3339(&format!(
                     "{}Z",
                     created_at.replace(" ", "T")
@@ -388,6 +391,7 @@ pub fn read_config() -> Result<Config, CommandError> {
                 config.projects.push(ProjectInfo {
                     name,
                     path,
+                    id: Some(id),
                     created_ts,
                     last_opened_ts,
                 });
@@ -480,15 +484,21 @@ pub fn write_config(config: &Config) -> Result<(), CommandError> {
     }
 
     // Projects update
-    // We also want to support adding projects directly if they were only in the old config.xml but not in SQLite.
+    // We handle UUID-based reconciliation to ensure metadata is preserved on re-import/move.
     {
-        let mut stmt_update = tx
-            .prepare("UPDATE projects SET last_opened_ts = ?1, name = ?2 WHERE xml_path = ?3")
+        let mut stmt_update_by_path = tx
+            .prepare("UPDATE projects SET last_opened_ts = ?1, name = ?2, is_recent = 1 WHERE xml_path = ?3")
             .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
-        let mut stmt_check = tx
+        let mut stmt_update_by_id = tx
+            .prepare("UPDATE projects SET last_opened_ts = ?1, name = ?2, xml_path = ?3, root_path = ?4, updated_at = ?5, is_recent = 1 WHERE id = ?6")
+            .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt_check_path = tx
             .prepare("SELECT 1 FROM projects WHERE xml_path = ?1")
             .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
-        let mut stmt_insert = tx.prepare("INSERT INTO projects (id, name, root_path, xml_path, created_at, last_opened_ts, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt_check_id = tx
+            .prepare("SELECT 1 FROM projects WHERE id = ?1")
+            .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+        let mut stmt_insert = tx.prepare("INSERT INTO projects (id, name, root_path, xml_path, created_at, last_opened_ts, updated_at, is_recent) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)").map_err(|e| CommandError::RusqliteError(e.to_string()))?;
 
         for project in &config.projects {
             let ts_str = project
@@ -496,24 +506,49 @@ pub fn write_config(config: &Config) -> Result<(), CommandError> {
                 .format("%Y-%m-%d %H:%M:%S")
                 .to_string();
             let created_str = project.created_ts.format("%Y-%m-%d %H:%M:%S").to_string();
-            let exists: bool = stmt_check.exists(params![project.path]).unwrap_or(false);
-            if exists {
-                let _ = stmt_update.execute(params![ts_str, project.name, project.path]);
-            } else {
-                let uuid = uuid::Uuid::new_v4().to_string();
-                let root_path = PathBuf::from(&project.path)
-                    .parent()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let _ = stmt_insert.execute(params![
-                    uuid,
-                    project.name,
-                    root_path,
-                    project.path,
-                    created_str,
-                    ts_str,
-                    ts_str
-                ]);
+            let root_path = PathBuf::from(&project.path)
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            let mut matched_by_id = false;
+            if let Some(id) = &project.id {
+                if stmt_check_id.exists(params![id]).unwrap_or(false) {
+                    println!("write_config: Resuming existing project by ID: {}", id);
+                    let _ = stmt_update_by_id.execute(params![
+                        ts_str,
+                        project.name,
+                        project.path,
+                        root_path,
+                        ts_str,
+                        id
+                    ]);
+                    matched_by_id = true;
+                }
+            }
+
+            if !matched_by_id {
+                let exists_by_path: bool =
+                    stmt_check_path.exists(params![project.path]).unwrap_or(false);
+                if exists_by_path {
+                    println!("write_config: Updating existing project by path: {}", project.path);
+                    let _ = stmt_update_by_path.execute(params![ts_str, project.name, project.path]);
+                } else {
+                    let final_uuid = project
+                        .id
+                        .clone()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                    println!("write_config: Creating new project record with ID: {}", final_uuid);
+                    let _ = stmt_insert.execute(params![
+                        final_uuid,
+                        project.name,
+                        root_path,
+                        project.path,
+                        created_str,
+                        ts_str,
+                        ts_str
+                    ]);
+                }
             }
         }
     }

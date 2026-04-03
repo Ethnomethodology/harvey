@@ -541,6 +541,21 @@ pub fn init_db() -> Result<(), CommandError> {
         )?;
     }
 
+    // Check and add is_recent column if missing
+    let mut stmt_check_is_recent = conn.prepare("PRAGMA table_info(projects)")?;
+    let is_recent_col_exists = stmt_check_is_recent
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "is_recent"));
+
+    if !is_recent_col_exists {
+        info!("[DB] Adding is_recent column to projects table.");
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN is_recent INTEGER DEFAULT 1",
+            [],
+        )?;
+        conn.execute("UPDATE projects SET is_recent = 1 WHERE is_recent IS NULL", [])?;
+    }
+
     // Global Settings table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS global_settings (

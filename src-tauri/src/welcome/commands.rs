@@ -1274,6 +1274,7 @@ pub async fn create_project(
         // This struct is for the legacy config.xml
         name: trimmed_name.to_string(),
         path: absolute_xml_path.clone(), // XML path
+        id: Some(project_uuid),
         created_ts: now,
         last_opened_ts: now,
     };
@@ -1628,6 +1629,7 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
     );
     let mut config = read_config()?;
     config.projects.retain(|p| p.path != project_xml_path);
+    write_config(&config)?; // Persist the removal from config.xml
 
     use crate::projectview::db_handler::get_db_path;
     use rusqlite::{params, Connection};
@@ -1635,12 +1637,12 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
     let conn =
         Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
     let _ = conn.execute(
-        "DELETE FROM projects WHERE xml_path = ?1",
+        "UPDATE projects SET is_recent = 0 WHERE xml_path = ?1",
         params![project_xml_path],
     );
 
     log::info!(
-        "remove_project_from_config_internal: Removed project path {} from harvey.sqlite.",
+        "remove_project_from_config_internal: Removed project path {} from config.xml and marked as is_recent=0 in DB.",
         project_xml_path
     );
     Ok(())
@@ -1747,6 +1749,8 @@ fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, Comman
     #[derive(Deserialize, Debug)]
     struct MinimalProject {
         name: String,
+        #[serde(default)]
+        project_uuid: String,
     }
     let imported: MinimalProject = serde_json::from_str(&xml_content).map_err(|e| {
         CommandError::from(format!(
@@ -1757,8 +1761,9 @@ fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, Comman
         ))
     })?;
     log::info!(
-        "import_project_internal: Deserialized name: {}",
-        imported.name
+        "import_project_internal: Deserialized name: {}, UUID: {}",
+        imported.name,
+        imported.project_uuid
     );
     let now = Utc::now();
     let created_time = fs::metadata(project_xml_path)?
@@ -1772,6 +1777,11 @@ fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, Comman
     let project_info = ProjectInfo {
         name: imported.name,
         path: canonical_path_str,
+        id: if imported.project_uuid.is_empty() {
+            None
+        } else {
+            Some(imported.project_uuid)
+        },
         created_ts: created_time,
         last_opened_ts: now,
     };
