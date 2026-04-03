@@ -70,7 +70,16 @@ pub fn run() {
                         path: logs_dir,
                         file_name: Some("harvey".into()),
                     })
-                    .filter(|metadata| metadata.level() <= log::LevelFilter::Warn),
+                    .filter(|metadata| {
+                        let target = metadata.target();
+                        // Protect privacy: only WARN/ERROR for sensitive transcription-related modules
+                        if target.contains("transcription") || target.contains("whisper") {
+                            metadata.level() <= log::Level::Warn
+                        } else {
+                            // High-level lifecycle context for all other modules
+                            metadata.level() <= log::Level::Info
+                        }
+                    }),
                 ])
                 .level(log::LevelFilter::Info) // Global default for stdout
                 .build(),
