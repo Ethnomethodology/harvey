@@ -41,6 +41,7 @@
   import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte'; // <-- Added this import
   import ManualSettingsModal from '$lib/components/projectview/modals/ManualSettingsModal.svelte';
   import { updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
+import { getErrorMessage } from '$lib/utils/errorUtils.js';
 
   const dispatch = createEventDispatcher();
 
@@ -374,7 +375,7 @@
         statusMessage: 'Transcript saved.'
       })); // Global status
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = getErrorMessage(error);
       project.update((p) => ({
         ...p,
         isLoading: false,
@@ -419,7 +420,8 @@
         loadNotePath: newDocPath
       });
     } catch (error) {
-      await message(`Failed to convert: ${error.message || error}`, {
+      const errorMsg = getErrorMessage(error);
+      await message(`Failed to convert: ${errorMsg}`, {
         title: 'Conversion Error',
         type: 'error'
       });
@@ -720,8 +722,9 @@
         await loadTranscriptFile(item.path);
         console.log('[TranscriptionView] Transcript loaded successfully.');
       } catch (error) {
+        const errorMsg = getErrorMessage(error);
         console.error('[TranscriptionView] Error loading transcript:', error);
-        message(`Error loading transcript: ${error.message || error}`, {
+        message(`Error loading transcript: ${errorMsg}`, {
           title: 'Load Error',
           type: 'error'
         });

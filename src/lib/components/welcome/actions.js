@@ -1,8 +1,9 @@
 // src/lib/components/welcome/actions.js
 import { invoke } from '@tauri-apps/api/core';
-import { open as openDialog, save as saveDialog, ask } from '@tauri-apps/plugin-dialog';
+import { open as openDialog, save as saveDialog, ask, message } from '@tauri-apps/plugin-dialog';
 import { homeDir, basename, dirname } from '@tauri-apps/api/path';
 import { project as projectStore } from '$lib/stores/projectStore.js';
+import { getErrorMessage, isDirExistsError } from '$lib/utils/errorUtils.js';
 import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 
@@ -100,18 +101,22 @@ export async function handleCreateProject({ setRecentProjects, setIsLoading }) {
     console.log(`Creating project '${projectName}' in ${parentLocation}...`);
     setIsLoading(true);
 
+    const isE2E = window && window.__E2E_TEST_PROJECT_PATH__;
+    const initialOverwrite = !isE2E; // Skip app-level prompt if native saveDialog handled it
+
     // --- Initial create attempt ---
     try {
       createdProjectFilePath = await invoke('create_project', {
         name: projectName,
         parentLocation,
-        overwrite: false // First attempt, don't overwrite
+        overwrite: initialOverwrite
       });
       console.log('[ProjectActions] Initial project creation successful.');
     } catch (initialError) {
       // Check if it's the specific directory exists error
-      if (initialError?.message?.startsWith('E_DIR_EXISTS:')) {
-        console.warn(`[ProjectActions] Directory exists error: ${initialError.message}`);
+      // We only prompt the user if we haven't already assumed overwrite (e.g. in E2E)
+      if (!initialOverwrite && isDirExistsError(initialError)) {
+        console.warn(`[ProjectActions] Directory exists error: ${getErrorMessage(initialError)}`);
         const userConfirmation = await ask(
           `A project named "${projectName}" already exists in this location. Do you want to delete the existing project and its contents and create a new one?`,
           {
@@ -161,9 +166,18 @@ export async function handleCreateProject({ setRecentProjects, setIsLoading }) {
     }
   } catch (error) {
     // Catch errors from initial create, overwrite create, or opening
+    const readableError = getErrorMessage(error);
     console.error('ACTION_ERROR: Failed to create or open project:', error);
+
     // Ensure loading state is cleared and welcome screen is shown
     setIsLoading(false);
+
+    // Show a user-friendly error message
+    await message(`Failed to create project: ${readableError}`, {
+      title: 'Project Creation Error',
+      type: 'error'
+    }).catch((e) => console.error('Error showing error message dialog:', e));
+
     await showWelcomeScreen().catch((e) =>
       console.error('Error showing welcome screen after create error:', e)
     );
@@ -205,8 +219,15 @@ export async function handleOpenProject({ setRecentProjects, setIsLoading }) {
       console.log('Open project cancelled.');
     }
   } catch (error) {
+    const readableError = getErrorMessage(error);
     console.error('Failed to open project XML file:', error);
     setIsLoading(false);
+
+    await message(`Failed to open project: ${readableError}`, {
+      title: 'Open Project Error',
+      type: 'error'
+    }).catch((e) => console.error('Error showing error message dialog:', e));
+
     await showWelcomeScreen();
     console.log('Reloading projects after error in handleOpenProject.');
     await loadProjects({ setRecentProjects, setIsLoading });
@@ -320,11 +341,16 @@ export async function handleMenuAction(
         console.warn('Unknown menu action:', action);
     }
   } catch (error) {
+    const readableError = getErrorMessage(error);
     console.error(
       `ACTION_ERROR: Failed to perform action ${action} for project ${project?.path}:`,
       error
     );
     setIsLoading(false);
+    await message(`Action "${action}" failed: ${readableError}`, {
+      title: 'Action Error',
+      type: 'error'
+    }).catch((e) => console.error('Error showing error message dialog:', e));
   }
 }
 
@@ -362,7 +388,14 @@ export async function handleRenameConfirm(event, { setRecentProjects, setIsLoadi
 
     await loadProjects({ setRecentProjects, setIsLoading });
   } catch (error) {
+    const readableError = getErrorMessage(error);
     console.error('Failed to rename project:', error);
+
+    await message(`Failed to rename project: ${readableError}`, {
+      title: 'Rename Error',
+      type: 'error'
+    }).catch((e) => console.error('Error showing error message dialog:', e));
+
     await loadProjects({ setRecentProjects, setIsLoading });
   }
 }
