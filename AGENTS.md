@@ -62,7 +62,11 @@ Before submitting any changes, ensure the following checks pass:
     ```bash
     npm run check
     ```
-2.  **Cargo Check**:
+2.  **Linting Check**:
+    ```bash
+    npm run lint
+    ```
+3.  **Cargo Check**:
     ```bash
     cd src-tauri && cargo check
     ```
