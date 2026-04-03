@@ -1,6 +1,6 @@
 // src-tauri/src/lib.rs
 use dashmap::DashMap;
-use env_logger;
+use tauri_plugin_log::{Target, TargetKind, RotationStrategy};
 use log; // Added log import
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::Emitter;
@@ -37,13 +37,10 @@ pub struct LiveTranscriptionState(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Err(e) = crate::welcome::config::ensure_config_dir_exists() {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-        log::error!(
-            "Fatal Error: Failed to ensure config directory exists: {}",
-            e
-        );
-    } else {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+        // If config dir creation fails, we still want to try to log it, 
+        // but we can't use the LogDir yet potentially. 
+        // The plugin will handle it or we'll see it in stdout.
+        eprintln!("Fatal Error: Failed to ensure config directory exists: {}", e);
     }
 
     // Initialize ProjectView Database
@@ -56,6 +53,19 @@ pub fn run() {
     log::info!("Starting Harvey application...");
 
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("harvey".into()),
+                    })
+                    .filter(|metadata| metadata.level() <= log::LevelFilter::Warn),
+                ])
+                .level(log::LevelFilter::Info) // Global default for stdout
+                .rotation_strategy(RotationStrategy::KeepCount(7)) // Keep exactly 7 log files
+                .build(),
+        )
         .manage(DownloadCancellationState::default())
         .manage(TranscriptionCancellationState::default())
         .manage(TranslationCancellationState::default())

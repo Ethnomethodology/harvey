@@ -452,10 +452,6 @@ pub async fn import_word_transcript<R: Runtime>(
         .replace("<br/>", "\n")
         .replace("<BR>", "\n")
         .replace("<BR/>", "\n");
-    info!(
-        "[import_word_transcript] HTML content (first 200 chars): {}",
-        html_content.chars().take(200).collect::<String>()
-    );
     let _ = fs::remove_file(&temp_html_path);
 
     let mut transcript_block_text_option: Option<String> = None;
@@ -507,17 +503,8 @@ pub async fn import_word_transcript<R: Runtime>(
     let transcript_text_content = transcript_block_text_option.ok_or_else(|| {
         CommandError::from("Could not extract transcript text content from the document.")
     })?;
-    info!(
-        "[import_word_transcript] Transcript text content:\n{}",
-        transcript_text_content
-    );
 
     let segments = parse_transcript_block(&transcript_text_content)?;
-    info!(
-        "[import_word_transcript] Parsed {} segments: {:#?}",
-        segments.len(),
-        segments
-    );
     if segments.is_empty() {
         return Err(CommandError::from("No transcript segments were parsed. Check document format under 'Transcript' heading: expected 'HH:MM:SS Speaker X' lines followed by text."));
     }
