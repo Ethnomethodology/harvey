@@ -43,6 +43,12 @@
     onMount(async () => {
       document.addEventListener('click', handleGlobalClick, true);
 
+      // Disable default browser context menu in production to prevent "Inspect Element" 
+      // and other non-native browser behaviors.
+      if (import.meta.env.PROD) {
+          document.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
+
       console.debug('[+layout.svelte] onMount started.'); // DEBUG
       // --- Load theme preference ---
       try {
