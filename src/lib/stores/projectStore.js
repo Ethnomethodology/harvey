@@ -3,7 +3,7 @@ import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
 import * as projectService from '$lib/services/projectService.js';
-import { addTag } from '$lib/stores/tagStore.js';
+import { addTag } from '$lib/stores/tagStore.svelte.js';
 
 export const groupContentNotification = writable(null);
 export const highlightsLastUpdated = writable(null);

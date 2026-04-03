@@ -31,7 +31,7 @@
 
   import TopBar from './TopBar.svelte';
   import LeftPanel from './LeftPanel.svelte';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Added
   import MediaPlayer from '../shared/MediaPlayer.svelte';
   import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Added for horizontal waveform
@@ -84,19 +84,19 @@
   // Reactive statements for panel widths
   $: middlePanelWidthClass = (() => {
     if (currentWaveformLayout === 'vertical') {
-      return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
     } else {
       // 'horizontal' or 'none'
-      return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
     }
   })();
 
   $: rightPanelWidthClass = (() => {
     if (currentWaveformLayout === 'vertical') {
-      return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
     } else {
       // 'horizontal' or 'none'
-      return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
     }
   })();
 
@@ -737,7 +737,7 @@
   <div class="flex flex-col flex-grow min-h-0 w-full">
     <!-- Main Content Area (Panels) -->
     <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
-      {#if !$panelStateStore.transcriptionPanelCollapsed}
+      {#if !panelStateStore.transcriptionPanelCollapsed}
         <div
           class="w-64 h-full bg-white dark:bg-gray-900 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
           transition:slide={{ duration: 300, axis: 'x' }}

@@ -41,7 +41,7 @@
   import TableThumbnail from './TableThumbnail.svelte';
   import AudioThumbnail from './AudioThumbnail.svelte';
   import PdfThumbnail from './PdfThumbnail.svelte'; // NEW
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import {
     Table,
     TableBody,
@@ -57,34 +57,34 @@
   } from 'flowbite-svelte';
 
   // Props
-  export let groupData; // Expected: { id, name, description, project_id }
+  let { groupData } = $props(); // Expected: { id, name, description, project_id }
 
   const dispatch = createEventDispatcher();
 
   // "Add to Group" Submenu State
-  let showAddToGroupSubMenu = false;
-  let addToGroupSubMenuX = 0;
-  let addToGroupSubMenuY = 0;
-  let itemForAddToGroup = null;
-  let projectGroupsForMenu = [];
-  let showCreateGroupModalFromGroupView = false;
-  let closeAddToGroupSubMenuListener = null;
+  let showAddToGroupSubMenu = $state(false);
+  let addToGroupSubMenuX = $state(0);
+  let addToGroupSubMenuY = $state(0);
+  let itemForAddToGroup = $state(null);
+  let projectGroupsForMenu = $state([]);
+  let showCreateGroupModalFromGroupView = $state(false);
+  let closeAddToGroupSubMenuListener = $state(null);
 
   // Context Menu State
-  let contextMenuVisible = false;
-  let contextMenuItem = null;
-  let contextMenuX = 0;
-  let contextMenuY = 0;
-  let closeContextMenuListener = null;
+  let contextMenuVisible = $state(false);
+  let contextMenuItem = $state(null);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+  let closeContextMenuListener = $state(null);
 
   // Rename Modal State
-  let showRenameModal = false;
-  let itemToRename = null;
+  let showRenameModal = $state(false);
+  let itemToRename = $state(null);
 
-  let revealButtonLabelGroupView = 'Open File Location'; // Default reveal label
+  let revealButtonLabelGroupView = $state('Open File Location'); // Default reveal label
 
   // Internal State
-  let categorizedFiles = {
+  let categorizedFiles = $state({
     audios: [],
     documents: [],
     images: [],
@@ -92,16 +92,16 @@
     standalone_transcripts: [],
     videos: [],
     others: [] // For any files that don't fit predefined categories
-  };
-  let allFiles = []; // Flat list for table view
-  let isLoading = false;
-  let errorMessage = null;
-  let isEditGroupModalOpen = false;
+  });
+  let allFiles = $state([]); // Flat list for table view
+  let isLoading = $state(false);
+  let errorMessage = $state(null);
+  let isEditGroupModalOpen = $state(false);
 
   // Table List View State
-  let searchQuery = '';
-  let sortKey = 'type';
-  let sortDirection = 1;
+  let searchQuery = $state('');
+  let sortKey = $state('type');
+  let sortDirection = $state(1);
 
   const LS_COLUMNS_KEY = 'harveyGroupListColumns';
   const defaultColumns = [
@@ -113,7 +113,7 @@
     { key: 'lastModified', label: 'Last Modified', visible: true, disabled: false }
   ];
 
-  let columns = [...defaultColumns];
+  let columns = $state([...defaultColumns]);
 
   if (typeof window !== 'undefined') {
     try {
@@ -135,7 +135,7 @@
   }
 
   // Reactively save to localStorage when columns change
-  $: {
+  $effect(() => {
     if (typeof window !== 'undefined') {
       try {
         // Save only the key and visibility state to reduce storage payload
@@ -145,9 +145,9 @@
         console.warn('[GroupDetailView] Failed to save column preferences:', e);
       }
     }
-  }
+  });
 
-  $: visibleColumnsCount = columns.filter((c) => c.visible).length;
+  let visibleColumnsCount = $derived(columns.filter((c) => c.visible).length);
 
   const CATEGORY_ORDER = [
     { key: 'audios', name: 'Audios', singularName: 'Audio', icon: Music },
@@ -346,54 +346,45 @@
     });
   }
 
-  $: filteredAllFiles = allFiles.filter((f) =>
+  let filteredAllFiles = $derived(allFiles.filter((f) =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ));
 
   // Reactive watch on groupData and specific project properties
-  // Using get(projectStore) inside the reactive block might be redundant if $projectStore is used,
-  // but ensures access if the block's timing is tricky with store updates.
-  // For simplicity and directness, direct $: subscription to $projectStore.id and $projectStore.xmlPath is cleaner.
-  $: if (groupData && groupData.id && $projectStore.id && $projectStore.xmlPath) {
-    fetchGroupContents();
-  } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) {
-    // Added condition to clear if context is lost
-    categorizedFiles = {
-      audios: [],
-      documents: [],
-      images: [],
-      tables: [],
-      standalone_transcripts: [],
-      videos: [],
-      others: []
-    };
-    allFiles = [];
-    isLoading = false;
-    errorMessage = null;
-  }
+  $effect(() => {
+    if (groupData && groupData.id && projectStore.id && projectStore.xmlPath) {
+      fetchGroupContents();
+    } else if (!groupData || !projectStore.id || !projectStore.xmlPath) {
+      // Added condition to clear if context is lost
+      categorizedFiles = {
+        audios: [],
+        documents: [],
+        images: [],
+        tables: [],
+        standalone_transcripts: [],
+        videos: [],
+        others: []
+      };
+      allFiles = [];
+      isLoading = false;
+      errorMessage = null;
+    }
+  });
 
   // Listen for external notifications to refresh group content
-  $: if (
-    $groupContentNotification &&
-    groupData &&
-    $groupContentNotification.groupId === groupData.id
-  ) {
-    console.log(
-      '[GroupDetailView] groupContentNotification received for current group, refreshing contents...',
-      $groupContentNotification
-    );
-    fetchGroupContents();
-    // Resetting the notification store after processing to prevent re-triggering
-    // This is a common pattern, but ensure it fits the overall design (e.g., if other components also need to react).
-    // If multiple components need to react independently, this reset should be handled more carefully,
-    // perhaps by having components acknowledge the notification or by using event-based logic.
-    // For a simple refresh, immediate reset is often fine.
-    // groupContentNotification.set(null);
-    // Edit: Per discussion, if the store value uses a timestamp, downstream components can decide if the notification is "new" enough to act on.
-    // So, direct reset here might not be needed if consumers check the timestamp.
-    // However, for this specific component, if it acts on any notification for its ID, resetting might still be useful if it shouldn't re-fetch for the exact same timestamped event.
-    // Let's defer resetting for now, assuming consumers will be smart or the notification implies a definite state change needing refresh.
-  }
+  $effect(() => {
+    if (
+      $groupContentNotification &&
+      groupData &&
+      $groupContentNotification.groupId === groupData.id
+    ) {
+      console.log(
+        '[GroupDetailView] groupContentNotification received for current group, refreshing contents...',
+        $groupContentNotification
+      );
+      fetchGroupContents();
+    }
+  });
 
   async function handleGroupDetailsUpdated(event) {
     // Make it async if calling await
@@ -866,7 +857,7 @@
     </div>
 
     <!-- Toolbar (Below Header Rule) -->
-    {#if $panelStateStore.groupDetailViewMode === 'list' && !isLoading}
+    {#if panelState.groupDetailViewMode === 'list' && !isLoading}
       <div class="mb-4 flex justify-between items-center">
         <div class="relative inline-block text-left">
           <Button
@@ -911,7 +902,7 @@
       {:else if errorMessage}
         <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
       {:else}
-        {#if $panelStateStore.groupDetailViewMode === 'grid'}
+        {#if panelState.groupDetailViewMode === 'grid'}
           {#each CATEGORY_ORDER as category (category.key)}
             {@const filesInCategory = categorizedFiles[category.key]}
             {#if filesInCategory && filesInCategory.length > 0}

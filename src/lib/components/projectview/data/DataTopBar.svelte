@@ -20,7 +20,7 @@
     PencilOff
   } from '@lucide/svelte';
   import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import { message } from '@tauri-apps/plugin-dialog';
   import { invoke } from '@tauri-apps/api/core';
   import {
@@ -28,7 +28,7 @@
     switchTranscriptInDataTab,
     clearStandaloneTranscriptSplit
   } from '$lib/stores/projectStore.js';
-  import { isMediaEditorOpen, isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
   import ExportModal from '../modals/ExportModal.svelte';
   import { transcriptStore, toggleTranslateModal } from '$lib/stores/transcriptStore.js';
   import { configStatus } from '$lib/stores/configStatusStore.js';
@@ -38,7 +38,7 @@
   import { basename } from '@tauri-apps/api/path';
   import { languageOptions } from '$lib/constants/transcriptionOptions.js';
   import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy, untrack } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
   import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
   // import Dropdown from '$lib/components/shared/Dropdown.svelte'; // Removed custom dropdown
@@ -53,24 +53,26 @@
   } from '$lib/services/projectService.js';
 
   const dispatch = createEventDispatcher();
-  export let dataViewRef = null; // Still keep it for potential external usage if any, but adding getExportData
-  export let getExportData = null;
-  export let activeSubItemPath = null;
-  export let activeSubItemType = null;
+  let {
+    dataViewRef = null,
+    getExportData = null,
+    activeSubItemPath = null,
+    activeSubItemType = null
+  } = $props();
 
   // Determine platform-specific modifier key name
   const isMac =
     typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const modKeyName = isMac ? 'Cmd' : 'Ctrl';
 
-  let isLiveTranscriptionActive = false;
-  let isLiveTranscriptionReady = false;
-  let liveTranscriptionError = null;
-  let showLiveTranscribeModal = false;
-  let isAddingTimestamps = false;
+  let isLiveTranscriptionActive = $state(false);
+  let isLiveTranscriptionReady = $state(false);
+  let liveTranscriptionError = $state(null);
+  let showLiveTranscribeModal = $state(false);
+  let isAddingTimestamps = $state(false);
 
-  let dotCount = 1;
-  let dotInterval;
+  let dotCount = $state(1);
+  let dotInterval = $state();
 
   function startDotAnimation() {
     dotInterval = setInterval(() => {
@@ -82,26 +84,43 @@
     clearInterval(dotInterval);
   }
 
-  $: dots = '.'.repeat(dotCount);
-  let showTranslateDocumentModal = false;
-  let showDocumentExportModal = false;
-  let showTableExportModal = false;
-  let isLexicalDocument = false;
-  let isStandaloneTranscript = false;
-  let isImage = false;
-  let isTable = false;
-  let isGroup = false;
-  let pathForExportModal = '';
+  let dots = $derived('.'.repeat(dotCount));
+  let showTranslateDocumentModal = $state(false);
+  let showDocumentExportModal = $state(false);
+  let showTableExportModal = $state(false);
+  const isStandaloneTranscript = $derived(!!$project.currentStandaloneTranscriptPath);
+  const isLexicalDocument = $derived(
+    isStandaloneTranscript ||
+    ($project.selectedDocumentPath &&
+      $project.selectedDocumentPath.toLowerCase().endsWith('.json'))
+  );
+  const isImage = $derived(
+    $project.selectedDocumentPath &&
+    ($project.selectedDocumentType === 'images' ||
+      $project.selectedDocumentType === 'image' ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test($project.selectedDocumentPath))
+  );
+  const isTable = $derived(
+    $project.selectedDocumentPath &&
+    ($project.selectedDocumentType === 'tables' ||
+      $project.selectedDocumentType === 'table' ||
+      /\.(csv|xlsx)$/i.test($project.selectedDocumentPath))
+  );
+  const isGroup = $derived(!!$project.selectedGroupId);
+  let pathForExportModal = $state('');
 
-  $: currentTranscriptPathForSplit = isStandaloneTranscript
-    ? $project.currentStandaloneTranscriptPath
-    : $project.activeTranscriptPathInDataTab;
-  $: splitState =
+  let currentTranscriptPathForSplit = $derived(
+    isStandaloneTranscript
+      ? $project.currentStandaloneTranscriptPath
+      : $project.activeTranscriptPathInDataTab
+  );
+  let splitState = $derived(
     currentTranscriptPathForSplit && $project.standaloneTranscriptSplits
       ? $project.standaloneTranscriptSplits[currentTranscriptPathForSplit]
-      : null;
-  $: isHorizontalSplitActive = splitState?.orientation === 'horizontal';
-  $: isVerticalSplitActive = splitState?.orientation === 'vertical';
+      : null
+  );
+  let isHorizontalSplitActive = $derived(splitState?.orientation === 'horizontal');
+  let isVerticalSplitActive = $derived(splitState?.orientation === 'vertical');
 
   function handleSplitToggle(orientation) {
     if (orientation === 'horizontal' && isHorizontalSplitActive) {
@@ -117,45 +136,6 @@
     }
   }
 
-  $: {
-    const p = $project;
-    // console.log("[DataTopBar] Path:", p.selectedDocumentPath, "Type:", p.selectedDocumentType);
-    isGroup = !!p.selectedGroupId;
-
-    // Reset all export flags
-    isLexicalDocument = false;
-    isStandaloneTranscript = false;
-    isImage = false;
-    isTable = false;
-
-    if (p.selectedMediaNotePath) {
-      // Audio/Video is open. Export is handled by the media transcript dropdown.
-    } else if (p.currentStandaloneTranscriptPath) {
-      isLexicalDocument = true;
-      isStandaloneTranscript = true;
-    } else if (p.selectedDocumentPath) {
-      if (
-        p.selectedDocumentType === 'images' ||
-        p.selectedDocumentType === 'image' ||
-        /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(p.selectedDocumentPath)
-      ) {
-        isImage = true;
-      } else if (
-        p.selectedDocumentType === 'tables' ||
-        p.selectedDocumentType === 'table' ||
-        /\.(csv|xlsx)$/i.test(p.selectedDocumentPath)
-      ) {
-        isTable = true;
-      } else if (p.selectedDocumentPath.toLowerCase().endsWith('.json')) {
-        isLexicalDocument = true;
-        isStandaloneTranscript = false;
-      }
-    } else if (p.selectedGroupId) {
-      // Group view, no export button
-    }
-
-    // console.log("[DataTopBar] isTable:", isTable, "isImage:", isImage, "isLexicalDocument:", isLexicalDocument);
-  }
 
   function handleDocumentTranslateConfirm(event) {
     const { documentPath, model, targetLanguage, sourceLanguage } = event.detail;
@@ -166,7 +146,9 @@
     }
   }
 
-  $: showTranslateDocumentModal = $transcriptStore.showTranslateModal;
+  $effect(() => {
+    showTranslateDocumentModal = $transcriptStore.showTranslateModal;
+  });
 
   function getLanguageLabel(langCode) {
     if (!langCode || langCode === 'original') return 'Original';
@@ -226,48 +208,38 @@
   });
 
   // --- Theme Icons ---
-  $: currentThemeName = $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
-  $: nextThemeName =
-    $themePreference === 'light' ? 'Dark' : $themePreference === 'dark' ? 'System' : 'Light';
-  $: themeTitle = `Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`;
+  let currentThemeName = $derived(
+    $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1)
+  );
+  let nextThemeName = $derived(
+    $themePreference === 'light' ? 'Dark' : $themePreference === 'dark' ? 'System' : 'Light'
+  );
+  let themeTitle = $derived(`Current theme: ${currentThemeName}. Switch to ${nextThemeName} mode.`);
 
-  let isDocumentDirty = false;
-  let isStandaloneTranscriptDirty = false;
-  let isMediaNoteTranscriptDirty = false; // New state for media note
-  let isPdfAnnotationsDirty = false;
-  let activeDocumentEditorRef = null;
-  let activeStandaloneTranscriptEditorRef = null;
-  let activeMediaNoteEditorRef = null; // New ref
-  let isAnythingDirty = false;
-  let showDirtyIndicator = false;
-  let isExportModalOpen = false;
-  let isLayoutDropdownOpen = false;
-  let currentActivePath;
+  const isDocumentDirty = $derived($project.isDocumentDirty || $project.isDocumentMetadataDirty);
+  const isStandaloneTranscriptDirty = $derived($project.isStandaloneTranscriptDirty);
+  const isMediaNoteTranscriptDirty = $derived($project.isMediaNoteTranscriptDirty);
+  const isPdfAnnotationsDirty = $derived($project.isPdfAnnotationsDirty);
+  const activeDocumentEditorRef = $derived($project.activeDocumentEditorRef);
+  const activeStandaloneTranscriptEditorRef = $derived($project.activeStandaloneTranscriptEditorRef);
+  const activeMediaNoteEditorRef = $derived($project.activeMediaNoteEditorRef);
 
-  let displayTitle = '';
+  const isAnythingDirty = $derived(
+    isDocumentDirty ||
+    isStandaloneTranscriptDirty ||
+    isMediaNoteTranscriptDirty ||
+    isPdfAnnotationsDirty
+  );
+  const showDirtyIndicator = $derived(isAnythingDirty);
+  let isExportModalOpen = $state(false);
+  let isLayoutDropdownOpen = $state(false);
+  let currentActivePath = $state();
 
-  $: {
-    // This is the existing reactive block for autosave related logic
-    const p = $project;
-    isDocumentDirty = p.isDocumentDirty || p.isDocumentMetadataDirty; // Combine content and metadata dirty for documents
-    isStandaloneTranscriptDirty = p.isStandaloneTranscriptDirty;
-    isMediaNoteTranscriptDirty = p.isMediaNoteTranscriptDirty; // Read from store
-    isPdfAnnotationsDirty = p.isPdfAnnotationsDirty;
+  let displayTitle = $state('');
 
-    activeDocumentEditorRef = p.activeDocumentEditorRef;
-    activeStandaloneTranscriptEditorRef = p.activeStandaloneTranscriptEditorRef;
-    activeMediaNoteEditorRef = p.activeMediaNoteEditorRef; // Read from store
-
-    isAnythingDirty =
-      isDocumentDirty ||
-      isStandaloneTranscriptDirty ||
-      isMediaNoteTranscriptDirty ||
-      isPdfAnnotationsDirty;
-    showDirtyIndicator = isAnythingDirty;
-  }
 
   // New reactive block for displayTitle
-  $: {
+  $effect(() => {
     if ($project && $project.name) {
       let currentFileName = null;
       let activePath =
@@ -297,10 +269,10 @@
     } else {
       displayTitle = 'Harvey'; // Default if project or name is not available
     }
-  }
+  });
 
   // Stop live transcription if the user switches to another file
-  $: {
+  $effect(() => {
     const newActivePath =
       $project.selectedDocumentPath ||
       $project.selectedMediaNotePath ||
@@ -308,7 +280,7 @@
       $project.selectedTablePath ||
       $project.selectedImagePath;
 
-    if (newActivePath !== currentActivePath) {
+    if (newActivePath !== untrack(() => currentActivePath)) {
       if (isLiveTranscriptionActive) {
         invoke('stop_live_transcription')
           .then((stopped) => {
@@ -324,7 +296,7 @@
       }
       currentActivePath = newActivePath;
     }
-  }
+  });
 
   const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
 
@@ -332,8 +304,8 @@
     // Autosave handles everything.
   }
 
-  let autosaveTimeout;
-  $: {
+  let autosaveTimeout = $state();
+  $effect(() => {
     const p = $project;
     let shouldAutosave = false;
     let activeEditorRefToSave = null;
@@ -382,9 +354,9 @@
         console.log(
           `[DataTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`
         );
-      } else if (p.isDocumentDirty && p.selectedTablePath && tableViewRef) {
+      } else if (p.isDocumentDirty && p.selectedTablePath && dataViewRef) {
         shouldAutosave = true;
-        activeEditorRefToSave = tableViewRef;
+        activeEditorRefToSave = dataViewRef;
         saveAction = 'table';
         console.log(`[DataTopBar Autosave Watch] Table for ${p.selectedTablePath} is dirty.`);
       } else {
@@ -392,7 +364,7 @@
       }
     }
 
-    clearTimeout(autosaveTimeout);
+    untrack(() => clearTimeout(autosaveTimeout));
     if (shouldAutosave) {
       autosaveTimeout = setTimeout(async () => {
         console.log('[DataTopBar] Autosave timer fired. Attempting save...');
@@ -418,7 +390,7 @@
             currentProjState.isMediaNoteTranscriptDirty;
         } else if (saveAction === 'table' && activeEditorRefToSave) {
           editorStillActiveAndDirty =
-            tableViewRef === activeEditorRefToSave && currentProjState.isDocumentDirty;
+            dataViewRef === activeEditorRefToSave && currentProjState.isDocumentDirty;
         }
 
         if (editorStillActiveAndDirty) {
@@ -443,7 +415,7 @@
         }
       }, 3000);
     }
-  }
+  });
   async function handleExportConfirm(event) {
     const { filePath, format, layoutChoice, excludeSpeakerNames } = event.detail;
     const activeTranscriptPath = pathForExportModal;
@@ -663,11 +635,9 @@
     }
   }
 
-  $: liveTranscriptionStatus = isLiveTranscriptionActive
-    ? 'active'
-    : liveTranscriptionError
-      ? 'error'
-      : 'default';
+  let liveTranscriptionStatus = $derived(
+    isLiveTranscriptionActive ? 'active' : liveTranscriptionError ? 'error' : 'default'
+  );
 </script>
 
 <div
@@ -838,7 +808,7 @@
         <div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-0.5">
           <button
             on:click={() => panelStateStore.setGroupDetailViewMode('list')}
-            class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode ===
+            class="p-1 rounded-md border-0 transition-colors {panelStateStore.groupDetailViewMode ===
             'list'
               ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400'
               : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
@@ -848,7 +818,7 @@
           </button>
           <button
             on:click={() => panelStateStore.setGroupDetailViewMode('grid')}
-            class="p-1 rounded-md border-0 transition-colors {$panelStateStore.groupDetailViewMode ===
+            class="p-1 rounded-md border-0 transition-colors {panelStateStore.groupDetailViewMode ===
             'grid'
               ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400'
               : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
@@ -937,7 +907,7 @@
           <SquareSplitVertical class="w-4 h-4" />
         </button>
       {/if}
-      {#if $isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
+      {#if mediaEditorStore.isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
         <button
           id="layout-settings-btn-data"
           class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
@@ -997,13 +967,13 @@
       {/if}
       <button
         id="read-edit-toggle-data"
-        on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
-        class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode
+        on:click={() => (mediaEditorStore.isLexicalEditMode = !mediaEditorStore.isLexicalEditMode)}
+        class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {mediaEditorStore.isLexicalEditMode
           ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
           : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-        title={$isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
+        title={mediaEditorStore.isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
       >
-        {#if $isLexicalEditMode}
+        {#if mediaEditorStore.isLexicalEditMode}
           <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
           <span class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
             >Edit Mode</span

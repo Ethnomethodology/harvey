@@ -6,7 +6,7 @@
   import { createEventDispatcher } from 'svelte';
   import { Sun, Moon, Monitor, Pencil, PencilOff } from '@lucide/svelte';
   import { Button } from 'flowbite-svelte';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+
 
   const dispatch = createEventDispatcher();
 

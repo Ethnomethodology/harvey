@@ -18,7 +18,7 @@
   import { confirm, message } from '@tauri-apps/plugin-dialog';
   import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
   import { activeLayout } from '$lib/stores/layoutStore.js';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
 
   import { createHeadlessEditor } from '@lexical/headless';
   import {
@@ -67,43 +67,45 @@
 
   const dispatch = createEventDispatcher();
 
-  export let itemPath = null;
-  export let isPrimary = true;
-  export let enableSegmentPlayback = false;
-  export let highlightedRowIndex = -1;
+  let {
+    itemPath = null,
+    isPrimary = true,
+    enableSegmentPlayback = false,
+    highlightedRowIndex = -1
+  } = $props();
 
-  let editorRef;
-  let editorJsonState = ''; // Holds the current Lexical JSON string
+  let editorRef = $state();
+  let editorJsonState = $state(''); // Holds the current Lexical JSON string
 
-  let localCurrentLexicalJson = null;
-  let localInitialLexicalJson = null;
-  let localIsDirty = false;
-  let localIsLoading = true;
-  let localErrorMessage = null;
-  let localCurrentHighlights = [];
-  let localInitialHighlights = [];
-  let localIsMetadataDirty = false;
+  let localCurrentLexicalJson = $state(null);
+  let localInitialLexicalJson = $state(null);
+  let localIsDirty = $state(false);
+  let localIsLoading = $state(true);
+  let localErrorMessage = $state(null);
+  let localCurrentHighlights = $state([]);
+  let localInitialHighlights = $state([]);
+  let localIsMetadataDirty = $state(false);
 
   // --- Derived state from local or store ---
-  $: currentLexicalJson = isPrimary
-    ? $project.currentStandaloneTranscriptLexicalJson
-    : localCurrentLexicalJson;
-  $: initialLexicalJson = isPrimary
-    ? $project.initialStandaloneTranscriptLexicalJson
-    : localInitialLexicalJson;
-  $: isDirty = isPrimary ? $project.isStandaloneTranscriptDirty : localIsDirty;
-  $: isLoading = isPrimary ? $project.isStandaloneTranscriptLoading : localIsLoading;
-  $: errorMessage = isPrimary ? $project.standaloneTranscriptError : localErrorMessage;
+  let currentLexicalJson = $derived(
+    isPrimary ? $project.currentStandaloneTranscriptLexicalJson : localCurrentLexicalJson
+  );
+  let initialLexicalJson = $derived(
+    isPrimary ? $project.initialStandaloneTranscriptLexicalJson : localInitialLexicalJson
+  );
+  let isDirty = $derived(isPrimary ? $project.isStandaloneTranscriptDirty : localIsDirty);
+  let isLoading = $derived(isPrimary ? $project.isStandaloneTranscriptLoading : localIsLoading);
+  let errorMessage = $derived(isPrimary ? $project.standaloneTranscriptError : localErrorMessage);
 
-  $: currentHighlights = isPrimary
-    ? $project.currentStandaloneTranscriptHighlights
-    : localCurrentHighlights;
-  $: isMetadataDirty = isPrimary
-    ? $project.isStandaloneTranscriptMetadataDirty
-    : localIsMetadataDirty;
+  let currentHighlights = $derived(
+    isPrimary ? $project.currentStandaloneTranscriptHighlights : localCurrentHighlights
+  );
+  let isMetadataDirty = $derived(
+    isPrimary ? $project.isStandaloneTranscriptMetadataDirty : localIsMetadataDirty
+  );
 
   // New state for highlights
-  let initialHighlightsFromBackend = [];
+  let initialHighlightsFromBackend = $state([]);
 
   const ALL_CONVERSION_NODES = [
     RootNode,
@@ -124,25 +126,36 @@
   let changeDebounceTimeout;
 
   // --- Store Subscription (Updated to only sync if primary and matching path) ---
-  $: console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
-  $: if (isPrimary && $project.currentStandaloneTranscriptPath === itemPath) {
-    if (editorRef && currentLexicalJson !== editorJsonState) {
-      console.log('[TranscriptEditorPanel Store Sync] Updating editorRef state from store.');
-      editorRef.resetEditorState(currentLexicalJson);
-      editorJsonState = currentLexicalJson;
+  $effect(() => {
+    console.log(`[TranscriptEditorPanel] Active Layout: ${$activeLayout}`);
+  });
+
+  $effect(() => {
+    if (isPrimary && $project.currentStandaloneTranscriptPath === itemPath) {
+      if (editorRef && currentLexicalJson !== editorJsonState) {
+        console.log('[TranscriptEditorPanel Store Sync] Updating editorRef state from store.');
+        editorRef.resetEditorState(currentLexicalJson);
+        untrack(() => {
+          editorJsonState = currentLexicalJson;
+        });
+      }
     }
-  }
+  });
 
   // --- Path Change Reaction (REFACTORED) ---
-  let prevPath = itemPath;
-  $: if (itemPath && itemPath !== prevPath) {
-    console.log(
-      `[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`
-    );
-    prevPath = itemPath;
-    loadAndConvertTranscript(itemPath);
-    loadHighlightsForTranscript(itemPath);
-  }
+  let prevPath = $state(itemPath);
+  $effect(() => {
+    if (itemPath && itemPath !== prevPath) {
+      console.log(
+        `[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`
+      );
+      untrack(() => {
+        prevPath = itemPath;
+        loadAndConvertTranscript(itemPath);
+        loadHighlightsForTranscript(itemPath);
+      });
+    }
+  });
 
   async function loadHighlightsForTranscript(path) {
     console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
@@ -803,7 +816,7 @@
           bind:this={editorRef}
           nodes={LEXICAL_NODES}
           initialJson={currentLexicalJson}
-          editable={$isLexicalEditMode}
+          editable={mediaEditorStore.isLexicalEditMode}
           allowReadModeHighlights={true}
           enableTableCellResize={false}
           placeholder="Transcript content will appear here as a table..."

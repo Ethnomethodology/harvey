@@ -2,7 +2,7 @@
 <script>
   import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
   import { get } from 'svelte/store';
-  import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
   import {
     project, // Store, aliased to projectStore below for clarity in functions
     clearStandaloneTranscriptSplit
@@ -18,28 +18,29 @@
   import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
   import TimestampInput from '../../shared/TimestampInput.svelte';
 
-  export let mediaPath = null;
+  let { mediaPath = $bindable(null) } = $props();
 
   const dispatch = createEventDispatcher();
 
-  let mediaPlayerInDataRef;
+  let mediaPlayerInDataRef = $state();
 
-  let isDataPlayerVideoHidden = false; // State for MediaPlayer's video visibility
+  let isDataPlayerVideoHidden = $state(false); // State for MediaPlayer's video visibility
 
   // Split View State
-  let primaryPanel;
-  let secondaryPanel;
-  let cleanupSync = () => {};
-  let isScrollSyncEnabled = true;
-  let primaryRowCount = 0;
-  let secondaryRowCount = 0;
-  let primaryHighlightedRowIndex = -1;
-  let secondaryHighlightedRowIndex = -1;
+  let primaryPanel = $state();
+  let secondaryPanel = $state();
+  let cleanupSync = $state(() => {});
+  let isScrollSyncEnabled = $state(true);
+  let primaryRowCount = $state(0);
+  let secondaryRowCount = $state(0);
+  let primaryHighlightedRowIndex = $state(-1);
+  let secondaryHighlightedRowIndex = $state(-1);
 
-  $: splitInfo =
-    $projectStore.standaloneTranscriptSplits[$projectStore.activeTranscriptPathInDataTab];
-  $: splitPartnerPath = splitInfo?.partner;
-  $: orientation = splitInfo?.orientation || 'horizontal';
+  let splitInfo = $derived(
+    $projectStore.standaloneTranscriptSplits[$projectStore.activeTranscriptPathInDataTab]
+  );
+  let splitPartnerPath = $derived(splitInfo?.partner);
+  let orientation = $derived(splitInfo?.orientation || 'horizontal');
 
   function handleSyncManager(path, enabled) {
     if (path && enabled) {
@@ -49,7 +50,9 @@
     }
   }
 
-  $: handleSyncManager(splitPartnerPath, isScrollSyncEnabled);
+  $effect(() => {
+    handleSyncManager(splitPartnerPath, isScrollSyncEnabled);
+  });
 
   function toggleScrollSync() {
     isScrollSyncEnabled = !isScrollSyncEnabled;
@@ -154,26 +157,26 @@
     };
   }
 
-  let showDataTrimUI = false;
-  let currentTrimAudioBuffer = null; // Buffer for the active trim session
-  let currentTrimAudioPeaks = null; // Peaks for the active trim session (for lazy loading)
-  let dataTrimStartTime = 0;
-  let dataTrimEndTime = 0;
+  let showDataTrimUI = $state(false);
+  let currentTrimAudioBuffer = $state(null); // Buffer for the active trim session
+  let currentTrimAudioPeaks = $state(null); // Peaks for the active trim session (for lazy loading)
+  let dataTrimStartTime = $state(0);
+  let dataTrimEndTime = $state(0);
 
   // LIVE MediaPlayer properties needed by InteractiveWaveform
-  let dataMediaPlayerCurrentTime = 0;
-  let dataMediaPlayerIsPlaying = false;
-  let dataMediaPlayerDuration = 0; // Bound to MediaPlayer to get duration reactively
+  let dataMediaPlayerCurrentTime = $state(0);
+  let dataMediaPlayerIsPlaying = $state(false);
+  let dataMediaPlayerDuration = $state(0); // Bound to MediaPlayer to get duration reactively
 
   onMount(() => {
-    isMediaEditorOpen.set(true);
+    mediaEditorStore.isMediaEditorOpen = true;
     showDataTrimUI = false;
     currentTrimAudioBuffer = null;
     currentTrimAudioPeaks = null;
   });
 
   onDestroy(() => {
-    isMediaEditorOpen.set(false);
+    mediaEditorStore.isMediaEditorOpen = false;
     cleanupSync();
   });
 

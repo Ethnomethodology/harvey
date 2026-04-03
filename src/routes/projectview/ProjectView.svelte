@@ -42,7 +42,7 @@
         prepareStandaloneTranscriptView,
         prepareMediaNoteView,
     } from "$lib/stores/projectStore.js";
-    import { fetchAllTags } from "$lib/stores/tagStore.js";
+    import { fetchAllTags } from "$lib/stores/tagStore.svelte.js";
     import {
         transcriptStore,
         setRanInBackground,
@@ -102,7 +102,7 @@
     import DataTopBar from "$lib/components/projectview/data/DataTopBar.svelte";
     import TranscriptionTopBar from "$lib/components/projectview/transcription/TopBar.svelte";
     import SimpleTopBar from "$lib/components/projectview/shared/SimpleTopBar.svelte";
-    import panelStateStore from "$lib/stores/panelStateStore.js";
+    import panelStateStore from "$lib/stores/panelStateStore.svelte.js";
     import CreateGroupModal from "$lib/components/projectview/modals/CreateGroupModal.svelte";
     import CreateTableModal from "$lib/components/projectview/modals/CreateTableModal.svelte";
 
@@ -1062,6 +1062,7 @@
             );
             await appWindow.center();
             handlingCloseRequest = false;
+            // eslint-disable-next-line svelte/no-navigation-without-resolve
             return goto("/");
         }
         handlingCloseRequest = false;

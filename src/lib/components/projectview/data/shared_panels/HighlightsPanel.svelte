@@ -21,15 +21,17 @@
     saveTableHighlights,
     loadHighlightsForFile
   } from '$lib/services/projectService.js';
-  import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
+  import { tagStore, fetchAllTags, addTag } from '$lib/stores/tagStore.svelte.js';
   import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
   import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
   import { Tags, MessageCircle, MoreVertical, Trash2 } from '@lucide/svelte';
   import { Dropdown, DropdownItem } from 'flowbite-svelte';
 
-  export let itemPath = null;
-  export let itemType = null;
-  export let refreshKey = null;
+  let {
+    itemPath = null,
+    itemType = null,
+    refreshKey = null
+  } = $props();
 
   let unsubscribeRefresher;
 
@@ -55,39 +57,41 @@
     });
   });
 
-  $: if (refreshKey && itemPath) {
-    let pathForHighlights = itemPath;
-    const p = get(project);
-    if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
-      pathForHighlights = p.activeTranscriptPathInDataTab;
-    }
+  $effect(() => {
+    if (refreshKey && itemPath) {
+      let pathForHighlights = itemPath;
+      const p = get(project);
+      if (p.selectedMediaNotePath === itemPath && p.activeTranscriptPathInDataTab) {
+        pathForHighlights = p.activeTranscriptPathInDataTab;
+      }
 
-    // Logic to prevent overwriting active local edits:
-    // If the path matches what is already open in the store AND the store is not empty,
-    // skip the redundant load when the panel mounts or when a local "save" just happened.
-    const currentHighlightsInStore =
-      p.currentDocumentHighlights ||
-      p.currentStandaloneTranscriptHighlights ||
-      p.currentTableHighlights ||
-      p.currentPdfAnnotations ||
-      p.currentImageAnnotations ||
-      [];
-    const currentActivePath =
-      p.selectedDocumentPath ||
-      p.currentStandaloneTranscriptPath ||
-      (p.selectedMediaNotePath === itemPath ? p.activeTranscriptPathInDataTab : null);
+      // Logic to prevent overwriting active local edits:
+      // If the path matches what is already open in the store AND the store is not empty,
+      // skip the redundant load when the panel mounts or when a local "save" just happened.
+      const currentHighlightsInStore =
+        p.currentDocumentHighlights ||
+        p.currentStandaloneTranscriptHighlights ||
+        p.currentTableHighlights ||
+        p.currentPdfAnnotations ||
+        p.currentImageAnnotations ||
+        [];
+      const currentActivePath =
+        p.selectedDocumentPath ||
+        p.currentStandaloneTranscriptPath ||
+        (p.selectedMediaNotePath === itemPath ? p.activeTranscriptPathInDataTab : null);
 
-    if (pathForHighlights === currentActivePath && currentHighlightsInStore.length > 0) {
-      console.log(
-        '[HighlightsPanel] Active document already has highlights in store, skipping redundant refresh for',
-        pathForHighlights
-      );
-    } else {
-      console.log('[HighlightsPanel] Loading highlights for', pathForHighlights);
-      loadHighlightsForFile(pathForHighlights, itemType);
-      fetchAllTags();
+      if (pathForHighlights === currentActivePath && currentHighlightsInStore.length > 0) {
+        console.log(
+          '[HighlightsPanel] Active document already has highlights in store, skipping redundant refresh for',
+          pathForHighlights
+        );
+      } else {
+        console.log('[HighlightsPanel] Loading highlights for', pathForHighlights);
+        loadHighlightsForFile(pathForHighlights, itemType);
+        fetchAllTags();
+      }
     }
-  }
+  });
 
   onDestroy(() => {
     if (unsubscribeRefresher) {
@@ -95,8 +99,8 @@
     }
   });
 
-  let showCommentsModal = false;
-  let selectedHighlightId = null;
+  let showCommentsModal = $state(false);
+  let selectedHighlightId = $state(null);
 
   function openCommentsModal(highlight) {
     selectedHighlightId = highlight.id;
@@ -109,45 +113,41 @@
   }
 
   // --- Reactive State based on Store and Props ---
-  let activeHighlights = [];
-  let effectiveType = null;
-
-  $: {
+  let effectiveType = $derived((() => {
     const p = $project;
-    const currentPath = p.selectedDocumentPath;
-    const selectedType = p.selectedDocumentType;
-
-    // Prioritize store state for determining the type of the active document
-    if (p.selectedMediaNotePath) {
-      effectiveType = 'doc'; // Media transcripts are handled like docs
-      activeHighlights = p.currentDocumentHighlights || [];
-    } else if (p.currentStandaloneTranscriptPath) {
-      effectiveType = 'standalone_transcript';
-      activeHighlights = p.currentStandaloneTranscriptHighlights || [];
-    } else if (
-      currentPath?.toLowerCase().endsWith('.pdf') ||
+    if (p.selectedMediaNotePath) return 'doc';
+    if (p.currentStandaloneTranscriptPath) return 'standalone_transcript';
+    if (
+      p.selectedDocumentPath?.toLowerCase().endsWith('.pdf') ||
       (itemPath && itemPath.toLowerCase().endsWith('.pdf'))
     ) {
-      effectiveType = 'pdf';
-      activeHighlights = p.currentPdfAnnotations || [];
-    } else if (itemType === 'doc') {
-      // Overrides for sub-items like Lexical docs opened inside TableViewer
-      effectiveType = 'doc';
-      activeHighlights = p.currentDocumentHighlights || [];
-    } else if (selectedType === 'tables') {
-      effectiveType = 'table';
-      activeHighlights = p.currentTableHighlights || [];
-    } else if (selectedType === 'images') {
-      effectiveType = 'image';
-      activeHighlights = p.currentImageAnnotations || [];
-    } else {
-      effectiveType = 'doc';
-      activeHighlights = p.currentDocumentHighlights || [];
+      return 'pdf';
     }
-  }
+    if (itemType === 'doc') return 'doc';
+    if (p.selectedDocumentType === 'tables') return 'table';
+    if (p.selectedDocumentType === 'images') return 'image';
+    return 'doc';
+  })());
 
-  $: selectedHighlightForComments =
-    activeHighlights.find((h) => h.id === selectedHighlightId) || null;
+  let activeHighlights = $derived((() => {
+    const p = $project;
+    switch (effectiveType) {
+      case 'standalone_transcript':
+        return p.currentStandaloneTranscriptHighlights || [];
+      case 'pdf':
+        return p.currentPdfAnnotations || [];
+      case 'table':
+        return p.currentTableHighlights || [];
+      case 'image':
+        return p.currentImageAnnotations || [];
+      default:
+        return p.currentDocumentHighlights || [];
+    }
+  })());
+
+
+
+  let selectedHighlightForComments = $derived(activeHighlights.find((h) => h.id === selectedHighlightId) || null);
 
   // This function handles the structure conversion for different annotation types
   function processHighlights(highlights, type) {
@@ -226,7 +226,7 @@
     }
   }
 
-  $: processedHighlights = processHighlights(activeHighlights, effectiveType);
+  let processedHighlights = $derived(processHighlights(activeHighlights, effectiveType));
 
   async function handleHighlightsUpdate(newHighlights) {
     if (effectiveType === 'standalone_transcript') {
@@ -391,7 +391,10 @@
           >
             <div
               class="p-3 bg-white dark:bg-gray-800 rounded-t-md cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors group relative"
-              on:click={() => handleHighlightClick(highlight)}
+              onclick={() => handleHighlightClick(highlight)}
+              onkeydown={(e) => e.key === 'Enter' && handleHighlightClick(highlight)}
+              role="button"
+              tabindex="0"
               title="Click to locate in document"
             >
               <div class="flex justify-between items-start gap-2">
@@ -422,14 +425,14 @@
                   <button
                     id="dropdown-menu-{highlight.id}"
                     class="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    on:click|stopPropagation
+                    onclick={(e) => e.stopPropagation()}
                   >
                     <MoreVertical class="w-4 h-4" />
                   </button>
                   <Dropdown placement="bottom-end" triggeredBy="#dropdown-menu-{highlight.id}">
                     <DropdownItem
                       class="flex items-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      on:click={() => handleDeleteHighlight(highlight.id)}
+                      onclick={() => handleDeleteHighlight(highlight.id)}
                     >
                       <Trash2 class="w-3.5 h-3.5" />
                       <span>Delete Highlight</span>
@@ -445,7 +448,7 @@
                 <Tags class="w-3 h-3 mr-2 flex-shrink-0 text-gray-400" />
                 <div class="w-full relative">
                   <TagMultiSelect
-                    allTags={$allTagsStore.map((t) => t.name)}
+                    allTags={tagStore.allTags.map((t) => t.name)}
                     assignedTags={highlight.tags}
                     on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                     on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}
@@ -454,7 +457,7 @@
               </div>
               <div class="flex justify-end w-full mt-2">
                 <button
-                  on:click={() => openCommentsModal(highlight)}
+                  onclick={() => openCommentsModal(highlight)}
                   class="relative p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors flex items-center justify-center"
                   title="View comments"
                 >

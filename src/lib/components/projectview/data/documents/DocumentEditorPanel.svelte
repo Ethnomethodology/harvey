@@ -22,24 +22,24 @@
   import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
   import { confirm, message } from '@tauri-apps/plugin-dialog';
   import { activeLayout } from '$lib/stores/layoutStore.js';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
 
   const dispatch = createEventDispatcher();
 
-  export let highlightedRowIndex = -1;
+  let { highlightedRowIndex = -1 } = $props();
 
-  let editorRef;
-  let editorJsonState = '';
+  let editorRef = $state();
+  let editorJsonState = $state('');
 
-  let currentJson = null;
-  let initialJson = null;
-  let isDirty = false;
-  let isLoading = false;
-  let selectedPath = null;
-  let errorMessage = null;
-  let initialHighlights = []; // New state for highlights
+  let currentJson = $state(null);
+  let initialJson = $state(null);
+  let isDirty = $state(false);
+  let isLoading = $state(false);
+  let selectedPath = $state(null);
+  let errorMessage = $state(null);
+  let initialHighlights = $state([]); // New state for highlights
 
-  $: {
+  $effect(() => {
     const p = $project;
     selectedPath = p.selectedDocumentPath;
     currentJson = p.currentDocumentJson;
@@ -56,25 +56,27 @@
     } else {
       initialHighlights = []; // Clear highlights for non-lexical docs
     }
-  }
+  });
 
-  let prevPath = null;
-  $: if (selectedPath !== prevPath) {
-    prevPath = selectedPath;
-    if (selectedPath) {
-      console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
-      if (currentJson) {
-        editorJsonState = currentJson;
-        if (editorRef) editorRef.resetEditorState(currentJson);
-      } else if (!isLoading) {
+  let prevPath = $state(null);
+  $effect(() => {
+    if (selectedPath !== prevPath) {
+      prevPath = selectedPath;
+      if (selectedPath) {
+        console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
+        if (currentJson) {
+          editorJsonState = currentJson;
+          if (editorRef) editorRef.resetEditorState(currentJson);
+        } else if (!isLoading) {
+          editorJsonState = '';
+          if (editorRef) editorRef.resetEditorState('');
+        }
+      } else {
         editorJsonState = '';
         if (editorRef) editorRef.resetEditorState('');
       }
-    } else {
-      editorJsonState = '';
-      if (editorRef) editorRef.resetEditorState('');
     }
-  }
+  });
 
   async function loadHighlightsForDocument(path) {
     try {
@@ -254,7 +256,7 @@
         <LexicalEditor
           bind:this={editorRef}
           initialJson={currentJson}
-          editable={$isLexicalEditMode}
+          editable={mediaEditorStore.isLexicalEditMode}
           allowReadModeHighlights={true}
           placeholder="Start typing your document..."
           enableTableCellMenu={true}

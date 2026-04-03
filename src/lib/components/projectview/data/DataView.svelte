@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/data/DataView.svelte -->
 <script>
   import { onMount, createEventDispatcher, tick } from 'svelte';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import DataTopBar from './DataTopBar.svelte';
   import DataLeftPanel from './DataLeftPanel.svelte';
   import DocumentView from './documents/DocumentView.svelte';
@@ -290,7 +290,7 @@
       itemTypeForInfo !== 'doc' &&
       itemTypeForInfo !== 'standalone_transcript' &&
       itemTypeForInfo !== 'table' &&
-      get(panelStateStore).activeInfoPanelTab === 'attachments'
+      panelStateStore.activeInfoPanelTab === 'attachments'
     ) {
       panelStateStore.setActiveInfoPanelTab('metadata');
     }
@@ -441,7 +441,7 @@
   <div class="flex flex-grow w-full min-h-0">
     <!-- Far Left Panel (File/Data Browser) -->
     <div
-      class="{$panelStateStore.dataLeftPanelCollapsed
+      class="{panelStateStore.dataLeftPanelCollapsed
         ? 'w-12'
         : 'w-64'} h-full flex-shrink-0 transition-all duration-300 ease-in-out"
     >
@@ -500,24 +500,24 @@
     </div>
 
     <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
-    {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
+    {#if !panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
       <div
         class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-700"
         transition:slide={{ duration: 300, axis: 'x' }}
       >
-        {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
+        {#if panelStateStore.activeInfoPanelTab === 'metadata'}
           <InfoPanel
             itemPath={activeItemPath}
             itemType={activeItemTypeForInfoPanel}
             refreshKey={infoPanelRefreshKey}
           />
-        {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
+        {:else if panelStateStore.activeInfoPanelTab === 'highlights'}
           <HighlightsPanel
             itemPath={activeSubItemPath || activeItemPath}
             itemType={activeSubItemType || activeItemTypeForInfoPanel}
             refreshKey={highlightsPanelRefreshKey}
           />
-        {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
+        {:else if panelStateStore.activeInfoPanelTab === 'attachments'}
           <AttachmentsPanel
             bind:this={attachmentsPanelRef}
             itemPath={activeItemPath}

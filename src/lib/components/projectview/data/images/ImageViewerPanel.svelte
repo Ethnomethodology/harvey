@@ -18,29 +18,30 @@
     Type,
     HatGlasses
   } from '@lucide/svelte';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
 
-  export let imagePath = '';
+  let {
+    imagePath = ''
+  } = $props();
 
-  let osdViewerElement;
-  let osdViewer = null;
-
-  let isLoading = true;
-  let error = null;
-  let currentLoadedPath = null;
-  let currentAssetUrl = null;
-  let pixelatedAssetUrl = null; // New variable for the low-res version
-  let imgAspectRatio = 1;
-  let pixelationCanvas; // Binding for the hidden canvas
+  let osdViewerElement = $state();
+  let osdViewer = $state(null);
+  let isLoading = $state(true);
+  let error = $state(null);
+  let currentLoadedPath = $state(null);
+  let currentAssetUrl = $state(null);
+  let pixelatedAssetUrl = $state(null);
+  let imgAspectRatio = $state(1);
+  let pixelationCanvas = $state();
 
   import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
-  let showAnnotationCreationDialog = false;
-  let showExportModal = false;
-  let dialogX = 0;
-  let dialogY = 0;
-  let annotationBeingEdited = null; // Stores the annotation data when editing
-  let isEditingExisting = false; // Flag to indicate if we are editing or creating
+  let showAnnotationCreationDialog = $state(false);
+  let showExportModal = $state(false);
+  let dialogX = $state(0);
+  let dialogY = $state(0);
+  let annotationBeingEdited = $state(null);
+  let isEditingExisting = $state(false);
 
   // Export modal trigger for external components (like DataTopBar)
   export function openExportModal() {
@@ -56,8 +57,8 @@
   });
 
   // State for drawing mode: 'rectangle', 'circle', 'polygon', 'speech-bubble-rect', 'speech-bubble-circle', or null
-  let activeDrawingTool = null;
-  let selectedBaseColorIndex = 0; // Index into baseColors
+  let activeDrawingTool = $state(null);
+  let selectedBaseColorIndex = $state(0);
 
   const baseColors = [
     { name: 'White', rgb: '255, 255, 255' },
@@ -77,38 +78,44 @@
   }
 
   // Variables for drawing
-  let isDrawing = false;
-  let startPoint = null;
-  let currentRect = null; // { x, y, width, height } for rectangle & speech-bubble-rect
-  let currentCircle = null; // { cx, cy, r } for circle & speech-bubble-circle
-  let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
-  let currentPreviewPolygonPoints = []; // For filled polygon preview
-  let svgOverlay; // Reference to the SVG element
+  let isDrawing = $state(false);
+  let startPoint = $state(null);
+  let currentRect = $state(null);
+  let currentCircle = $state(null);
+  let currentPolygon = $state({ points: [], previewLine: null, closingPreviewLine: null });
+  let currentPreviewPolygonPoints = $state([]);
+  let svgOverlay = $state();
 
   // State for dragging tail
-  let isDraggingTail = false;
-  let isDraggingTailWidth = false;
-  let isDraggingShape = false;
-  let isDraggingResizeHandle = false;
-  let selectedAnnotationId = null;
-  let draggedAnnotationId = null;
-  let draggedHandleType = null; // 'nw', 'ne', 'sw', 'se', 'r', or index for polygon
-  let dragStartViewportPoint = null;
-  let handleRadius = 0.008; // Default viewport radius
+  let isDraggingTail = $state(false);
+  let isDraggingTailWidth = $state(false);
+  let isDraggingShape = $state(false);
+  let isDraggingResizeHandle = $state(false);
+  let selectedAnnotationId = $state(null);
+  let draggedAnnotationId = $state(null);
+  let draggedHandleType = $state(null);
+  let dragStartViewportPoint = $state(null);
+  let handleRadius = $state(0.008);
 
-  $: if (activeDrawingTool) {
-    selectedAnnotationId = null;
-  }
+  $effect(() => {
+    if (activeDrawingTool) {
+      untrack(() => {
+        selectedAnnotationId = null;
+      });
+    }
+  });
 
-  $: if (
-    !$isLexicalEditMode &&
-    activeDrawingTool &&
-    ['speech-bubble-rect', 'speech-bubble-circle', 'text-area', 'censored'].includes(
-      activeDrawingTool
-    )
-  ) {
-    activeDrawingTool = null;
-  }
+  $effect(() => {
+    if (
+      !mediaEditorStore.isLexicalEditMode &&
+      activeDrawingTool &&
+      ['speech-bubble-rect', 'speech-bubble-circle', 'text-area', 'censored'].includes(
+        activeDrawingTool
+      )
+    ) {
+      activeDrawingTool = null;
+    }
+  });
 
   function fixHtmlForDisplay(html) {
     if (!html) return html;
@@ -1589,7 +1596,7 @@
   }
 
   function handleAnnotationDoubleClick(event, annotation) {
-    if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
+    if (!mediaEditorStore.isLexicalEditMode && !isHighlightAnnotation(annotation)) return;
     event.stopPropagation(); // Prevent OSD zoom
     console.log('Annotation double-clicked:', annotation);
     annotationBeingEdited = annotation;
@@ -1717,7 +1724,7 @@
   }
 
   function startTailWidthDrag(event, annotationId) {
-    if (!get(isLexicalEditMode)) return;
+    if (!mediaEditorStore.isLexicalEditMode) return;
     event.preventDefault();
     isDraggingTailWidth = true;
     draggedAnnotationId = annotationId;
@@ -1731,7 +1738,7 @@
   }
 
   function startTailDrag(event, annotationId) {
-    if (!get(isLexicalEditMode)) return;
+    if (!mediaEditorStore.isLexicalEditMode) return;
     // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
     // event.stopPropagation();
     event.preventDefault(); // Stop text selection etc.
@@ -1742,7 +1749,7 @@
 
   function startShapeDrag(event, annotationId) {
     const annotation = $currentAnnotations.find((a) => a.id === annotationId);
-    if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
+    if (!mediaEditorStore.isLexicalEditMode && !isHighlightAnnotation(annotation)) return;
     // Do not stop propagation, so OSD 'canvas-press' fires
     event.preventDefault();
     isDraggingShape = true;
@@ -1761,7 +1768,7 @@
 
   function startResizeDrag(event, annotationId, handleType) {
     const annotation = $currentAnnotations.find((a) => a.id === annotationId);
-    if (!get(isLexicalEditMode) && !isHighlightAnnotation(annotation)) return;
+    if (!mediaEditorStore.isLexicalEditMode && !isHighlightAnnotation(annotation)) return;
     event.preventDefault();
     // Do not stop propagation, so OSD 'canvas-press' fires and we can use OSD's drag handler
     // event.stopPropagation();
@@ -1862,9 +1869,11 @@
     }
   }
 
-  $: if ($project.requestedHighlightId && osdViewer && !isLoading) {
-    scrollToAnnotation($project.requestedHighlightId);
-  }
+  $effect(() => {
+    if ($project.requestedHighlightId && osdViewer && !isLoading) {
+      scrollToAnnotation($project.requestedHighlightId);
+    }
+  });
 
   onMount(() => {
     console.log('[ImageViewerPanel] Mounted. Initial Path:', imagePath);
@@ -1891,38 +1900,37 @@
     }
   });
 
-  $: {
+  $effect(() => {
     if (imagePath && imagePath !== currentLoadedPath && osdViewerElement) {
       console.log(
-        `[ImageViewerPanel reactive] imagePath changed from '${currentLoadedPath || 'null'}' to '${imagePath}'`
+        `[ImageViewerPanel effect] imagePath changed from '${currentLoadedPath || 'null'}' to '${imagePath}'`
       );
       initializeViewer(imagePath);
     } else if (imagePath && imagePath !== currentLoadedPath && !osdViewerElement) {
       console.log(
-        `[ImageViewerPanel reactive] imagePath changed to ${imagePath}, but osdViewerElement not ready. Deferring init.`
+        `[ImageViewerPanel effect] imagePath changed to ${imagePath}, but osdViewerElement not ready. Deferring init.`
       );
-      if (!isLoading) isLoading = true;
+      untrack(() => {
+        if (!isLoading) isLoading = true;
+      });
     } else if (!imagePath && osdViewer) {
-      console.log(`[ImageViewerPanel reactive] imagePath cleared, destroying viewer instance.`);
+      console.log(`[ImageViewerPanel effect] imagePath cleared, destroying viewer instance.`);
       if (osdViewer) {
         if (svgOverlay && osdViewer.getOverlayById(svgOverlay)) {
           osdViewer.removeOverlay(svgOverlay);
         }
         osdViewer.destroy();
       }
-      osdViewer = null;
-      isLoading = false;
-      error = null;
-      currentLoadedPath = null;
+      untrack(() => {
+        osdViewer = null;
+        isLoading = false;
+        error = null;
+        currentLoadedPath = null;
+      });
     }
-  }
+  });
 
-  // Reactive statement to update annotation positions when viewport changes
-  $: if (osdViewer && $currentAnnotations) {
-    // This is a reactive statement that will re-run whenever $currentAnnotations changes,
-    // which is exactly what we want to keep the SVG overlay in sync with the store.
-    // Svelte's reactivity handles the re-rendering of the {#each} block below.
-  }
+  // Svelte 5 automatically handles re-rendering of currentAnnotations because it is a $derived
 </script>
 
 <svelte:head>
@@ -1984,7 +1992,7 @@
             (activeDrawingTool =
               activeDrawingTool === 'speech-bubble-circle' ? null : 'speech-bubble-circle')}
           title="Draw Circular Speech Bubble"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <MessageCircle class="w-4 h-4" />
         </button>
@@ -1996,7 +2004,7 @@
             (activeDrawingTool =
               activeDrawingTool === 'speech-bubble-rect' ? null : 'speech-bubble-rect')}
           title="Draw Rectangular Speech Bubble"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <MessageSquare class="w-4 h-4" />
         </button>
@@ -2007,7 +2015,7 @@
           on:click={() =>
             (activeDrawingTool = activeDrawingTool === 'text-area' ? null : 'text-area')}
           title="Draw Text Area"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Type class="w-4 h-4" />
         </button>
@@ -2018,7 +2026,7 @@
           on:click={() =>
             (activeDrawingTool = activeDrawingTool === 'censored' ? null : 'censored')}
           title="Anonymise (Pixelate)"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <HatGlasses class="w-4 h-4" />
         </button>

@@ -1,10 +1,10 @@
 <!-- src/lib/components/projectview/data/tables/TableViewerPanel.svelte -->
 <script>
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get, writable } from 'svelte/store';
   import { TabulatorFull as Tabulator, HistoryModule } from 'tabulator-tables';
   Tabulator.registerModule(HistoryModule);
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import { panelState } from '$lib/stores/panelStateStore.svelte.js';
   import {
     loadTableData,
     saveTableData,
@@ -59,58 +59,61 @@
   import { invoke } from '@tauri-apps/api/core';
   import { Input, Button, Dropdown, DropdownItem, Search, Badge } from 'flowbite-svelte';
   import { Datepicker } from 'flowbite-datepicker';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
   import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
   import FloatingTableHighlightToolbar from '../../tables/FloatingTableHighlightToolbar.svelte';
 
-  export let tablePath = '';
-  export let hasHeaders = true;
-  export let activeSubItemPath = null;
-  export let activeSubItemType = null;
+  let {
+    tablePath = '',
+    hasHeaders = true,
+    activeSubItemPath = null,
+    activeSubItemType = null,
+    initialChartToLoad = null
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
-  let tableContainer;
-  let tabulatorInstance = null;
-  let tableData = [];
-  let tableSchema = {};
-  let isLoading = true;
-  let error = null;
-  let currentLoadedPath = null;
-  let availableViews = [];
+  let tableContainer = $state();
+  let tabulatorInstance = $state(null);
+  let tableData = $state([]);
+  let tableSchema = $state({});
+  let isLoading = $state(false);
+  let error = $state(null);
+  let currentLoadedPath = $state(null);
+  let availableViews = $state([]);
 
-  let isViewingDocument = false;
-  let currentActiveDocumentPath = null;
-  let currentActiveDocumentJson = null;
-  let currentActiveDocumentHighlights = [];
+  let isViewingDocument = $state(false);
+  let currentActiveDocumentPath = $state(null);
+  let currentActiveDocumentJson = $state(null);
+  let currentActiveDocumentHighlights = $state([]);
 
-  let svelteUndoStack = [];
-  let svelteRedoStack = [];
-  let isUndoRedoActive = false; // Flag to prevent history tracking during undo/redo actions
+  let svelteUndoStack = $state([]);
+  let svelteRedoStack = $state([]);
+  let isUndoRedoActive = $state(false); // Flag to prevent history tracking during undo/redo actions
 
   const highlightOptions = HIGHLIGHT_OPTIONS;
 
-  let tableReady = false;
-  let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
+  let tableReady = $state(false);
+  let tableStyles = $state({ rowStyles: {}, cellStyles: {} }); // This will be derived from highlights
 
   let projectAssetOptions = [];
 
-  let showEditEntryModal = false;
-  let editingEntryData = null;
-  let editingEntryIndex = -1;
-  let tableColumnsForModal = [];
+  let showEditEntryModal = $state(false);
+  let editingEntryData = $state(null);
+  let editingEntryIndex = $state(-1);
+  let tableColumnsForModal = $state([]);
 
-  let currentPrimaryField = null;
-  let duplicateIds = new Set(); // Stores harvey_internal_id of rows with duplicate primary values
+  let currentPrimaryField = $state(null);
+  let duplicateIds = $state(new Set()); // Stores harvey_internal_id of rows with duplicate primary values
 
-  let tableHasValidationErrors = false;
-  let invalidCells = new Map(); // Stores cell keys "rowIndex-colField" -> errorMessage
+  let tableHasValidationErrors = $state(false);
+  let invalidCells = $state(new Map()); // Stores cell keys "rowIndex-colField" -> errorMessage
 
-  let showTableModifyToolbar = false;
-  let tableModifyToolbarPosition = { top: 0, left: 0 };
-  let clickedRow = null;
-  let selectedRows = []; // Rows from a multi-cell/multi-row selection
-  let activeHighlightIdForToolbar = null;
+  let showTableModifyToolbar = $state(false);
+  let tableModifyToolbarPosition = $state({ top: 0, left: 0 });
+  let clickedRow = $state(null);
+  let selectedRows = $state([]); // Rows from a multi-cell/multi-row selection
+  let activeHighlightIdForToolbar = $state(null);
   let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
   let mainPanelContainer = null;
 
@@ -249,37 +252,47 @@
   }
 
   // Reactive mapping of store highlights to Tabulator styles
-  $: if ($project.currentTableHighlights) {
-    const hls = $project.currentTableHighlights;
-    const newRowStyles = {};
-    const newCellStyles = {};
+  $effect(() => {
+    const highlights = $project.currentTableHighlights; // Primary dependency
+    
+    untrack(() => {
+      if (!highlights) {
+        tableStyles = { rowStyles: {}, cellStyles: {} };
+        return;
+      }
 
-    if (Array.isArray(hls)) {
-      hls.forEach((h) => {
-        if (h.id?.startsWith('row-') || h.rowIndices) {
-          // Handle both old single-row and new grouped-row formats
-          const indices = h.rowIndices || [h.id.substring(4)];
-          indices.forEach((idx) => {
-            newRowStyles[idx] = h.color;
-          });
-        } else if (h.id?.startsWith('cell-')) {
-          // Cell IDs are in format "cell-rowIndex-colField"
-          newCellStyles[h.id] = {
-            color: h.color,
-            textColor: h.textColor,
-            bold: h.bold,
-            italic: h.italic,
-            underline: h.underline
-          };
+      const newRowStyles = {};
+      const newCellStyles = {};
+
+      if (Array.isArray(highlights)) {
+        highlights.forEach((h) => {
+          if (h.id?.startsWith('row-') || h.rowIndices) {
+            const indices = h.rowIndices || [h.id.substring(4)];
+            indices.forEach((idx) => {
+              newRowStyles[idx] = h.color;
+            });
+          } else if (h.id?.startsWith('cell-')) {
+            newCellStyles[h.id] = {
+              color: h.color,
+              textColor: h.textColor,
+              bold: h.bold,
+              italic: h.italic,
+              underline: h.underline
+            };
+          }
+        });
+      }
+
+      tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
+
+      // Debounce reformat to avoid rapid successive calls during project state updates
+      debounce(() => {
+        if (typeof reformatAllRows === 'function') {
+          reformatAllRows();
         }
-      });
-    }
-
-    tableStyles = { rowStyles: newRowStyles, cellStyles: newCellStyles };
-
-    // Trigger a reformat of entries to apply new styles
-    reformatAllRows();
-  }
+      }, 50)();
+    });
+  });
 
   async function toggleStyle(styleType) {
     if (!tabulatorInstance) return;
@@ -507,22 +520,22 @@
     await saveTableHighlights();
   }
 
-  let searchTerm = '';
-  let cellMatches = []; // Changed from searchMatches to store cell components
-  let currentMatchIndex = -1;
-  let columnFields = [];
-  let tableLayoutSnapshot = { columns: {} };
-  let tableClipboard = null;
-  let searchInputRef = null;
+  let searchTerm = $state('');
+  let cellMatches = $state([]); // Changed from searchMatches to store cell components
+  let currentMatchIndex = $state(-1);
+  let columnFields = $state([]);
+  let tableLayoutSnapshot = $state({ columns: {} });
+  let tableClipboard = $state(null);
+  let searchInputRef = $state(null);
 
-  let showOptionsMenu = false;
-  let areFiltersVisible = false; // Start with the assumption that filters are hidden
+  let showOptionsMenu = $state(false);
+  let areFiltersVisible = $state(false); // Start with the assumption that filters are hidden
 
-  let showUrlPopover = false;
-  let popoverUrl = '';
-  let popoverX = 0;
-  let popoverY = 0;
-  let isUrlCopied = false;
+  let showUrlPopover = $state(false);
+  let popoverUrl = $state('');
+  let popoverX = $state(0);
+  let popoverY = $state(0);
+  let isUrlCopied = $state(false);
 
   async function handleOpenUrl() {
     if (!popoverUrl) return;
@@ -551,11 +564,11 @@
     }, 2000);
   }
 
-  let showEmailPopover = false;
-  let popoverEmail = '';
-  let popoverEmailX = 0;
-  let popoverEmailY = 0;
-  let isEmailCopied = false;
+  let showEmailPopover = $state(false);
+  let popoverEmail = $state('');
+  let popoverEmailX = $state(0);
+  let popoverEmailY = $state(0);
+  let isEmailCopied = $state(false);
 
   async function handleOpenEmail() {
     if (!popoverEmail) return;
@@ -577,13 +590,13 @@
     }, 2000);
   }
 
-  let showProjectLinkPopover = false;
-  let popoverProjectLink = '';
-  let popoverProjectLinkCategory = '';
-  let popoverProjectLinkX = 0;
-  let popoverProjectLinkY = 0;
+  let showProjectLinkPopover = $state(false);
+  let popoverProjectLink = $state('');
+  let popoverProjectLinkCategory = $state('');
+  let popoverProjectLinkX = $state(0);
+  let popoverProjectLinkY = $state(0);
 
-  let revealButtonLabel = 'Show in Finder';
+  let revealButtonLabel = $state('Show in Finder');
   import { type as getOsType } from '@tauri-apps/plugin-os';
 
   onMount(async () => {
@@ -826,16 +839,20 @@
     }
   }
 
-  $: if ($project.requestedHighlightId && tableReady && !isViewingDocument) {
-    scrollToHighlight($project.requestedHighlightId);
-  }
-
-  $: if (tableReady && $isLexicalEditMode !== undefined) {
-    // Redraw/Re-run floating layout/buttons when edit mode toggles
-    if (tabulatorInstance) {
-      addFloatingAddRowButton();
+  $effect(() => {
+    if ($project.requestedHighlightId && tableReady && !isViewingDocument) {
+      scrollToHighlight($project.requestedHighlightId);
     }
-  }
+  });
+
+  $effect(() => {
+    if (tableReady && mediaEditorStore.isLexicalEditMode !== undefined) {
+      // Redraw/Re-run floating layout/buttons when edit mode toggles
+      if (tabulatorInstance) {
+        addFloatingAddRowButton();
+      }
+    }
+  });
 
   async function toggleFilters() {
     if (!tabulatorInstance) return;
@@ -953,7 +970,8 @@
     }
 
     duplicateIds = newDuplicateIds;
-    reformatAllRows();
+    // Debounce reformat to prevent cascade hangs
+    debounce(() => reformatAllRows(), 50)();
   }
 
   function getUniqueColumnName(baseName) {
@@ -997,7 +1015,7 @@
   }
 
   function getColumnContextMenu(column) {
-    const isEditMode = get(isLexicalEditMode);
+    const isEditMode = mediaEditorStore.isLexicalEditMode;
     if (currentActiveViewType === 'pivot' || !isEditMode) {
       return [
         {
@@ -1051,14 +1069,14 @@
     return menu;
   }
 
-  let showEditFieldModal = false;
-  let showChartModal = false;
-  let showViewModal = false;
-  let initialViewToLoad = null;
-  let editingFieldData = { name: '', schema: {} };
-  let isAddingNewField = false;
-  let newFieldPosition = 'after';
-  let newFieldTargetColumn = null;
+  let showEditFieldModal = $state(false);
+  let showChartModal = $state(false);
+  let showViewModal = $state(false);
+  let initialViewToLoad = $state(null);
+  let editingFieldData = $state({ name: '', schema: {} });
+  let isAddingNewField = $state(false);
+  let newFieldPosition = $state('after');
+  let newFieldTargetColumn = $state(null);
 
   function openFieldEditor(column) {
     const field = column.getField();
@@ -1835,7 +1853,8 @@
       project.update((p) => ({ ...p, statusMessage: `Ready: ${filename}` }));
     }
 
-    reformatAllRows();
+    // Debounce reformat to prevent cascade hangs
+    debounce(() => reformatAllRows(), 50)();
   }
 
   function performSoftValidation(value, schema) {
@@ -2629,7 +2648,7 @@
                         </div>`;
           };
           colDef.cellClick = function (e, cell) {
-            if (!get(isLexicalEditMode)) return;
+            if (!mediaEditorStore.isLexicalEditMode) return;
             // Immediate toggle on single click
             const currentVal = cell.getValue();
             const isCurrentlyChecked =
@@ -2737,7 +2756,7 @@
           };
           // Force edit on single click rather than waiting for double-click
           colDef.cellClick = function (e, cell) {
-            if (!get(isLexicalEditMode)) return;
+            if (!mediaEditorStore.isLexicalEditMode) return;
 
             if (!e || !e.target) {
               cell.edit(true);
@@ -3099,7 +3118,7 @@
     }
 
     // Add the "Add Field" column at the end
-    if (get(isLexicalEditMode)) {
+    if (mediaEditorStore.isLexicalEditMode) {
       dataColumnDefs.push({
         title: (() => {
           const button = document.createElement('button');
@@ -3131,7 +3150,7 @@
     return dataColumnDefs;
   }
 
-  export let initialChartToLoad = null;
+
 
   export function openChart(chart) {
     if (!tabulatorInstance) return;
@@ -3144,19 +3163,19 @@
     dispatch('requestviewchange', { type: 'chart_opened', item: chart });
   }
 
-  let currentActiveView = null;
-  let currentActiveViewType = null;
-  let baseTableColumns = []; // Store base columns when applying a view
-  let pivotDerivedSchema = {};
-  let generatedPivotResult = {
+  let currentActiveView = $state(null);
+  let currentActiveViewType = $state(null);
+  let baseTableColumns = $state([]); // Store base columns when applying a view
+  let pivotDerivedSchema = $state({});
+  let generatedPivotResult = $state({
     colHeaders: [],
     rows: [],
     rowFieldsCount: 0,
     colLeavesCount: 0,
     rowFields: [],
     colLeaves: []
-  };
-  $: computedSchema = { ...tableSchema, ...pivotDerivedSchema };
+  });
+  let computedSchema = $derived({ ...tableSchema, ...pivotDerivedSchema });
 
   const debouncedLexicalSave = debounce(async (docPath, jsonString) => {
     if (!docPath || !jsonString) return;
@@ -3220,16 +3239,20 @@
 
   // Reactive watcher to capture tags/comments added via the HighlightsPanel sidebar
   // when a survey document is actively being viewed in the table viewer.
-  $: if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
-    // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
-    debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
-  }
+  $effect(() => {
+    if (isViewingDocument && currentActiveDocumentPath && $project.currentDocumentHighlights) {
+      // Debounce to prevent duplicate writes alongside handleLexicalHighlightsChange
+      debouncedLexicalHighlightsSave(currentActiveDocumentPath, $project.currentDocumentHighlights);
+    }
+  });
 
   // Reactive watcher to capture tags/comments added to base tables
   // via floating toolbar or HighlightsPanel sidebar
-  $: if (!isViewingDocument && tableReady && $project.isTableHighlightsDirty) {
-    saveTableHighlights();
-  }
+  $effect(() => {
+    if (!isViewingDocument && tableReady && $project.isTableHighlightsDirty) {
+      saveTableHighlights();
+    }
+  });
 
   export async function openLexicalDocument(docPath) {
     if (!docPath) return;
@@ -3703,8 +3726,10 @@
   async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
     if (newHasHeaders !== null) hasHeaders = newHasHeaders;
     if (!pathForTable || !tableContainer) return;
-    if (isLoading && currentLoadedPath === pathForTable) return;
-    if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) return;
+    
+    // Safety check: Don't reload if already loading this path, OR if already loaded (unless forced)
+    if (isLoading) return;
+    if (!force && tabulatorInstance && currentLoadedPath === pathForTable) return;
 
     currentLoadedPath = pathForTable;
     isLoading = true;
@@ -3909,7 +3934,7 @@
           }
         },
         rowContextMenu: (e, row) => {
-          const isEditMode = get(isLexicalEditMode);
+          const isEditMode = mediaEditorStore.isLexicalEditMode;
 
           const ranges = tabulatorInstance.getRanges();
           let selectedRowsForMenu = [row];
@@ -3970,7 +3995,7 @@
           headerVAlign: 'middle',
           editor: 'textarea',
           editable: function (cell) {
-            return currentActiveViewType !== 'pivot' && get(isLexicalEditMode);
+            return currentActiveViewType !== 'pivot' && mediaEditorStore.isLexicalEditMode;
           },
           editorParams: { verticalNavigation: 'editor', shiftEnterSubmit: false },
           resizable: 'header',
@@ -3992,7 +4017,7 @@
             span.className = 'row-number-text group-hover:hidden';
             span.textContent = rowNum;
 
-            if (currentActiveViewType !== 'pivot' && get(isLexicalEditMode)) {
+            if (currentActiveViewType !== 'pivot' && mediaEditorStore.isLexicalEditMode) {
               const button = document.createElement('button');
               button.className =
                 'edit-icon-placeholder hidden group-hover:flex items-center justify-center h-full w-full text-blue-500 hover:text-blue-600 transition-colors';
@@ -4009,7 +4034,7 @@
             return container;
           },
           cellClick: (e, cell) => {
-            if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
+            if (currentActiveViewType === 'pivot' || !mediaEditorStore.isLexicalEditMode) return;
             if (e.target.closest('.edit-icon-placeholder')) {
               e.preventDefault();
               e.stopPropagation();
@@ -4228,7 +4253,7 @@
     const existingBtns = tableContainer.querySelectorAll('.tabulator-add-entry-row');
     existingBtns.forEach((btn) => btn.remove());
 
-    if (currentActiveViewType === 'pivot' || !get(isLexicalEditMode)) return;
+    if (currentActiveViewType === 'pivot' || !mediaEditorStore.isLexicalEditMode) return;
 
     const tableHolder = tableContainer.querySelector('.tabulator-table');
     if (!tableHolder) return;
@@ -4324,7 +4349,8 @@
   }
 
   onMount(() => {
-    if (tablePath) initializeTable(tablePath);
+    // initializeTable is now strictly handled by the $effect monitoring tablePath
+    // if (tablePath) initializeTable(tablePath);
 
     const handleKeyDown = (e) => {
       // Ignore custom shortcuts if user is typing in an input/textarea so native text undo/redo works
@@ -4485,16 +4511,20 @@
     applyHistoryAction(action, false);
   }
 
-  $: if (tablePath && tablePath !== currentLoadedPath) {
-    initializeTable(tablePath);
-  }
+  $effect(() => {
+    if (tablePath && tablePath !== untrack(() => currentLoadedPath)) {
+      initializeTable(tablePath);
+    }
+  });
 
-  $: if ($panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance) {
-    // Debounce this to avoid excessive redraws during rapid toggling
-    debounce(() => {
-      reformatAllRows();
-    }, 100)();
-  }
+  $effect(() => {
+    if (panelState.tagsLeftPanelCollapsed !== undefined && tabulatorInstance) {
+      // Debounce this to avoid excessive redraws during rapid toggling
+      debounce(() => {
+        reformatAllRows();
+      }, 100)();
+    }
+  });
 </script>
 
 <svelte:window on:mousedown={handleOutsideClick} />
@@ -4592,7 +4622,7 @@
           on:click={undo}
           class="mini-toolbar-button"
           title="Undo"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Undo2 size={14} />
         </button>
@@ -4602,7 +4632,7 @@
           on:click={redo}
           class="mini-toolbar-button"
           title="Redo"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Redo2 size={14} />
         </button>
@@ -4614,7 +4644,7 @@
           on:click={() => toggleStyle('bold')}
           class="mini-toolbar-button"
           title="Bold"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Bold size={14} />
         </button>
@@ -4624,7 +4654,7 @@
           on:click={() => toggleStyle('italic')}
           class="mini-toolbar-button"
           title="Italic"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Italic size={14} />
         </button>
@@ -4634,7 +4664,7 @@
           on:click={() => toggleStyle('underline')}
           class="mini-toolbar-button"
           title="Underline"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Underline size={14} />
         </button>
@@ -4647,7 +4677,7 @@
             on:click={toggleColorDropdown}
             class="mini-toolbar-button flex items-center"
             title="Text Color"
-            disabled={!$isLexicalEditMode}
+            disabled={!mediaEditorStore.isLexicalEditMode}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -4700,7 +4730,7 @@
           on:click={clearFormatting}
           class="mini-toolbar-button"
           title="Clear Formatting"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <Eraser size={14} />
         </button>
@@ -4717,7 +4747,7 @@
           }}
           class="mini-toolbar-button flex items-center gap-1"
           title="Insert Charts"
-          disabled={!$isLexicalEditMode}
+          disabled={!mediaEditorStore.isLexicalEditMode}
         >
           <ChartBar size={14} />
           <span>Insert Charts</span>
@@ -4735,7 +4765,7 @@
           }}
           class="mini-toolbar-button flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30"
           title="Create Views"
-          disabled={currentActiveViewType === 'pivot' || !$isLexicalEditMode}
+          disabled={currentActiveViewType === 'pivot' || !mediaEditorStore.isLexicalEditMode}
         >
           <Table2 size={14} />
           <span>Create Views</span>
@@ -4964,7 +4994,7 @@
           <div class="flex-grow min-h-0">
             <LexicalEditor
               initialJson={currentActiveDocumentJson}
-              editable={$isLexicalEditMode}
+              editable={mediaEditorStore.isLexicalEditMode}
               allowReadModeHighlights={true}
               placeholder="Start typing your document..."
               enableTableCellMenu={true}

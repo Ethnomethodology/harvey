@@ -19,7 +19,7 @@
   // --- Svelte/Store Imports ---
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
   import {
     transcriptStore,

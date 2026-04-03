@@ -4,7 +4,7 @@
   import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
   import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
   import { MessageSquare, Code, Check, Square, Circle, Info, Tags } from '@lucide/svelte';
-  import { allTags as allTagsStore, addTag } from '$lib/stores/tagStore.js';
+  import { addTag } from '$lib/stores/tagStore.svelte.js';
 
   const dispatch = createEventDispatcher();
 

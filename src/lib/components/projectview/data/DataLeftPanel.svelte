@@ -17,7 +17,7 @@
   } from '$lib/stores/projectStore.js';
 
   import { get } from 'svelte/store';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import { panelState, toggleDataLeftPanel } from '$lib/stores/panelStateStore.svelte.js';
   import {
     createNewDocument,
     renameProjectItem,
@@ -1633,7 +1633,7 @@
   }
 
   function handleToggleDataLeftPanel() {
-    panelStateStore.toggleDataLeftPanel();
+    toggleDataLeftPanel();
   }
 
   onMount(async () => {
@@ -1652,11 +1652,11 @@
 </script>
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
-  {#if !$panelStateStore.dataLeftPanelCollapsed}
+  {#if !panelState.dataLeftPanelCollapsed}
     <h2
       class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-400 px-1 h-9 border-b border-gray-200 dark:border-gray-800"
-      class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
-      class:mb-0={$panelStateStore.dataLeftPanelCollapsed}
+      class:mb-3={!panelState.dataLeftPanelCollapsed}
+      class:mb-0={panelState.dataLeftPanelCollapsed}
     >
       <!-- Normal Header Content -->
       <div
@@ -2071,7 +2071,7 @@
     </Dropdown>
   {/if}
 
-  {#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
+  {#if contextMenuVisible && contextMenuItem && !panelState.dataLeftPanelCollapsed}
     <div
       id="notes-left-panel-context-menu"
       class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[150px]"
@@ -2435,7 +2435,7 @@
     </div>
   {/if}
 
-  {#if categoryContextMenuVisible && !$panelStateStore.dataLeftPanelCollapsed}
+  {#if categoryContextMenuVisible && !panelState.dataLeftPanelCollapsed}
     <div
       id="notes-left-panel-category-context-menu"
       class="fixed z-50 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-800 py-1 text-xs min-w-[120px]"

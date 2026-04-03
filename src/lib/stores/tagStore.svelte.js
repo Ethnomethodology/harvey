@@ -1,8 +1,8 @@
-import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { v4 as uuidv4 } from 'uuid';
 import { project } from '$lib/stores/projectStore.js';
 import { triggerRefresh } from '$lib/stores/refresherStore.js';
+import { get } from 'svelte/store'; // Still needed for projectStore until it's migrated
 
 /**
  * @typedef {object} Tag
@@ -20,20 +20,15 @@ import { triggerRefresh } from '$lib/stores/refresherStore.js';
  * @property {string | null} description
  */
 
-// Writable store for holding all tags in the project.
-export const allTags = writable([]);
-// Writable store for holding all tag groups in the project.
-export const allTagGroups = writable([]);
-
-// Store for the currently selected tag in the Tags view
-export const selectedTag = writable(null);
-// Store for the currently selected tag group in the Tags view
-export const selectedTagGroup = writable(null);
-
-// Store for the details of the currently selected tag or tag group
-export const tagInfo = writable(null);
-// Store for the search query in the Tags view
-export const tagSearchQuery = writable('');
+// Svelte 5 State object for all tag-related data
+export const tagStore = $state({
+  allTags: [],
+  allTagGroups: [],
+  selectedTag: null,
+  selectedTagGroup: null,
+  tagInfo: null,
+  tagSearchQuery: ''
+});
 
 /**
  * Fetches all tags and tag groups for the current project from the database and updates the store.
@@ -42,8 +37,8 @@ export async function fetchAllTags() {
   const proj = get(project);
   if (!proj || !proj.id) {
     console.warn('[tagStore] fetchAllTags called without a project ID.');
-    allTags.set([]);
-    allTagGroups.set([]);
+    tagStore.allTags = [];
+    tagStore.allTagGroups = [];
     return;
   }
 
@@ -53,38 +48,36 @@ export async function fetchAllTags() {
       invoke('get_tag_groups', { projectId: proj.id })
     ]);
 
-    allTags.set(tagsFromDb || []);
-    allTagGroups.set(groupsFromDb || []);
+    tagStore.allTags = tagsFromDb || [];
+    tagStore.allTagGroups = groupsFromDb || [];
 
     // Validate selected tag still exists
-    const currentSelectedTag = get(selectedTag);
-    if (currentSelectedTag && !tagsFromDb.some((t) => t.id === currentSelectedTag.id)) {
-      selectedTag.set(null);
-      if (!get(selectedTagGroup)) {
-        tagInfo.set(null);
+    if (tagStore.selectedTag && !tagsFromDb.some((t) => t.id === tagStore.selectedTag.id)) {
+      tagStore.selectedTag = null;
+      if (!tagStore.selectedTagGroup) {
+        tagStore.tagInfo = null;
       }
     }
 
     // Validate selected group still exists
-    const currentSelectedGroup = get(selectedTagGroup);
-    if (currentSelectedGroup && !groupsFromDb.some((g) => g.id === currentSelectedGroup.id)) {
-      selectedTagGroup.set(null);
-      if (!get(selectedTag)) {
-        tagInfo.set(null);
+    if (tagStore.selectedTagGroup && !groupsFromDb.some((g) => g.id === tagStore.selectedTagGroup.id)) {
+      tagStore.selectedTagGroup = null;
+      if (!tagStore.selectedTag) {
+        tagStore.tagInfo = null;
       }
     }
 
     // If we have a selected tag, refresh its info as well (to get highlight count etc potentially updated)
-    if (currentSelectedTag) {
+    if (tagStore.selectedTag) {
       // Re-fetch info to ensure consistency
-      selectTag(currentSelectedTag);
-    } else if (currentSelectedGroup) {
-      selectTagGroup(currentSelectedGroup);
+      selectTag(tagStore.selectedTag);
+    } else if (tagStore.selectedTagGroup) {
+      selectTagGroup(tagStore.selectedTagGroup);
     }
   } catch (error) {
     console.error('[tagStore] Failed to fetch tags/groups:', error);
-    allTags.set([]);
-    allTagGroups.set([]);
+    tagStore.allTags = [];
+    tagStore.allTagGroups = [];
   }
 }
 
@@ -93,14 +86,14 @@ export async function fetchAllTags() {
  */
 export async function selectTag(tag) {
   if (!tag) {
-    selectedTag.set(null);
-    if (!get(selectedTagGroup)) tagInfo.set(null);
+    tagStore.selectedTag = null;
+    if (!tagStore.selectedTagGroup) tagStore.tagInfo = null;
     return;
   }
 
-  selectedTag.set(tag);
-  selectedTagGroup.set(null); // Deselect group
-  tagInfo.set(null); // Clear previous info while loading
+  tagStore.selectedTag = tag;
+  tagStore.selectedTagGroup = null; // Deselect group
+  tagStore.tagInfo = null; // Clear previous info while loading
 
   const proj = get(project);
   try {
@@ -109,10 +102,10 @@ export async function selectTag(tag) {
       tagId: tag.id,
       tagName: tag.name
     });
-    tagInfo.set(info);
+    tagStore.tagInfo = info;
   } catch (error) {
     console.error(`[tagStore] Failed to load tag info for ${tag.name}:`, error);
-    tagInfo.set(null);
+    tagStore.tagInfo = null;
   }
 }
 
@@ -121,14 +114,14 @@ export async function selectTag(tag) {
  */
 export async function selectTagGroup(group) {
   if (!group) {
-    selectedTagGroup.set(null);
-    if (!get(selectedTag)) tagInfo.set(null);
+    tagStore.selectedTagGroup = null;
+    if (!tagStore.selectedTag) tagStore.tagInfo = null;
     return;
   }
 
-  selectedTagGroup.set(group);
-  selectedTag.set(null); // Deselect tag
-  tagInfo.set(null); // Clear previous info while loading
+  tagStore.selectedTagGroup = group;
+  tagStore.selectedTag = null; // Deselect tag
+  tagStore.tagInfo = null; // Clear previous info while loading
 
   const proj = get(project);
   try {
@@ -136,10 +129,10 @@ export async function selectTagGroup(group) {
       projectId: proj.id,
       groupId: group.id
     });
-    tagInfo.set(info);
+    tagStore.tagInfo = info;
   } catch (error) {
     console.error(`[tagStore] Failed to load tag group info for ${group.name}:`, error);
-    tagInfo.set(null);
+    tagStore.tagInfo = null;
   }
 }
 
@@ -155,8 +148,7 @@ export async function addTag(newTagName, description = null, tagGroupId = null) 
   }
   const tagToAdd = newTagName.trim();
 
-  const currentTags = get(allTags);
-  if (currentTags.some((tag) => tag.name.toLowerCase() === tagToAdd.toLowerCase())) {
+  if (tagStore.allTags.some((tag) => tag.name.toLowerCase() === tagToAdd.toLowerCase())) {
     // Tag already exists, no need to add it again.
     return;
   }
@@ -200,8 +192,7 @@ export async function updateTag(tagId, newName, newColor, description = null, ta
   }
 
   // Find the original tag name before updating
-  const tags = get(allTags);
-  const originalTag = tags.find((tag) => tag.id === tagId);
+  const originalTag = tagStore.allTags.find((tag) => tag.id === tagId);
   if (!originalTag) {
     throw new Error('Tag not found.');
   }
@@ -276,14 +267,7 @@ export async function deleteTagGroup(groupId) {
   const proj = get(project);
   if (!proj || !proj.id) return;
 
-  // Get all tags in this group to remove them from highlights first
-  // Note: The backend delete_tag_group cascades deletion of tags from DB, but we need to handle highlight text removal if necessary.
-  // However, the requirement is "show warning that tags under them will be deleted but highlights will remain".
-  // This implies we should treat it like deleting each tag individually.
-  // Currently deleteTag handles global removal. We should probably do that for each tag in the group.
-
-  const tags = get(allTags);
-  const tagsInGroup = tags.filter((t) => t.tag_group_id === groupId);
+  const tagsInGroup = tagStore.allTags.filter((t) => t.tag_group_id === groupId);
 
   try {
     // Remove each tag from highlights globally
@@ -318,8 +302,7 @@ export async function deleteTag(tagId) {
   }
 
   // Find the tag name before deleting
-  const tags = get(allTags);
-  const tagToDelete = tags.find((tag) => tag.id === tagId);
+  const tagToDelete = tagStore.allTags.find((tag) => tag.id === tagId);
   if (!tagToDelete) {
     throw new Error('Tag not found.');
   }

@@ -20,7 +20,7 @@
     customFieldDefinitions as customFieldDefinitionsStore,
     loadAllDefinitions
   } from '$lib/stores/customFieldStore.js';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import { panelState } from '$lib/stores/panelStateStore.svelte.js';
   import { SquarePen, XSquare, Trash2, PlusCircle } from '@lucide/svelte';
   import { Input, Label, Textarea, Button } from 'flowbite-svelte';
 
@@ -42,12 +42,12 @@
     }
   }
 
-  $: {
+  $effect(() => {
     if (refreshKey && currentOriginalAssetDetails?.originalRelativePath) {
       console.log(`[InfoPanel] Refresh triggered by key: ${refreshKey}`);
       loadMetadata(currentOriginalAssetDetails.originalRelativePath);
     }
-  }
+  });
 
   async function getOriginalAssetDetails(selectedPath, projectStoreState) {
     if (!selectedPath || !projectStoreState || !projectStoreState.baseDirectory) {
@@ -140,24 +140,24 @@
     return bps + ' bps';
   }
 
-  let currentFileMetadata = null;
-  let currentOriginalAssetDetails = null; // Store the full details object
-  let editableMetadata = {
+  let currentFileMetadata = $state(null);
+  let currentOriginalAssetDetails = $state(null); // Store the full details object
+  let editableMetadata = $state({
     file_name: '',
     title: '',
     description: '',
     summary: '',
     customFields: []
-  };
-  let showAddFieldModal = false;
-  let displayableCustomFields = [];
-  let fileAssignedGroups = [];
-  let allProjectGroupsForPanel = [];
-  let isLoadingFileGroups = false;
-  let isCreateGroupModalOpen = false;
-  let createGroupModalFileToAssign = null;
-  let currentAssetRelativePathForGroups = null; // This is originalRelativePath
-  let previousProcessedItemPath = null; // This will store the *originalRelativePath* of the previously processed item
+  });
+  let showAddFieldModal = $state(false);
+  let displayableCustomFields = $state([]);
+  let fileAssignedGroups = $state([]);
+  let allProjectGroupsForPanel = $state([]);
+  let isLoadingFileGroups = $state(false);
+  let isCreateGroupModalOpen = $state(false);
+  let createGroupModalFileToAssign = $state(null);
+  let currentAssetRelativePathForGroups = $state(null); // This is originalRelativePath
+  let previousProcessedItemPath = $state(null); // This will store the *originalRelativePath* of the previously processed item
 
   async function fetchAllProjectGroups() {
     const currentProjectId = get(project).id;
@@ -505,21 +505,23 @@
     isCreateGroupModalOpen = true;
   }
 
-  export let itemPath = null;
-  export let itemType = null;
-  export let refreshKey = null;
+  let {
+    itemPath = $bindable(null),
+    itemType = null,
+    refreshKey = null
+  } = $props();
 
-  $: {
-    if ($project.fileRenamed && $project.fileRenamed.newPath) {
+  $effect(() => {
+    if (project.fileRenamed && project.fileRenamed.newPath) {
       // This is a temporary solution to force a reload of the metadata.
       // A better solution would be to have a more robust event system.
-      if (itemPath === $project.fileRenamed.oldPath) {
-        itemPath = $project.fileRenamed.newPath;
+      if (itemPath === project.fileRenamed.oldPath) {
+        itemPath = project.fileRenamed.newPath;
       }
     }
-  }
+  });
 
-  $: {
+  $effect(() => {
     (async () => {
       const currentProjectStoreState = get(project);
       if (itemPath && itemType && currentProjectStoreState?.baseDirectory) {
@@ -566,13 +568,13 @@
         }
       }
     })();
-  }
+  });
 
-  $: {
-    if (currentFileMetadata && $customFieldDefinitionsStore) {
+  $effect(() => {
+    if (currentFileMetadata && customFieldDefinitionsStore.value) {
       const assetCustomValues = currentFileMetadata.customFields || [];
       let newEditableCustomFields = [];
-      for (const def of $customFieldDefinitionsStore) {
+      for (const def of customFieldDefinitionsStore.value) {
         let isApplicable = false;
         if (typeof def.scope === 'string') {
           if (def.scope.toLowerCase() === 'project') isApplicable = true;
@@ -632,10 +634,10 @@
       editableMetadata.description = '';
       editableMetadata.summary = '';
     }
-  }
+  });
 
   // Always clear dirty flags since we don't have manual saves anymore
-  $: {
+  $effect(() => {
     const currentProjectState = get(project);
     if (
       itemType === 'doc' ||
@@ -649,7 +651,7 @@
       if (currentProjectState.isMediaNoteMetadataDirty)
         project.update((p) => ({ ...p, isMediaNoteMetadataDirty: false }));
     }
-  }
+  });
 </script>
 
 <div class="h-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">

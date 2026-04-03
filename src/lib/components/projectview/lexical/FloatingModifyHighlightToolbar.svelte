@@ -1,57 +1,59 @@
 <script>
   import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
-  import { allTags, allTagGroups, addTag } from '$lib/stores/tagStore.js';
+  import { tagStore } from '$lib/stores/tagStore.svelte.js';
   import { Toolbar, Button, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
   import { Trash2, Tag, ChevronRight, SquareCheck, Search } from '@lucide/svelte';
 
-  export let showToolbar;
-  export let toolbarPosition;
-  export let onChangeColor;
-  export let onDelete;
-  export let highlightId;
-  export let docType;
-  export let filePath;
+  let {
+    showToolbar,
+    toolbarPosition,
+    onChangeColor,
+    onDelete,
+    highlightId,
+    docType,
+    filePath
+  } = $props();
 
   // Derive current tags for this specific highlight from the project store
-  $: currentHighlight = (() => {
+  let currentHighlight = $derived((() => {
     let highlights = [];
     if (docType === 'pdf') {
-      highlights = $project.currentPdfAnnotations || [];
+      highlights = project.currentPdfAnnotations || [];
     } else if (docType === 'table') {
-      highlights = $project.currentTableHighlights || [];
+      highlights = project.currentTableHighlights || [];
     } else if (docType === 'standalone_transcript') {
-      highlights = $project.currentStandaloneTranscriptHighlights || [];
+      highlights = project.currentStandaloneTranscriptHighlights || [];
     } else {
       // For 'doc', 'audio_transcript', 'video_transcript'
-      highlights = $project.currentDocumentHighlights || [];
+      highlights = project.currentDocumentHighlights || [];
     }
 
     return (highlights || []).find((h) => h.id === highlightId);
-  })();
+  })());
 
-  $: activeTags = currentHighlight?.tags || [];
+  let activeTags = $derived(currentHighlight?.tags || []);
 
-  let isSearchVisible = false;
-  let searchTerm = '';
+  let isSearchVisible = $state(false);
+  let searchTerm = $state('');
 
-  $: filteredTagGroups = searchTerm.trim()
-    ? $allTagGroups.filter((g) => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    : $allTagGroups;
+  let filteredTagGroups = $derived(searchTerm.trim()
+    ? tagStore.allTagGroups.filter((g) => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    : tagStore.allTagGroups);
 
-  $: ungroupedTags = $allTags.filter(
+  let ungroupedTags = $derived(tagStore.allTags.filter(
     (t) => t.tag_group_id === null || t.tag_group_id === undefined
-  );
-  $: filteredUngroupedTags = searchTerm.trim()
+  ));
+  let filteredUngroupedTags = $derived(searchTerm.trim()
     ? ungroupedTags.filter((t) => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    : ungroupedTags;
+    : ungroupedTags);
 
-  $: groupedTagsMap = $allTags.reduce((acc, tag) => {
+  let groupedTagsMap = $derived(tagStore.allTags.reduce((acc, tag) => {
     if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
       if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
       acc[tag.tag_group_id].push(tag);
     }
     return acc;
-  }, {});
+  }, {}));
 
   function isGroupChecked(groupId) {
     const tags = groupedTagsMap[groupId] || [];
@@ -86,7 +88,7 @@
     const trimmedTerm = searchTerm.trim();
     if (!trimmedTerm) return;
     try {
-      await addTag(trimmedTerm);
+      await tagStore.addTag(trimmedTerm);
       handleTagToggle(trimmedTerm);
       searchTerm = '';
     } catch (err) {
@@ -208,7 +210,7 @@
           <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
         {/if}
 
-        {#if searchTerm.trim() && !$allTags.some((t) => t.name.toLowerCase() === searchTerm
+        {#if searchTerm.trim() && !tagStore.allTags.some((t) => t.name.toLowerCase() === searchTerm
                 .trim()
                 .toLowerCase())}
           <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>

@@ -1,11 +1,11 @@
 <!-- src/lib/components/projectview/documents/PDFViewerPanel.svelte -->
 <script>
-  import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, tick, createEventDispatcher, untrack } from 'svelte';
   import { Toolbar, Button, Tooltip, Dropdown, Checkbox, DropdownItem } from 'flowbite-svelte';
   import { readFile } from '@tauri-apps/plugin-fs';
   import { v4 as uuidv4 } from 'uuid';
   import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
-  import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
+  import { tagStore, addTag } from '$lib/stores/tagStore.svelte.js';
   import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
   import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
   import { get } from 'svelte/store';
@@ -27,29 +27,33 @@
     SquareCheck
   } from '@lucide/svelte';
 
-  import { addTag } from '$lib/stores/tagStore.js';
+  let isSearchVisible = $state(false);
+  let searchTerm = $state('');
 
-  let isSearchVisible = false;
-  let searchTerm = '';
-
-  $: filteredTagGroups = searchTerm.trim()
-    ? $allTagGroups.filter((g) => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    : $allTagGroups;
-
-  $: ungroupedTags = $allTags.filter(
-    (t) => t.tag_group_id === null || t.tag_group_id === undefined
+  let filteredTagGroups = $derived(
+    searchTerm.trim()
+      ? tagStore.allTagGroups.filter((g) => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      : tagStore.allTagGroups
   );
-  $: filteredUngroupedTags = searchTerm.trim()
-    ? ungroupedTags.filter((t) => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    : ungroupedTags;
 
-  $: groupedTagsMap = $allTags.reduce((acc, tag) => {
-    if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
-      if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
-      acc[tag.tag_group_id].push(tag);
-    }
-    return acc;
-  }, {});
+  let ungroupedTags = $derived(
+    tagStore.allTags.filter((t) => t.tag_group_id === null || t.tag_group_id === undefined)
+  );
+  let filteredUngroupedTags = $derived(
+    searchTerm.trim()
+      ? ungroupedTags.filter((t) => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      : ungroupedTags
+  );
+
+  let groupedTagsMap = $derived(
+    tagStore.allTags.reduce((acc, tag) => {
+      if (tag.tag_group_id !== null && tag.tag_group_id !== undefined) {
+        if (!acc[tag.tag_group_id]) acc[tag.tag_group_id] = [];
+        acc[tag.tag_group_id].push(tag);
+      }
+      return acc;
+    }, {})
+  );
 
   function isGroupChecked(groupId, activeTags) {
     const tags = groupedTagsMap[groupId] || [];
@@ -60,21 +64,30 @@
   const dispatch = createEventDispatcher();
 
   /* ─────────────────────────── Component state / props ─────────────────────────── */
-  export let pdfPath = '';
-  export let initialHighlights = [];
+  let {
+    pdfPath = '',
+    initialHighlights: initialHighlightsProp = []
+  } = $props();
+
+  let initialHighlights = $state(initialHighlightsProp);
+
+  $effect(() => {
+    // Sync local state when prop changes from outside
+    initialHighlights = initialHighlightsProp;
+  });
   // StoredHighlight structure expected in initialHighlights and dispatched:
   // { id: string, color: string, pageIndex: number, text: string,
   //   prefix?: string, suffix?: string, occurrenceInPageContext?: number }
 
-  let loading = true;
-  let loadingMessage = 'Loading PDF...';
-  let error = null;
-  let pdfDoc = null;
+  let loading = $state(true);
+  let loadingMessage = $state('Loading PDF...');
+  let error = $state(null);
+  let pdfDoc = $state(null);
   let pdfViewer = null;
   let eventBus = null;
-  let numPages = 0;
-  let currentPageNum = 1;
-  let currentScaleValue = 'auto'; // Default to auto
+  let numPages = $state(0);
+  let currentPageNum = $state(1);
+  let currentScaleValue = $state('auto'); // Default to auto
   const PRESET_SCALES = [
     'auto',
     'page-actual',
@@ -95,13 +108,13 @@
 
   let isMounted = false;
   let selectionToolbarElement;
-  let showSelectionToolbar = false;
-  let selectionToolbarTop = 0;
-  let selectionToolbarLeft = 0;
-  let toolbarMode = null;
-  let selectedRange = null;
-  let clickedHighlightId = null;
-  let clickedHighlightColor = null;
+  let showSelectionToolbar = $state(false);
+  let selectionToolbarTop = $state(0);
+  let selectionToolbarLeft = $state(0);
+  let toolbarMode = $state(null);
+  let selectedRange = $state(null);
+  let clickedHighlightId = $state(null);
+  let clickedHighlightColor = $state(null);
   let hideToolbarTimeoutId = null;
 
   const highlightOptions = [
@@ -116,15 +129,15 @@
   // let highlightDropdownRef; // Removed
 
   let highlightDropdownRef;
-  let isHighlightDropdownOpen = false;
-  let selectedHighlightColor = 'transparent';
-  let isTagDropdownOpen = false;
+  let isHighlightDropdownOpen = $state(false);
+  let selectedHighlightColor = $state('transparent');
+  let isTagDropdownOpen = $state(false);
 
   let zoomDropdownRef;
-  let isZoomDropdownOpen = false;
+  let isZoomDropdownOpen = $state(false);
 
-  let pageRendering = false;
-  let pageNumInput = currentPageNum;
+  let pageRendering = $state(false);
+  let pageNumInput = $state(currentPageNum);
   let pdfjsLib = null;
   let PDFViewer = null;
   let EventBus = null;
@@ -148,19 +161,19 @@
     { value: '4', label: '400%' }
   ];
 
-  let searchQuery = '';
-  let lastSearched = '';
-  let currentFindState = 0;
+  let searchQuery = $state('');
+  let lastSearched = $state('');
+  let currentFindState = $state(0);
 
-  let undoStack = [];
-  let redoStack = [];
+  let undoStack = $state([]);
+  let redoStack = $state([]);
   const CONTEXT_LENGTH = 30;
-  let initialHighlightsApplied = false;
+  let initialHighlightsApplied = $state(false);
   let pdfJsStyleElement = null;
-  let loadedPagesWithAnnotations = new Set(); // To track pages with rendered annotations
-  let isLoadingInitialAnnotations = false; // New state for initial annotation loading
+  let loadedPagesWithAnnotations = $state(new Set()); // To track pages with rendered annotations
+  let isLoadingInitialAnnotations = $state(false); // New state for initial annotation loading
   let annotationMatcherWorker = null; // For text matching fallback
-  let pendingWorkerTasks = new Set(); // Tracks annotations being processed by the worker: `${pageIndex}-${annotationId}`
+  let pendingWorkerTasks = $state(new Set()); // Tracks annotations being processed by the worker: `${pageIndex}-${annotationId}`
 
   function deferTask(taskFn) {
     if (window.requestIdleCallback) {
@@ -1416,11 +1429,13 @@
     isHighlightDropdownOpen = false;
   }
 
-  $: if (toolbarMode === 'click' && clickedHighlightColor) {
-    selectedHighlightColor = clickedHighlightColor;
-  } else if (toolbarMode !== 'click' && !selectedRange) {
-    selectedHighlightColor = 'transparent';
-  }
+  $effect(() => {
+    if (toolbarMode === 'click' && clickedHighlightColor) {
+      selectedHighlightColor = clickedHighlightColor;
+    } else if (toolbarMode !== 'click' && !selectedRange) {
+      selectedHighlightColor = 'transparent';
+    }
+  });
 
   function toggleZoomDropdown() {
     isZoomDropdownOpen = !isZoomDropdownOpen;
@@ -2815,52 +2830,56 @@
   }
 
   /* ─── Sync with store‑level PDF annotations ─── */
-  $: storePdfAnnotations =
+  let storePdfAnnotations = $derived(
     $project.currentPdfAnnotations ??
     $project.pdfAnnotations ??
     $project.currentDocumentHighlights ??
-    [];
+    []
+  );
 
-  $: if (
-    pdfDoc &&
-    pdfViewer &&
-    // Check if storePdfAnnotations actually changed from initialHighlights to prevent loops
-    // and ensure it runs when annotations are loaded or updated.
-    JSON.stringify(storePdfAnnotations) !== JSON.stringify(initialHighlights)
-  ) {
-    initialHighlights = storePdfAnnotations;
-    loadedPagesWithAnnotations = new Set(); // Reset loaded pages
-    initialHighlightsApplied = false; // Allow applyInitialHighlights to run again with new data
+  $effect(() => {
+    if (
+      pdfDoc &&
+      pdfViewer &&
+      // Check if storePdfAnnotations actually changed from initialHighlights to prevent loops
+      // and ensure it runs when annotations are loaded or updated.
+      JSON.stringify(storePdfAnnotations) !== JSON.stringify(untrack(() => initialHighlights))
+    ) {
+      initialHighlights = storePdfAnnotations;
+      loadedPagesWithAnnotations = new Set(); // Reset loaded pages
+      initialHighlightsApplied = false; // Allow applyInitialHighlights to run again with new data
 
-    console.log(
-      '[PDFViewerPanel Store Sync] Annotations updated from store. Resetting loaded state.'
-    );
+      console.log(
+        '[PDFViewerPanel Store Sync] Annotations updated from store. Resetting loaded state.'
+      );
 
-    // If pages are already initialized and viewer is ready, trigger initial load process.
-    // This condition is important to ensure applyInitialHighlights runs after PDF is ready
-    // and also when annotations are updated externally (e.g. from another component).
-    if (pdfViewer._pages?.length > 0 && !loading) {
-      // Ensure PDF itself is not in a loading state
-      console.log('[PDFViewerPanel Store Sync] Applying highlights due to store update.');
-      applyInitialHighlights(); // This will call loadAnnotationsForPageRange for the current view
+      // If pages are already initialized and viewer is ready, trigger initial load process.
+      if (pdfViewer._pages?.length > 0 && !loading) {
+        // Ensure PDF itself is not in a loading state
+        console.log('[PDFViewerPanel Store Sync] Applying highlights due to store update.');
+        applyInitialHighlights(); // This will call loadAnnotationsForPageRange for the current view
+      }
+    } else if (
+      pdfDoc &&
+      pdfViewer &&
+      storePdfAnnotations &&
+      storePdfAnnotations.length === 0 &&
+      initialHighlights.length > 0
+    ) {
+      // Handle case where all annotations are removed from the store
+      console.log('[PDFViewerPanel Store Sync] All annotations removed from store. Clearing UI.');
+      initialHighlights = [];
+      document.querySelectorAll('.highlight-overlay .overlay-part').forEach((el) => el.remove());
+      loadedPagesWithAnnotations = new Set();
+      initialHighlightsApplied = false; // Reset
     }
-  } else if (
-    pdfDoc &&
-    pdfViewer &&
-    storePdfAnnotations &&
-    storePdfAnnotations.length === 0 &&
-    initialHighlights.length > 0
-  ) {
-    // Handle case where all annotations are removed from the store
-    console.log('[PDFViewerPanel Store Sync] All annotations removed from store. Clearing UI.');
-    initialHighlights = [];
-    document.querySelectorAll('.highlight-overlay .overlay-part').forEach((el) => el.remove());
-    loadedPagesWithAnnotations = new Set();
-    initialHighlightsApplied = false; // Reset
-  }
+  });
 
-  $: pageNumInput = currentPageNum;
-  $: selectScaleValue = (() => {
+  $effect(() => {
+    pageNumInput = currentPageNum;
+  });
+
+  let selectScaleValue = $derived((() => {
     const s = String(currentScaleValue);
     if (PRESET_SCALES.includes(s)) return s;
     const numScale = parseFloat(s);
@@ -2873,7 +2892,7 @@
       return s; // Return the numeric string if no close preset, PDFViewer will handle it
     }
     return 'auto'; // Default fallback
-  })();
+  })());
 
   function scrollToHighlight(id) {
     if (!id) return;
@@ -2907,11 +2926,13 @@
     }
   }
 
-  $: if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
-    scrollToHighlight($project.requestedHighlightId);
-  }
+  $effect(() => {
+    if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
+      scrollToHighlight($project.requestedHighlightId);
+    }
+  });
 
-  $: currentZoomLabel = (() => {
+  let currentZoomLabel = $derived((() => {
     const scaleStr = String(currentScaleValue);
     const foundOption = zoomOptions.find((opt) => opt.value === scaleStr);
     if (foundOption && foundOption.type !== 'separator') {
@@ -2931,7 +2952,7 @@
       return `${Math.round(numScale * 100)}%`;
     }
     return 'Auto'; // Default fallback
-  })();
+  })());
 </script>
 
 <div
@@ -3294,7 +3315,7 @@
                 <div class="p-2 text-gray-500 italic text-xs text-center">No tags available</div>
               {/if}
 
-              {#if searchTerm.trim() && !$allTags.some((t) => t.name.toLowerCase() === searchTerm
+              {#if searchTerm.trim() && !tagStore.allTags.some((t) => t.name.toLowerCase() === searchTerm
                       .trim()
                       .toLowerCase())}
                 <div class="h-px bg-gray-100 dark:bg-gray-600 my-1"></div>

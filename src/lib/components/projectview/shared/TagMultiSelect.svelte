@@ -1,21 +1,27 @@
 <script lang="ts">
   import MultiSelect from './MultiSelect.svelte';
   import { createEventDispatcher } from 'svelte';
-  import { allTags, allTagGroups } from '$lib/stores/tagStore.js';
+  import { tagStore } from '$lib/stores/tagStore.svelte.js';
 
-  export let assignedTags: string[] = [];
-  export let isEditable = true;
+  let {
+    assignedTags = [],
+    isEditable = true
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
-  $: groupedTags = $allTagGroups
-    .map((group) => ({
-      name: group.name,
-      options: $allTags.filter((tag) => tag.tag_group_id === group.id).map((tag) => tag.name)
-    }))
-    .filter((group) => group.options.length > 0);
+  let groupedTags = $derived(
+    tagStore.allTagGroups
+      .map((group) => ({
+        name: group.name,
+        options: tagStore.allTags
+          .filter((tag) => tag.tag_group_id === group.id)
+          .map((tag) => tag.name)
+      }))
+      .filter((group) => group.options.length > 0)
+  );
 
-  $: allTagNames = $allTags.map((t) => t.name);
+  let allTagNames = $derived(tagStore.allTags.map((t) => t.name));
 
   function handleUpdate(event) {
     dispatch('update', { tags: event.detail.options });

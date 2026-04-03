@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/tags/TagsView.svelte -->
 <script>
-  import { onMount, afterUpdate, onDestroy, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { slide } from 'svelte/transition';
   import { invoke } from '@tauri-apps/api/core';
   import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -8,22 +8,17 @@
   import { dndzone } from 'svelte-dnd-action';
   import { project } from '$lib/stores/projectStore.js';
   import {
-    allTags,
-    allTagGroups,
+    tagStore,
     updateTag,
     deleteTag,
     createTagGroup,
     updateTagGroup,
     deleteTagGroup,
     fetchAllTags,
-    selectedTag,
-    selectedTagGroup,
-    tagInfo,
-    tagSearchQuery,
     selectTag,
     selectTagGroup,
     addTag
-  } from '$lib/stores/tagStore.js';
+  } from '$lib/stores/tagStore.svelte.js';
   import { refresher } from '$lib/stores/refresherStore.js';
   import {
     manageCommentInHighlightLocal,
@@ -36,7 +31,7 @@
   import AddTagModal from '../modals/AddTagModal.svelte';
   import AddTagGroupModal from '../modals/AddTagGroupModal.svelte';
   import EditTagGroupModal from '../modals/EditTagGroupModal.svelte';
-  import panelStateStore from '$lib/stores/panelStateStore.js';
+  import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
   import { get } from 'svelte/store';
   import {
     MoreVertical,
@@ -53,20 +48,19 @@
     Plus
   } from '@lucide/svelte';
 
-  let unsubscribePanelState;
   let unsubscribeRefresher;
 
   // UI State for Modals
-  let isEditTagModalOpen = false;
-  let isAddTagModalOpen = false;
-  let isAddGroupModalOpen = false;
-  let isEditGroupModalOpen = false;
-  let isCommentsPanelOpen = false;
+  let isEditTagModalOpen = $state(false);
+  let isAddTagModalOpen = $state(false);
+  let isAddGroupModalOpen = $state(false);
+  let isEditGroupModalOpen = $state(false);
+  let isCommentsPanelOpen = $state(false);
 
-  let isLoading = false;
+  let isLoading = $state(false);
 
   // UI State for Context Menu / Dropdown
-  let showAddMenu = false;
+  let showAddMenu = $state(false);
 
   // Exported methods for parent control
   export function openAddTagModal() {
@@ -78,49 +72,51 @@
   }
 
   // Derived Data for Display
-  let groups = [];
-  let ungroupedTags = [];
+  let groups = $state([]);
+  let ungroupedTags = $state([]);
 
   // Internal DnD State
   const flipDurationMs = 200;
-  let isDragging = false; // Flag to prevent store updates from overwriting local state during drag
+  let isDragging = $state(false); // Flag to prevent store updates from overwriting local state during drag
 
-  $: if (!isDragging) {
-    // Rebuild structure when stores change
-    // We need to map tags to groups
-    const groupMap = new Map($allTagGroups.map((g) => [g.id, { ...g, tags: [] }]));
-    const _ungrouped = [];
+  $effect(() => {
+    if (!isDragging) {
+      // Rebuild structure when stores change
+      // We need to map tags to groups
+      const groupMap = new Map(tagStore.allTagGroups.map((g) => [g.id, { ...g, tags: [] }]));
+      const _ungrouped = [];
 
-    // Sort tags by name first to ensure stable initial order
-    const sortedTags = [...$allTags].sort((a, b) => a.name.localeCompare(b.name));
+      // Sort tags by name first to ensure stable initial order
+      const sortedTags = [...tagStore.allTags].sort((a, b) => a.name.localeCompare(b.name));
 
-    sortedTags.forEach((tag) => {
-      if (tag.tag_group_id && groupMap.has(tag.tag_group_id)) {
-        groupMap.get(tag.tag_group_id).tags.push(tag);
-      } else {
-        _ungrouped.push(tag);
-      }
-    });
+      sortedTags.forEach((tag) => {
+        if (tag.tag_group_id && groupMap.has(tag.tag_group_id)) {
+          groupMap.get(tag.tag_group_id).tags.push(tag);
+        } else {
+          _ungrouped.push(tag);
+        }
+      });
 
-    groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    ungroupedTags = _ungrouped;
-  }
+      groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      ungroupedTags = _ungrouped;
+    }
+  });
 
   onMount(async () => {
-    await fetchAllTags();
-
-    const currentTag = get(selectedTag);
-    const currentGroup = get(selectedTagGroup);
+    const currentTag = tagStore.selectedTag;
+    const currentGroup = tagStore.selectedTagGroup;
     if (currentTag) {
       await selectTag(currentTag);
     } else if (currentGroup) {
       await selectTagGroup(currentGroup);
     }
 
-    unsubscribePanelState = panelStateStore.subscribe((state) => {
-      if (tabulatorInstance) {
-        tabulatorInstance.redraw(true);
-        window.dispatchEvent(new Event('resize'));
+    $effect(() => {
+      if (panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance && tableReady) {
+        if (tableContainer) {
+          tabulatorInstance.redraw(true);
+          window.dispatchEvent(new Event('resize'));
+        }
       }
     });
 
@@ -132,10 +128,10 @@
       }
       await fetchAllTags();
       // Validate selection
-      if ($selectedTag && !$allTags.some((t) => t.id === $selectedTag.id)) {
+      if (tagStore.selectedTag && !tagStore.allTags.some((t) => t.id === tagStore.selectedTag.id)) {
         selectTag(null);
       }
-      if ($selectedTagGroup && !$allTagGroups.some((g) => g.id === $selectedTagGroup.id)) {
+      if (tagStore.selectedTagGroup && !tagStore.allTagGroups.some((g) => g.id === tagStore.selectedTagGroup.id)) {
         selectTagGroup(null);
       }
     });
@@ -147,7 +143,6 @@
   });
 
   onDestroy(() => {
-    if (unsubscribePanelState) unsubscribePanelState();
     if (unsubscribeRefresher) unsubscribeRefresher();
     if (typeof window !== 'undefined') {
       window.removeEventListener('click', closeAddMenu);
@@ -199,27 +194,21 @@
   }
 
   // --- Table & Data Logic ---
-  let description = '';
-  let tableContainer;
+  let description = $state('');
+  let tableContainer = $state();
   let tabulatorInstance = null;
-  let tableReady = false;
-  let processedHighlights = [];
-  let selectedHighlight = null;
+  let tableReady = $state(false);
+  let processedHighlights = $state([]);
+  let selectedHighlight = $state(null);
 
   const dispatch = createEventDispatcher();
 
-  // Redraw table on panel resize/collapse
-  $: if ($panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance && tableReady) {
-    if (tableContainer) {
-      tabulatorInstance.redraw(true);
-      window.dispatchEvent(new Event('resize'));
-    }
-  }
+
 
   // Process highlights when tagInfo changes
-  $: {
-    if ($tagInfo && $tagInfo.highlights) {
-      processedHighlights = $tagInfo.highlights.map((item) => {
+  $effect(() => {
+    if (tagStore.tagInfo && tagStore.tagInfo.highlights) {
+      processedHighlights = tagStore.tagInfo.highlights.map((item) => {
         const highlight = item.highlight || item;
         return {
           ...highlight,
@@ -230,12 +219,12 @@
     } else {
       processedHighlights = [];
     }
-  }
+  });
 
   // React to tagInfo or selection changes to update table
-  $: {
-    if ($tagInfo && tableContainer) {
-      const isGroupView = !!$selectedTagGroup;
+  $effect(() => {
+    if (tagStore.tagInfo && tableContainer) {
+      const isGroupView = !!tagStore.selectedTagGroup;
       // If table doesn't exist, create it
       if (!tabulatorInstance) {
         initializeTable(processedHighlights);
@@ -259,14 +248,14 @@
             .catch((err) => console.error('Table update failed', err));
         }
       }
-    } else if (!$tagInfo && tabulatorInstance) {
+    } else if (!tagStore.tagInfo && tabulatorInstance) {
       // Cleanup if no tag selected
       tabulatorInstance.destroy();
       tabulatorInstance = null;
       tableReady = false;
       currentTableMode = null;
     }
-  }
+  });
 
   let currentTableMode = null; // 'tag' or 'group'
 
@@ -277,7 +266,7 @@
     }
     tableReady = false;
 
-    const isGroupView = !!$selectedTagGroup;
+    const isGroupView = !!tagStore.selectedTagGroup;
     currentTableMode = isGroupView ? 'group' : 'tag';
 
     let columns = [
@@ -338,10 +327,10 @@
         widthGrow: 2,
         formatter: (cell) => {
           const allTagsOnHighlight = cell.getValue() || [];
-          if (!$selectedTagGroup) return '';
+          if (!tagStore.selectedTagGroup) return '';
 
-          const currentGroupTags = $allTags
-            .filter((t) => t.tag_group_id === $selectedTagGroup.id)
+          const currentGroupTags = tagStore.allTags
+            .filter((t) => t.tag_group_id === tagStore.selectedTagGroup.id)
             .map((t) => t.name);
           const matchingTags = allTagsOnHighlight.filter((t) => currentGroupTags.includes(t));
 
@@ -474,7 +463,7 @@
       paginationSize: 10,
       paginationAddRow: 'table',
       resizableColumns: false,
-      initialFilter: [{ field: 'text', type: 'like', value: $tagSearchQuery }],
+      initialFilter: [{ field: 'text', type: 'like', value: tagStore.tagSearchQuery }],
       columns: columns,
       height: '100%',
       placeholder: 'No highlights for this tag.'
@@ -511,8 +500,8 @@
       await updateTagGroup(id, name, description);
       isEditGroupModalOpen = false;
       // Refresh selection if current group was updated
-      if ($selectedTagGroup && $selectedTagGroup.id === id) {
-        const updatedGroup = $allTagGroups.find((g) => g.id === id);
+      if (tagStore.selectedTagGroup && tagStore.selectedTagGroup.id === id) {
+        const updatedGroup = tagStore.allTagGroups.find((g) => g.id === id);
         selectTagGroup(updatedGroup);
       }
     } catch (error) {
@@ -534,8 +523,8 @@
   async function handleSaveTag(event) {
     const { id, name, description } = event.detail;
     // Use existing color and group if not provided (modal doesn't edit color/group currently)
-    const currentColor = $selectedTag ? $selectedTag.color : null;
-    const currentGroupId = $selectedTag ? $selectedTag.tag_group_id : null;
+    const currentColor = tagStore.selectedTag ? tagStore.selectedTag.color : null;
+    const currentGroupId = tagStore.selectedTag ? tagStore.selectedTag.tag_group_id : null;
     try {
       await updateTag(id, name, currentColor, description, currentGroupId);
       isEditTagModalOpen = false;
@@ -623,7 +612,7 @@
 
   function handleSearch() {
     if (tabulatorInstance) {
-      tabulatorInstance.setFilter('text', 'like', $tagSearchQuery);
+      tabulatorInstance.setFilter('text', 'like', tagStore.tagSearchQuery);
     }
   }
 
@@ -700,7 +689,7 @@
     currentEditingGroup = group;
   }
 
-  let currentEditingGroup = null;
+  let currentEditingGroup = $state(null);
 
   // --- Action Handlers ---
   async function handleInspect(highlight) {
@@ -734,7 +723,7 @@
       try {
         // Fetch the base asset that owns this attachment
         const baseAssetPath = await invoke('get_base_asset_for_attachment', {
-          projectXmlPathStr: $project.xmlPath,
+          projectXmlPathStr: get(project).xmlPath,
           attachmentRelativePath: highlight.source.file_path
         });
 
@@ -775,9 +764,9 @@
   }
 
   async function handleUntag(highlight) {
-    if (!highlight || !highlight.source || !$selectedTag) return;
+    if (!highlight || !highlight.source || !tagStore.selectedTag) return;
 
-    const tagName = $selectedTag.name;
+    const tagName = tagStore.selectedTag.name;
     const confirmUntag = await confirm(
       `Are you sure you want to remove the tag "${tagName}" from this highlight?`,
       { title: 'Confirm Untag', kind: 'warning' }
@@ -807,7 +796,7 @@
         tabulatorInstance.deleteRow(highlight.id);
         // Also update the tag's highlight count
         if (currentTableMode === 'tag') {
-          $selectedTag.highlight_count = Math.max(0, ($selectedTag.highlight_count || 1) - 1);
+          tagStore.selectedTag.highlight_count = Math.max(0, (tagStore.selectedTag.highlight_count || 1) - 1);
         }
       }
     } catch (error) {
@@ -820,7 +809,7 @@
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-gray-950 overflow-hidden">
   <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-border">
     <!-- Left Panel: List of groups and tags -->
-    {#if !$panelStateStore.tagsLeftPanelCollapsed}
+    {#if !panelStateStore.tagsLeftPanelCollapsed}
       <div
         class="w-64 flex-shrink-0 h-full bg-white dark:bg-gray-900 flex flex-col"
         transition:slide={{ axis: 'x' }}
@@ -863,15 +852,15 @@
               <!-- Group Header -->
               <div
                 class="flex items-center justify-between px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                class:bg-blue-100={$selectedTagGroup?.id === group.id}
-                class:dark:bg-blue-900={$selectedTagGroup?.id === group.id}
+                class:bg-blue-100={tagStore.selectedTagGroup?.id === group.id}
+                class:dark:bg-blue-900={tagStore.selectedTagGroup?.id === group.id}
                 on:click={() => handleSelect(group, 'group')}
               >
                 <div class="flex items-center">
                   <span
                     class="font-semibold text-sm dark:text-white truncate"
-                    class:!text-blue-700={$selectedTagGroup?.id === group.id}
-                    class:dark:!text-blue-200={$selectedTagGroup?.id === group.id}
+                    class:!text-blue-700={tagStore.selectedTagGroup?.id === group.id}
+                    class:dark:!text-blue-200={tagStore.selectedTagGroup?.id === group.id}
                     >{group.name}</span
                   >
                 </div>
@@ -887,14 +876,14 @@
                 {#each group.tags as tag (tag.id)}
                   <div
                     class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-gray-800"
-                    class:bg-blue-100={$selectedTag?.id === tag.id}
-                    class:dark:bg-blue-900={$selectedTag?.id === tag.id}
+                    class:bg-blue-100={tagStore.selectedTag?.id === tag.id}
+                    class:dark:bg-blue-900={tagStore.selectedTag?.id === tag.id}
                     on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                   >
                     <span
                       class="truncate dark:text-gray-400"
-                      class:!text-blue-700={$selectedTag?.id === tag.id}
-                      class:dark:!text-blue-200={$selectedTag?.id === tag.id}>{tag.name}</span
+                      class:!text-blue-700={tagStore.selectedTag?.id === tag.id}
+                      class:dark:!text-blue-200={tagStore.selectedTag?.id === tag.id}>{tag.name}</span
                     >
                   </div>
                 {/each}
@@ -932,14 +921,14 @@
               {#each ungroupedTags as tag (tag.id)}
                 <div
                   class="px-2 py-1.5 mb-1 rounded cursor-pointer text-xs flex items-center hover:bg-gray-100 dark:hover:bg-gray-800"
-                  class:bg-blue-100={$selectedTag?.id === tag.id}
-                  class:dark:bg-blue-900={$selectedTag?.id === tag.id}
+                  class:bg-blue-100={tagStore.selectedTag?.id === tag.id}
+                  class:dark:bg-blue-900={tagStore.selectedTag?.id === tag.id}
                   on:click|stopPropagation={() => handleSelect(tag, 'tag')}
                 >
                   <span
                     class="truncate dark:text-gray-400"
-                    class:!text-blue-700={$selectedTag?.id === tag.id}
-                    class:dark:!text-blue-200={$selectedTag?.id === tag.id}>{tag.name}</span
+                    class:!text-blue-700={tagStore.selectedTag?.id === tag.id}
+                    class:dark:!text-blue-200={tagStore.selectedTag?.id === tag.id}>{tag.name}</span
                   >
                 </div>
               {/each}
@@ -953,24 +942,24 @@
     <div
       class="h-full flex flex-col overflow-y-auto p-4 gap-4 flex-1 bg-white dark:bg-gray-950 min-h-0"
     >
-      {#if $selectedTag || $selectedTagGroup}
+      {#if tagStore.selectedTag || tagStore.selectedTagGroup}
         {#if isLoading}
           <p class="dark:text-gray-200">Loading information...</p>
-        {:else if $tagInfo}
+        {:else if tagStore.tagInfo}
           <!-- Tag / Group info -->
           <div class="flex-shrink-0">
             <div class="flex items-center space-x-2">
-              <h2 class="text-xl font-bold dark:text-white">{$tagInfo.name}</h2>
-              {#if $selectedTag}
+              <h2 class="text-xl font-bold dark:text-white">{tagStore.tagInfo.name}</h2>
+              {#if tagStore.selectedTag}
                 <button
                   on:click={() => (isEditTagModalOpen = true)}
                   class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   <SquarePen class="w-4 h-4" />
                 </button>
-              {:else if $selectedTagGroup}
+              {:else if tagStore.selectedTagGroup}
                 <button
-                  on:click={() => openEditGroup($selectedTagGroup, { stopPropagation: () => {} })}
+                  on:click={() => openEditGroup(tagStore.selectedTagGroup, { stopPropagation: () => {} })}
                   class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   <SquarePen class="w-4 h-4" />
@@ -992,12 +981,12 @@
           <div class="flex flex-col flex-1 min-h-0">
             <div class="flex justify-between items-center mb-2 flex-shrink-0">
               <h3 class="text-lg font-semibold dark:text-white">
-                Highlights ({$tagInfo.highlight_count})
+                Highlights ({tagStore.tagInfo.highlight_count})
               </h3>
               <input
                 type="text"
                 placeholder="Search content..."
-                bind:value={$tagSearchQuery}
+                bind:value={tagStore.tagSearchQuery}
                 on:input={handleSearch}
                 on:keydown={(e) => {
                   if (e.key === 'Enter') {
@@ -1039,10 +1028,10 @@
     on:close={() => (isAddGroupModalOpen = false)}
     on:save={handleAddGroup}
   />
-  {#if isEditTagModalOpen && $selectedTag}
+  {#if isEditTagModalOpen && tagStore.selectedTag}
     <EditTagModal
       showModal={isEditTagModalOpen}
-      tag={$selectedTag}
+      tag={tagStore.selectedTag}
       on:close={() => (isEditTagModalOpen = false)}
       on:save={handleSaveTag}
       on:delete={handleDeleteTagFromModal}

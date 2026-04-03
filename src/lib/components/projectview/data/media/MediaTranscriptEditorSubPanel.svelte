@@ -18,25 +18,27 @@
   import { saveDocumentContent } from '$lib/services/projectService.js';
   import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
   import { activeLayout } from '$lib/stores/layoutStore.js';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
 
-  export let mediaPath = null;
-  export let transcriptPath = null;
-  export let isPrimary = true;
-  export let enableSegmentPlayback = true;
-  export let highlightedRowIndex = -1;
+  let {
+    mediaPath = null,
+    transcriptPath = null,
+    isPrimary = true,
+    enableSegmentPlayback = true,
+    highlightedRowIndex = -1
+  } = $props();
 
   const dispatch = createEventDispatcher();
 
-  let lexicalEditorRef;
-  let localEditorJsonState = '';
+  let lexicalEditorRef = $state();
+  let localEditorJsonState = $state('');
 
-  let localCurrentTranscriptJson = null;
-  let localInitialTranscriptJson = null;
-  let localIsTranscriptDirty = false;
-  let localIsTranscriptLoading = true;
-  let localTranscriptLoadError = null;
-  let localCurrentHighlights = [];
+  let localCurrentTranscriptJson = $state(null);
+  let localInitialTranscriptJson = $state(null);
+  let localIsTranscriptDirty = $state(false);
+  let localIsTranscriptLoading = $state(true);
+  let localTranscriptLoadError = $state(null);
+  let localCurrentHighlights = $state([]);
 
   const defaultEmptyJson = JSON.stringify({
     root: {
@@ -70,34 +72,42 @@
     search: true
   };
 
-  $: currentTranscriptJson = isPrimary
-    ? $project.currentMediaNoteTranscriptJson
-    : localCurrentTranscriptJson;
-  $: initialTranscriptJson = isPrimary
-    ? $project.initialMediaNoteTranscriptJson
-    : localInitialTranscriptJson;
-  $: isTranscriptDirty = isPrimary ? $project.isMediaNoteTranscriptDirty : localIsTranscriptDirty;
-  $: isTranscriptLoading = isPrimary
-    ? $project.isMediaNoteTranscriptLoading
-    : localIsTranscriptLoading;
-  $: transcriptLoadError = isPrimary ? $project.mediaNoteTranscriptError : localTranscriptLoadError;
-  $: currentHighlights = isPrimary ? $project.currentDocumentHighlights : localCurrentHighlights;
+  let currentTranscriptJson = $derived(
+    isPrimary ? $project.currentMediaNoteTranscriptJson : localCurrentTranscriptJson
+  );
+  let initialTranscriptJson = $derived(
+    isPrimary ? $project.initialMediaNoteTranscriptJson : localInitialTranscriptJson
+  );
+  let isTranscriptDirty = $derived(
+    isPrimary ? $project.isMediaNoteTranscriptDirty : localIsTranscriptDirty
+  );
+  let isTranscriptLoading = $derived(
+    isPrimary ? $project.isMediaNoteTranscriptLoading : localIsTranscriptLoading
+  );
+  let transcriptLoadError = $derived(
+    isPrimary ? $project.mediaNoteTranscriptError : localTranscriptLoadError
+  );
+  let currentHighlights = $derived(
+    isPrimary ? $project.currentDocumentHighlights : localCurrentHighlights
+  );
 
-  $: isFileNotFoundInfo = transcriptLoadError === 'INFO:FILE_NOT_FOUND';
+  let isFileNotFoundInfo = $derived(transcriptLoadError === 'INFO:FILE_NOT_FOUND');
 
   // Store sync for primary
-  $: if (isPrimary && $project.selectedMediaNotePath === mediaPath) {
-    if (lexicalEditorRef && localEditorJsonState !== currentTranscriptJson) {
-      console.log(
-        `[MediaTranscriptEditorSubPanel] Triggering resetEditorState from currentTranscriptJson change for ${transcriptPath}`
-      );
-      lexicalEditorRef.resetEditorState(
-        currentTranscriptJson || defaultEmptyJson,
-        'primary_store_sync'
-      );
-      localEditorJsonState = currentTranscriptJson || defaultEmptyJson;
+  $effect(() => {
+    if (isPrimary && $project.selectedMediaNotePath === mediaPath) {
+      if (lexicalEditorRef && localEditorJsonState !== currentTranscriptJson) {
+        console.log(
+          `[MediaTranscriptEditorSubPanel] Triggering resetEditorState from currentTranscriptJson change for ${transcriptPath}`
+        );
+        lexicalEditorRef.resetEditorState(
+          currentTranscriptJson || defaultEmptyJson,
+          'primary_store_sync'
+        );
+        localEditorJsonState = currentTranscriptJson || defaultEmptyJson;
+      }
     }
-  }
+  });
 
   async function loadTranscript(path) {
     if (!path) {
@@ -394,7 +404,7 @@
       <LexicalEditor
         bind:this={lexicalEditorRef}
         initialJson={currentTranscriptJson || defaultEmptyJson}
-        editable={$isLexicalEditMode}
+        editable={mediaEditorStore.isLexicalEditMode}
         allowReadModeHighlights={true}
         {enableSegmentPlayback}
         enableTableCellResize={false}
