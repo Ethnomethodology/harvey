@@ -2904,8 +2904,12 @@
       // Scroll to the page
       pdfViewer.scrollPageIntoView({ pageNumber: highlight.pageIndex + 1 });
 
-      // Wait for page to be in view and rendered
-      setTimeout(() => {
+      // Poll for the element to appear (up to 2 seconds)
+      let attempts = 0;
+      const maxAttempts = 20;
+      const intervalMs = 100;
+
+      const checkHighlightElement = () => {
         const overlayParts = document.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
         if (overlayParts.length > 0) {
           overlayParts[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2918,18 +2922,29 @@
               el.style.outline = 'none';
             }, 2000);
           });
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(checkHighlightElement, intervalMs);
+        } else {
+          console.warn(`[PDFViewerPanel] Highlight element ${id} not found after scrolling (max attempts reached).`);
         }
-      }, 500);
+      };
 
-      // Clear the requested highlight ID after scrolling
+      // Initial wait to let PDF.js start rendering
+      setTimeout(checkHighlightElement, 300);
+
+      // Clear the requested highlight ID after initiating the scroll
       project.update((p) => ({ ...p, requestedHighlightId: null }));
     }
   }
 
   $effect(() => {
-    if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
-      scrollToHighlight($project.requestedHighlightId);
-    }
+    const requestedId = $project.requestedHighlightId;
+    untrack(() => {
+      if (requestedId && initialHighlightsApplied && !loading) {
+        scrollToHighlight(requestedId);
+      }
+    });
   });
 
   let currentZoomLabel = $derived((() => {
