@@ -1,8 +1,8 @@
 // src-tauri/src/projectview/chart_handler.rs
 use crate::projectview::db_handler::get_db_path;
 use crate::welcome::config::CommandError;
-use log::{debug, error, info};
-use rusqlite::{params, Connection, OptionalExtension};
+use log::{debug, info};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

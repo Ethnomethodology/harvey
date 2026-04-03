@@ -8,7 +8,6 @@ use crate::utils::canonicalize_path;
 use crate::welcome::config::CommandError;
 use chrono::Utc;
 use log::{debug, error, info, warn};
-use quick_xml;
 use rusqlite::{params, Connection}; // Added for opening DB connection in commands
 use serde::Deserialize;
 use serde::Serialize;
@@ -1022,7 +1021,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     let mut process_media_list = |entries: &mut Vec<MediaFileEntryXml>,
                                   dir_name: &str,
                                   was_healed: &mut bool,
-                                  is_new_project: bool|
+                                  _is_new_project: bool|
      -> Result<(), CommandError> {
         let dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, dir_name);
         for media_entry in entries {
@@ -2361,7 +2360,7 @@ pub async fn delete_project_item(
 
     if !item_path_buf.exists() {
         warn!("[Backend Delete] Item '{}' (project_id: {}) not found. Assuming already deleted or invalid path. Attempting XML cleanup...", item_path, project_id_for_db);
-        let (item_type_guess, media_stem_opt_guess, item_relative_path_buf_guess) =
+        let (item_type_guess, _media_stem_opt_guess, item_relative_path_buf_guess) =
             match get_item_details(&item_path_buf, project_base_dir) {
                 Ok(details) => details,
                 Err(_) => {
@@ -2587,7 +2586,7 @@ pub async fn delete_project_item(
     match item_type.as_str() {
         "media" => {
             if let Some(media_stem) = media_stem_opt.as_deref() {
-                let (media_stem_dir_path, media_entry_rel_path) = {
+                let (media_stem_dir_path, _media_entry_rel_path) = {
                     let mut path = None;
                     let mut rel = None;
                     if let Ok(xml_content) = fs::read_to_string(&xml_path_buf) {
@@ -3185,11 +3184,6 @@ fn rename_asset_with_folder(
             let parent_dir = item_path
                 .parent()
                 .ok_or_else(|| CommandError::from("Could not get parent directory"))?;
-            old_stem_name = parent_dir
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| CommandError::from("Could not get old stem"))?;
-
             let asset_dir = parent_dir
                 .parent()
                 .ok_or_else(|| CommandError::from("Could not get asset directory"))?;

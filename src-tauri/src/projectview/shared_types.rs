@@ -458,19 +458,6 @@ pub struct ProjectXml {
 }
 
 impl ProjectXml {
-    pub fn find_media_mut(&mut self, name: &str) -> Option<&mut MediaFileEntryXml> {
-        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.name == name) {
-            return Some(f);
-        }
-        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.name == name) {
-            return Some(f);
-        }
-        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.name == name) {
-            return Some(f);
-        }
-        None
-    }
-
     pub fn find_media_by_relative_path_mut(
         &mut self,
         relative_path: &str,

@@ -3,7 +3,6 @@ use crate::projectview::db_handler;
 use crate::projectview::shared_types::{FileMetadata, ProjectXml};
 use chrono::Utc;
 use log::{debug, info};
-use quick_xml;
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;

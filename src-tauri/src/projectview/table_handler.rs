@@ -9,7 +9,6 @@ use calamine::{open_workbook, Data, Reader, Xlsx};
 use chrono::Utc;
 use csv;
 use log::{debug, error, info};
-use quick_xml;
 use rust_xlsxwriter::Workbook;
 use serde_json;
 use serde_json::{json, Value};
@@ -28,7 +27,7 @@ pub async fn get_xlsx_sheets(source_path_str: String) -> Result<Vec<String>, Com
         )));
     }
 
-    let mut workbook: Xlsx<_> = open_workbook(&source_path).map_err(|e| {
+    let workbook: Xlsx<_> = open_workbook(&source_path).map_err(|e| {
         CommandError::from(format!(
             "Failed to open XLSX '{}': {}",
             source_path.display(),

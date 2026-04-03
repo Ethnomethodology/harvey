@@ -4,13 +4,12 @@ use calamine;
 use chrono::{DateTime, Utc};
 use csv;
 use directories::UserDirs;
-use quick_xml::{de::from_str, se::to_string_with_root};
+use quick_xml::de::from_str;
 use rust_xlsxwriter;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
-    fs::{self, File},
-    io::{BufWriter, Write},
+    fs::{self},
     path::PathBuf,
 };
 use tauri;

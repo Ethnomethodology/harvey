@@ -186,49 +186,6 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
 
-    // Migration for broken paths in multiple tables after Media -> Audios/Videos refactor
-    info!("[DB] Running correction for multiple tables' paths...");
-    let tables_and_cols = [
-        ("pdf_annotations", "pdf_document_path"),
-        ("table_styles", "table_path"),
-        ("table_schemas", "table_path"),
-        ("table_layout_preferences", "table_asset_relative_path"),
-        ("file_groups", "file_asset_path"),
-        ("attachments", "base_asset_relative_path"),
-        ("attachments", "attachment_relative_path"),
-        ("media_transcript_data", "asset_relative_path"),
-    ];
-
-    for (table, col) in tables_and_cols {
-        let sql_audios = format!(
-            "UPDATE {}
-             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Audios/')
-             WHERE {} LIKE 'harvey_files/Media/%'
-             AND EXISTS (
-                 SELECT 1 FROM asset_metadata m
-                 WHERE m.project_id = {}.project_id
-                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
-             );", table, col, col, col, table, table, col
-        );
-        let sql_videos = format!(
-            "UPDATE {}
-             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Videos/')
-             WHERE {} LIKE 'harvey_files/Media/%'
-             AND EXISTS (
-                 SELECT 1 FROM asset_metadata m
-                 WHERE m.project_id = {}.project_id
-                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
-             );", table, col, col, col, table, table, col
-        );
-
-        if let Err(e) = conn.execute(&sql_audios, []) {
-            error!("[DB] Failed to run {} correction for Audios: {}", table, e);
-        }
-        if let Err(e) = conn.execute(&sql_videos, []) {
-            error!("[DB] Failed to run {} correction for Videos: {}", table, e);
-        }
-    }
-
     // asset_metadata table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS asset_metadata (
@@ -1039,6 +996,47 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized highlight_tags table.");
+
+    // Migration for broken paths in multiple tables after Media -> Audios/Videos refactor
+    info!("[DB] Running correction for multiple tables' paths...");
+    let tables_and_cols = [
+        ("pdf_annotations", "pdf_document_path"),
+        ("table_styles", "table_path"),
+        ("table_schemas", "table_path"),
+        ("table_layout_preferences", "table_asset_relative_path"),
+        ("file_groups", "file_asset_path"),
+        ("media_transcript_data", "asset_relative_path"),
+    ];
+
+    for (table, col) in tables_and_cols {
+        let sql_audios = format!(
+            "UPDATE {}
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m
+                 WHERE m.project_id = {}.project_id
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
+             );", table, col, col, col, table, table, col
+        );
+        let sql_videos = format!(
+            "UPDATE {}
+             SET {} = REPLACE({}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             WHERE {} LIKE 'harvey_files/Media/%'
+             AND EXISTS (
+                 SELECT 1 FROM asset_metadata m
+                 WHERE m.project_id = {}.project_id
+                 AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
+             );", table, col, col, col, table, table, col
+        );
+
+        if let Err(e) = conn.execute(&sql_audios, []) {
+            error!("[DB] Failed to run {} correction for Audios: {}", table, e);
+        }
+        if let Err(e) = conn.execute(&sql_videos, []) {
+            error!("[DB] Failed to run {} correction for Videos: {}", table, e);
+        }
+    }
 
     // Cleanup legacy tables if they exist
     conn.execute("DROP TABLE IF EXISTS tag_groups_legacy", [])?;

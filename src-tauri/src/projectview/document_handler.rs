@@ -10,7 +10,6 @@ use crate::welcome::config::CommandError;
 
 use crate::welcome::python_env::get_python_command;
 use log::{debug, error, info, warn};
-use quick_xml;
 use std::{
     fs,
     path::{Path, PathBuf},

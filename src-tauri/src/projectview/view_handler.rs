@@ -757,25 +757,6 @@ pub fn delete_table_view(
     Ok(())
 }
 
-pub fn delete_all_table_views_for_table(
-    project_id: &str,
-    table_path: &str,
-) -> Result<(), CommandError> {
-    let db_path = get_db_path()?;
-    let conn = Connection::open(db_path)?;
-
-    info!(
-        "[DB] Deleting all table views for table '{}' in project '{}'",
-        table_path, project_id
-    );
-
-    conn.execute(
-        "DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, table_path],
-    )?;
-
-    Ok(())
-}
 pub fn rename_table_view(
     project_id: &str,
     table_path: &str,

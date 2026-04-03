@@ -4,7 +4,6 @@ use crate::projectview::shared_types::FileMetadata;
 use crate::projectview::shared_types::ProjectXml;
 use chrono::Utc;
 use log::{debug, error, info, warn}; // Added warn
-use quick_xml;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;

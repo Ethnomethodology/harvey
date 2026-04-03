@@ -18,17 +18,12 @@ use crate::DownloadCancellationState;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use log; // Use log crate
-use quick_xml::{
-    events::{BytesText, Event},
-    Reader, Writer,
-};
 use reqwest;
 use serde::Deserialize;
-use serde_json::from_str;
 use std::{
     collections::HashSet,
     fs::{self, File},
-    io::{BufReader, Cursor, Write},
+    io::Write,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1632,7 +1627,6 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
         project_xml_path
     );
     let mut config = read_config()?;
-    let initial_len = config.projects.len();
     config.projects.retain(|p| p.path != project_xml_path);
 
     use crate::projectview::db_handler::get_db_path;

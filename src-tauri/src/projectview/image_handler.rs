@@ -7,7 +7,6 @@ use crate::projectview::db_handler;
 use crate::welcome::config::CommandError;
 use chrono::Utc;
 use log::{debug, error, info, warn};
-use quick_xml;
 use serde_json;
 use std::{
     fs,

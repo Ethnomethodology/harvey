@@ -22,7 +22,6 @@ use crate::transcription::whisper_cpp::WhisperCppEngine;
 use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
 use crate::welcome::python_env::{get_env_path, get_python_command};
 use dashmap::DashMap;
-use quick_xml;
 use regex::Regex;
 use std::{
     fs::{self, File},

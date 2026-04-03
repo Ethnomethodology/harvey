@@ -5,7 +5,6 @@ use super::shared_utils::*;
 use crate::utils::canonicalize_path;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
-use quick_xml;
 use serde_json;
 use std::{
     fs,

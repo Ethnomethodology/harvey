@@ -42,12 +42,8 @@ pub async fn check_config_status<R: Runtime>(
     let mut python_libs_installed = config.verification_status.python_libraries_verified;
     let mut transcription_models_downloaded =
         config.verification_status.transcription_models_verified;
-    let mut whisper_cpp_models_downloaded = false; // We calculate these below
-    let mut faster_whisper_models_downloaded = false;
     let mut diarization_model_downloaded = config.verification_status.diarization_model_verified;
     let mut translation_models_downloaded = config.verification_status.translation_models_verified;
-    let mut helsinki_models_downloaded = false;
-    let mut nllb_models_downloaded = false;
     let mut hf_token_present = config.verification_status.hf_token_verified;
     let mut ct2_installed = config.verification_status.ctranslate2_verified;
     let mut fw_deps_installed = config
@@ -73,22 +69,22 @@ pub async fn check_config_status<R: Runtime>(
 
     // Transcription and Translation: Instant checks via directory listing
     let models = get_downloaded_models().await?;
-    whisper_cpp_models_downloaded = models.iter().any(|m| {
+    let whisper_cpp_models_downloaded = models.iter().any(|m| {
         let family = m.family.as_deref().unwrap_or("whisper-cpp");
         (family == "whisper-cpp" || (m.family.is_none() && !m.name.contains('/')))
             && !m.name.contains("paraphrase")
     });
-    faster_whisper_models_downloaded = models.iter().any(|m| {
+    let faster_whisper_models_downloaded = models.iter().any(|m| {
         let family = m.family.as_deref().unwrap_or("");
         family == "faster-whisper" && !m.name.contains("paraphrase")
     });
     let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded;
 
     let translation_models = get_local_translation_models().await?;
-    helsinki_models_downloaded = translation_models
+    let helsinki_models_downloaded = translation_models
         .iter()
         .any(|m| m.family.as_deref().unwrap_or("helsinki") == "helsinki");
-    nllb_models_downloaded = translation_models
+    let nllb_models_downloaded = translation_models
         .iter()
         .any(|m| m.family.as_deref().unwrap_or("") == "nllb");
     let has_translation = !translation_models.is_empty();

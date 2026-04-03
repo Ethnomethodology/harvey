@@ -22,7 +22,7 @@ fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String>
 
 // Helper to get the custom diarization hub path
 pub fn get_diarization_hub_path<R: Runtime>(
-    app_handle: &AppHandle<R>,
+    _app_handle: &AppHandle<R>,
 ) -> Result<std::path::PathBuf, String> {
     let config = read_config().map_err(|e| e.to_string())?;
     let base_path = std::path::PathBuf::from(config.download_location);

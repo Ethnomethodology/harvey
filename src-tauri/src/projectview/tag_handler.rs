@@ -6,7 +6,7 @@ use crate::welcome::config::CommandError;
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf}; // Added PathBuf // Added OptionalExtension
+use std::path::Path; // Added PathBuf // Added OptionalExtension
 
 use log::{error, info, warn};
 
