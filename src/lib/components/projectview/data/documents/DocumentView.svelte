@@ -17,7 +17,9 @@
 
   let currentHighlightsFromStore = [];
   $: currentHighlightsFromStore =
-    $project.selectedDocumentPath === itemPath ? $project.currentDocumentHighlights : [];
+    $project.selectedDocumentPath === itemPath
+      ? (isPdf ? $project.currentPdfAnnotations : $project.currentDocumentHighlights)
+      : [];
 
   const dispatch = createEventDispatcher();
 

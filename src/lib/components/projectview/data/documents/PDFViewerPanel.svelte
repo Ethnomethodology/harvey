@@ -2898,9 +2898,7 @@
     if (!id) return;
     const highlight = initialHighlights.find((h) => h.id === id);
     if (highlight) {
-      console.log(
-        `[PDFViewerPanel] Scrolling to highlight: ${id} on page ${highlight.pageIndex + 1}`
-      );
+      console.log(`[PDFViewerPanel] Scrolling to highlight: ${id} on page ${highlight.pageIndex + 1}`);
       // Scroll to the page
       pdfViewer.scrollPageIntoView({ pageNumber: highlight.pageIndex + 1 });
 
@@ -2912,6 +2910,7 @@
       const checkHighlightElement = () => {
         const overlayParts = document.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
         if (overlayParts.length > 0) {
+          console.log(`[PDFViewerPanel] Highlight element found after ${attempts} attempts. Scrolling into view.`);
           overlayParts[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
           // Pulse effect
           overlayParts.forEach((el) => {
@@ -2926,7 +2925,7 @@
           attempts++;
           setTimeout(checkHighlightElement, intervalMs);
         } else {
-          console.warn(`[PDFViewerPanel] Highlight element ${id} not found after scrolling (max attempts reached).`);
+          console.warn(`[PDFViewerPanel] Highlight element ${id} not found after ${maxAttempts} attempts on page ${highlight.pageIndex + 1}.`);
         }
       };
 
@@ -2935,16 +2934,19 @@
 
       // Clear the requested highlight ID after initiating the scroll
       project.update((p) => ({ ...p, requestedHighlightId: null }));
+    } else {
+      console.warn(`[PDFViewerPanel] Highlight ID ${id} requested but not found in current initialHighlights state.`);
     }
   }
 
   $effect(() => {
-    const requestedId = $project.requestedHighlightId;
-    untrack(() => {
-      if (requestedId && initialHighlightsApplied && !loading) {
-        scrollToHighlight(requestedId);
-      }
-    });
+    // Only trigger if all conditions are met, but track all of them
+    if ($project.requestedHighlightId && initialHighlightsApplied && !loading) {
+      const id = $project.requestedHighlightId;
+      untrack(() => {
+        scrollToHighlight(id);
+      });
+    }
   });
 
   let currentZoomLabel = $derived((() => {
