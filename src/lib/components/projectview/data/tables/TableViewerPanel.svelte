@@ -66,8 +66,8 @@
   let {
     tablePath = '',
     hasHeaders = true,
-    activeSubItemPath = null,
-    activeSubItemType = null,
+    activeSubItemPath = $bindable(null),
+    activeSubItemType = $bindable(null),
     initialChartToLoad = null
   } = $props();
 
@@ -3317,6 +3317,8 @@
         });
       }
       applyViewToTable(view.view_name, view.view_type, config);
+      activeSubItemPath = view;
+      activeSubItemType = 'view';
       dispatch('requestviewchange', { type: 'view_changed', item: view });
     } catch (e) {
       console.error('Failed to parse view config on open:', e);
@@ -3568,6 +3570,8 @@
 
     // Perform in-place update if possible
     applyViewToTable(viewName, viewType, config);
+    activeSubItemPath = { view_name: viewName, view_type: viewType };
+    activeSubItemType = 'view';
     dispatch('requestviewchange', {
       type: 'view_changed',
       item: { view_name: viewName, view_type: viewType }
@@ -3588,6 +3592,8 @@
     }
 
     applyViewToTable(viewName, viewType, config);
+    activeSubItemPath = { view_name: viewName, view_type: viewType };
+    activeSubItemType = 'view';
     dispatch('requestviewchange', {
       type: 'view_changed',
       item: { view_name: viewName, view_type: viewType }
