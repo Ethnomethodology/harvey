@@ -1402,55 +1402,42 @@ pub fn map_speaker_ids_to_names(segments: &mut Vec<TranscriptSegment>, user_name
         return;
     }
     info!(
-        "[Name Map] Attempting to map generic speaker IDs to User Names: {:?}",
+        "[Name Map] Attempting to map generic speaker IDs to User Names in chronological order: {:?}",
         user_names
     );
 
+    let mut speaker_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut current_name_index = 0;
+
     for segment in segments.iter_mut() {
         let original_speaker = segment.speaker.trim();
-        // Strip trailing colon if present (e.g. "SPEAKER_00:" -> "SPEAKER_00")
-        let speaker_id = original_speaker.trim_end_matches(':');
+        let speaker_id = original_speaker.trim_end_matches(':').to_string();
 
-        let number_part_opt = if speaker_id.starts_with("SPEAKER_") {
-            speaker_id
-                .get("SPEAKER_".len()..)
-                .and_then(|num_str| num_str.parse::<usize>().ok())
-        } else if speaker_id.starts_with("speaker_") {
-            speaker_id
-                .get("speaker_".len()..)
-                .and_then(|num_str| num_str.parse::<usize>().ok())
-                .filter(|&index_1| index_1 > 0)
-                .map(|index_1| index_1 - 1)
-        } else {
-            None
-        };
+        if speaker_id == "Unknown" || speaker_id.is_empty() {
+            continue;
+        }
 
-        if let Some(user_name_index) = number_part_opt {
-            if let Some(mapped_name) = user_names.get(user_name_index) {
-                if !mapped_name.trim().is_empty() {
-                    debug!(
-                        "[Name Map] Mapping '{}' -> '{}' (index {}) for segment at {:.3}s",
-                        original_speaker, mapped_name, user_name_index, segment.start_time
-                    );
-                    segment.speaker = mapped_name.clone();
-                } else {
-                    warn!(
-                        "[Name Map] User name at index {} is empty. Keeping original ID '{}'.",
-                        user_name_index, original_speaker
-                    );
-                }
+        let mapped_name = speaker_map.entry(speaker_id.clone()).or_insert_with(|| {
+            if current_name_index < user_names.len() {
+                let name = user_names[current_name_index].clone();
+                current_name_index += 1;
+                name
             } else {
-                warn!("[Name Map] Speaker index {} derived from '{}' is out of bounds for user names list (length {}). Keeping original ID.",
-                      user_name_index, speaker_id, user_names.len());
+                // If we run out of user names, default to the original speaker ID
+                warn!("[Name Map] Not enough user names provided. Keeping original ID '{}'.", speaker_id);
+                speaker_id.clone()
             }
-        } else {
-            if original_speaker != "Unknown" && !user_names.contains(&original_speaker.to_string())
-            {
-                debug!("[Name Map] Speaker ID '{}' not in generic format & not in user_names. Skipping mapping for this segment.", original_speaker);
-            }
+        });
+
+        if !mapped_name.trim().is_empty() && mapped_name != &speaker_id {
+            debug!(
+                "[Name Map] Mapping '{}' -> '{}' for segment at {:.3}s",
+                original_speaker, mapped_name, segment.start_time
+            );
+            segment.speaker = mapped_name.clone();
         }
     }
-    info!("[Name Map] Finished speaker name mapping process.");
+    info!("[Name Map] Finished speaker name mapping process. Mapped {} speakers.", speaker_map.len());
 }
 
 // --- Main Transcription Command ---
@@ -2715,6 +2702,54 @@ fn merge_diarization_results_cmd(
                 }
             }
             word.speaker = best_speaker;
+        }
+
+        // 2b. Smooth speaker assignments to eliminate isolated word errors
+        if all_words.len() > 2 {
+            // Find continuous chunks of words with the same speaker
+            let mut chunks = Vec::new();
+            let mut current_chunk_start_idx = 0;
+            let mut current_speaker = all_words[0].speaker.clone();
+
+            for i in 1..all_words.len() {
+                if all_words[i].speaker != current_speaker {
+                    chunks.push((current_chunk_start_idx, i - 1, current_speaker.clone()));
+                    current_speaker = all_words[i].speaker.clone();
+                    current_chunk_start_idx = i;
+                }
+            }
+            chunks.push((current_chunk_start_idx, all_words.len() - 1, current_speaker.clone()));
+
+            // Iterate over chunks and smooth short interruptions
+            for i in 1..chunks.len().saturating_sub(1) {
+                let prev_chunk = &chunks[i - 1];
+                let current_chunk = &chunks[i];
+                let next_chunk = &chunks[i + 1];
+
+                // If the speaker before and after the current chunk are the same
+                if prev_chunk.2 == next_chunk.2 && current_chunk.2 != prev_chunk.2 {
+                    let chunk_duration = all_words[current_chunk.1].end - all_words[current_chunk.0].start;
+                    let chunk_word_count = current_chunk.1 - current_chunk.0 + 1;
+
+                    // Conditions for a "short interruption" (e.g. <= 3 words or <= 1.5 seconds)
+                    if chunk_word_count <= 3 || chunk_duration <= 1.5 {
+                        let prev_word_end = all_words[prev_chunk.1].end;
+                        let first_word_start = all_words[current_chunk.0].start;
+                        let last_word_end = all_words[current_chunk.1].end;
+                        let next_word_start = all_words[next_chunk.0].start;
+
+                        let gap_before = first_word_start - prev_word_end;
+                        let gap_after = next_word_start - last_word_end;
+
+                        // Only smooth if there are no significant pauses (e.g., > 1.5s) isolating this chunk
+                        if gap_before <= 1.5 && gap_after <= 1.5 {
+                            for j in current_chunk.0..=current_chunk.1 {
+                                all_words[j].speaker = prev_chunk.2.clone();
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
