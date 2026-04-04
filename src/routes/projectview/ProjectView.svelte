@@ -2142,22 +2142,23 @@
     <!-- Main Content Area -->
     <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-2 px-1 border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 border-r border-gray-300 dark:border-gray-700"
         >
-            <!-- Import button at the top -->
-            <button
-                title="Import"
-                aria-label="Import"
-                on:click={handleImportMediaInSidebar}
-                class="w-10 h-10 mx-auto mb-2 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:outline-2 focus:outline-blue-500"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-            </button>
-            <!-- Divider -->
-            <div class="w-8 mx-auto mb-2 border-t border-gray-200 dark:border-gray-700"></div>
-            <div class="flex-grow flex flex-col space-y-2">
+            <!-- Import button zone — h-9 matches the 'Data' panel header height exactly -->
+            <div class="h-9 flex-shrink-0 flex items-center justify-center border-b border-gray-200 dark:border-gray-800">
+                <button
+                    title="Import"
+                    aria-label="Import"
+                    on:click={handleImportMediaInSidebar}
+                    class="w-7 h-7 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:outline-2 focus:outline-blue-500"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3.5 h-3.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Tab icons -->
+            <div class="flex-grow flex flex-col space-y-2 py-2 px-1">
                 <button
                     title="Data"
                     aria-label="Data"
