@@ -1351,7 +1351,7 @@ pub(crate) fn prepare_output_paths(
         counter += 1;
     }
 
-    let temp_rttm_base = transcripts_dir.join(format!("rttm_temp_{}", job_id));
+    let temp_rttm_base = transcripts_dir.join(format!("{}_diarization", media_filename_stem));
     let expected_rttm_temp_path = temp_rttm_base.with_extension("rttm");
 
     debug!("[prepare_output_paths][{}] Orig Temp Whisper Base: '{}', Orig Whisper JSON (temp): '{}', RTTM (temp): '{}', Orig Final JSON: '{}'",
@@ -1715,9 +1715,6 @@ pub async fn transcribe_media_command<R: Runtime>(
                 let _ = fs::remove_file(&wav_media_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp WAV file during original pass error: {:?}", job_id, e_del));
             }
             let _ = fs::remove_file(&expected_whisper_temp_json_path_orig).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp Whisper JSON during original pass error: {:?}", job_id, e_del));
-            if !expected_rttm_temp_path.exists() {
-                let _ = fs::remove_file(&expected_rttm_temp_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp RTTM file during original pass error: {:?}", job_id, e_del));
-            }
 
             if error_message.to_lowercase().contains("cancel") {
                 let _ = app_handle.emit(
@@ -2018,9 +2015,6 @@ pub async fn transcribe_media_command<R: Runtime>(
 
     if expected_whisper_temp_json_path_orig.exists() {
         let _ = fs::remove_file(&expected_whisper_temp_json_path_orig);
-    }
-    if expected_rttm_temp_path.exists() {
-        let _ = fs::remove_file(&expected_rttm_temp_path);
     }
     if wav_media_path.to_string_lossy() != payload.media_path_str {
         let _ = fs::remove_file(&wav_media_path);
@@ -2896,15 +2890,6 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
             }
             Err(e) => {
                 warn!("[Exec Pass][{}] Failed to parse RTTM file: {}. Proceeding without merged diarization.", job_id, e);
-            }
-        }
-        // Clean up temp RTTM file after use
-        if rttm_path.exists() {
-            if let Err(e_rttm_del) = fs::remove_file(&rttm_path) {
-                warn!(
-                    "[Exec Pass][{}] Failed to delete temporary RTTM file {:?}: {}",
-                    job_id, rttm_path, e_rttm_del
-                );
             }
         }
     } else {
