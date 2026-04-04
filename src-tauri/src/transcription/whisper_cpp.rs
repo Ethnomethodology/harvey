@@ -98,6 +98,7 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
         let output_base_path = options.output_dir.join(&temp_base_name);
         let output_base_path_str = normalize_path_for_cli(&output_base_path.to_string_lossy());
         let expected_json_path = output_base_path.with_extension("json");
+        let expected_wts_path = output_base_path.with_extension("wts"); // .wts is generated alongside .json when -owts is passed
 
         // Normalize all paths for the CLI
         let model_path_str = normalize_path_for_cli(&options.model_path);
@@ -264,6 +265,9 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
                     let _ = fs::remove_file(&expected_json_path);
                 }
             }
+            if expected_wts_path.exists() {
+                let _ = fs::remove_file(&expected_wts_path);
+            }
             return Err(CommandError::from(format!(
                 "Transcription cancelled for job {}.",
                 job_id
@@ -275,6 +279,9 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
                 {
                     let _ = fs::remove_file(&expected_json_path);
                 }
+            }
+            if expected_wts_path.exists() {
+                let _ = fs::remove_file(&expected_wts_path);
             }
             return Err(CommandError::from(format!(
                 "Whisper process failed. Exit: {:?}, Err: {:?}",
@@ -306,8 +313,11 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
         // Parse JSON
         let segments = parse_whisper_json(&expected_json_path)?;
 
-        // Cleanup temp file
+        // Cleanup temp files
         let _ = fs::remove_file(&expected_json_path);
+        if expected_wts_path.exists() {
+            let _ = fs::remove_file(&expected_wts_path);
+        }
 
         Ok(segments)
     }
