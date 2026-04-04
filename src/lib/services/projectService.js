@@ -1003,30 +1003,48 @@ export async function importDocumentFile() {
     let lexicalJsonString = '';
     const conversionEditor = createConversionEditor('import-doc');
     try {
+      console.debug(`[importDocumentFile] htmlContent snippet: ${htmlContent?.substring(0, 300)}...`);
       const domParser = new DOMParser();
       const dom = domParser.parseFromString(htmlContent, 'text/html');
-
-      // Inline CSS styles so Lexical can see colors and other formatting
-      inlineCssRules(dom);
+      const targetElement = dom.body;
 
       await conversionEditor.update(() => {
-        const nodes = _generateNodesFromDOM(conversionEditor, dom);
-        _getRoot().clear();
-        _getRoot().append(...nodes);
-      });
-      const editorState = conversionEditor.getEditorState();
-      if (editorState.isEmpty()) {
-        conversionEditor.update(() => {
-          _getRoot().clear();
+        const root = _getRoot();
+        let nodes = _generateNodesFromDOM(conversionEditor, targetElement);
+        
+        console.log(`[importDocumentFile] Generated ${nodes.length} Lexical nodes:`, nodes.map(n => n.getType()));
+
+        // Failsafe: if results are zero but text exists, manually wrap it in a paragraph
+        if (nodes.length === 0 && targetElement.textContent?.trim().length > 0) {
+          console.warn('[importDocumentFile] Lexical nodes empty, falling back to text-content extraction.');
+          const p = _createParagraphNode();
+          p.append(_createTextNode(targetElement.textContent.trim()));
+          nodes = [p];
+        }
+
+        root.clear();
+        if (nodes.length > 0) {
+          root.append(...nodes);
+        }
+
+        // Determine if there is actual content: non-empty text, or any node that isn't a paragraph
+        const textContent = root.getTextContent().trim();
+        const children = root.getChildren();
+        const hasActualContent = textContent.length > 0 || children.some(node => node.getType() !== 'paragraph');
+
+        if (!hasActualContent) {
+          console.warn('[importDocumentFile] No actual content detected, adding placeholder.');
+          root.clear();
           const para = _createParagraphNode();
           para.append(
-            _createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)
+            _createTextNode(`[Content from ${sourceFilename} was empty or could not be fully parsed]`)
           );
-          _getRoot().append(para);
-        });
-      }
+          root.append(para);
+        }
+      });
       lexicalJsonString = JSON.stringify(conversionEditor.getEditorState().toJSON(), null, 2);
     } catch (lexicalError) {
+      console.error('[importDocumentFile] Lexical conversion error:', lexicalError);
       const errorEditor = createConversionEditor('import-error');
       errorEditor.update(() => {
         _getRoot().clear();
