@@ -3469,8 +3469,23 @@ export async function checkUnsavedChangesThenProceed(
   // const pathDescForLog = newPathToLoad ? await basename(newPathToLoad) : "NO_PATH_PROVIDED";
   // const typeDescForLog = providedActionContextDescription || "unknown action";
 
-  // Check order: Media Notes -> PDF Annotations -> JSON Documents -> Imported Transcripts -> Main Transcript
-  if (projState.selectedMediaNotePath && projState.isMediaNoteTranscriptDirty) {
+  // Check order: Main Transcript -> Media Notes -> PDF Annotations -> JSON Documents -> Imported Transcripts
+  if (tsState.currentTranscriptPath && tsState.transcriptDirty) {
+    itemIsDirty = true;
+    itemPath = tsState.currentTranscriptPath;
+    itemTypeForPrompt = 'main transcript';
+    saveFunction = async () => saveTranscriptData();
+    discardFunction = () => {
+      const undoStack = get(transcriptStore).transcriptUndoStack;
+      transcriptStore.update((ts) => ({
+        ...ts,
+        segments: undoStack.length > 0 ? undoStack[0] : ts.segments,
+        transcriptDirty: false,
+        transcriptUndoStack: [],
+        transcriptRedoStack: []
+      }));
+    };
+  } else if (projState.selectedMediaNotePath && projState.isMediaNoteTranscriptDirty) {
     itemIsDirty = true;
     itemPath = projState.selectedMediaNotePath;
     itemTypeForPrompt = 'media notes';
@@ -3524,22 +3539,30 @@ export async function checkUnsavedChangesThenProceed(
     projState.selectedDocumentPath &&
     (projState.isDocumentDirty || projState.isDocumentMetadataDirty)
   ) {
-    itemIsDirty = true;
-    itemPath = projState.selectedDocumentPath;
-    itemTypeForPrompt = 'document';
-    if (
-      projState.activeDocumentEditorRef?.ref &&
-      typeof projState.activeDocumentEditorRef.ref.save === 'function'
-    ) {
-      saveFunction = projState.activeDocumentEditorRef.ref.save;
-    } else {
-      if (projState.isDocumentDirty || projState.isDocumentMetadataDirty) {
-        saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
+    // Only flag as dirty if it's a valid document (not a media file leaking into selectedDocumentPath)
+    const isActuallyDoc =
+      projState.selectedDocumentType === 'documents' ||
+      projState.selectedDocumentType === 'document' ||
+      !projState.selectedDocumentType;
+
+    if (isActuallyDoc) {
+      itemIsDirty = true;
+      itemPath = projState.selectedDocumentPath;
+      itemTypeForPrompt = 'document';
+      if (
+        projState.activeDocumentEditorRef?.ref &&
+        typeof projState.activeDocumentEditorRef.ref.save === 'function'
+      ) {
+        saveFunction = projState.activeDocumentEditorRef.ref.save;
+      } else {
+        if (projState.isDocumentDirty || projState.isDocumentMetadataDirty) {
+          saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
+        }
       }
+      discardFunction = () => markDocumentChangesDiscarded();
+      initialContentForReset = projState.initialDocumentJson;
+      resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
     }
-    discardFunction = () => markDocumentChangesDiscarded();
-    initialContentForReset = projState.initialDocumentJson;
-    resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
   } else if (
     projState.currentStandaloneTranscriptPath &&
     (projState.isStandaloneTranscriptDirty || projState.isStandaloneTranscriptMetadataDirty)
@@ -3569,22 +3592,8 @@ export async function checkUnsavedChangesThenProceed(
       }
       discardFunction = () => markStandaloneTranscriptChangesDiscarded(itemPath);
     }
-  } else if (tsState.currentTranscriptPath && tsState.transcriptDirty) {
-    itemIsDirty = true;
-    itemPath = tsState.currentTranscriptPath;
-    itemTypeForPrompt = 'main transcript';
-    saveFunction = async () => saveTranscriptData();
-    discardFunction = () => {
-      const undoStack = get(transcriptStore).transcriptUndoStack;
-      transcriptStore.update((ts) => ({
-        ...ts,
-        segments: undoStack.length > 0 ? undoStack[0] : ts.segments,
-        transcriptDirty: false,
-        transcriptUndoStack: [],
-        transcriptRedoStack: []
-      }));
-    };
   }
+
 
   if (itemIsDirty && itemPath === newPathToLoad) {
     return true;
