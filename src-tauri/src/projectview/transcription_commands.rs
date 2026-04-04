@@ -2166,7 +2166,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
         "-ac".into(),
         "1".into(),
         "-af".into(),
-        "aresample=resampler=soxr,loudnorm".into(),
+        "loudnorm".into(),
         "-y".into(),
         output_wav_path.to_string_lossy().to_string(),
     ];
