@@ -2359,14 +2359,8 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
   const translateToEnglish = currentTs.translateToEnglish;
   const diarize = currentTs.diarizationEnabledForNextJob;
 
-  let numSpeakersForPayload = 0;
-  if (diarize) {
-    if (currentTs.speakers.count > 0) {
-      numSpeakersForPayload = currentTs.speakers.count;
-    } else {
-      numSpeakersForPayload = 2; // Default to 2 speakers if diarize is checked but no count is set
-    }
-  }
+  const diarizationOn = diarize;
+  const numSpeakersForPayload = diarize ? currentTs.speakers.count : 0;
 
   const mediaPathForJob = currentTs.selectedMediaFile?.path;
   const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
@@ -2394,7 +2388,8 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
   const payload = {
     project_xml_path: currentProj.xmlPath,
     media_path_str: mediaPathForJob,
-    num_speakers: numSpeakersForPayload, // Use the adjusted num_speakers value
+    num_speakers: numSpeakersForPayload,
+    diarization_on: diarizationOn,
     language_code:
       currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage
         ? null

@@ -1461,6 +1461,7 @@ pub struct TranscribeMediaPayload {
     num_speakers: usize,
     language_code: Option<String>,
     model_name: String,
+    diarization_on: bool,
     translate_to_english: bool,
     speaker_names: Vec<String>, // For original transcript
     translated_speaker_names: Option<Vec<String>>, // For translated transcript
@@ -1702,6 +1703,7 @@ pub async fn transcribe_media_command<R: Runtime>(
         &expected_whisper_temp_json_path_orig,
         &final_transcript_path_orig,
         payload.num_speakers,
+        payload.diarization_on,
         &expected_rttm_temp_path,
         false, // is_translation_pass
         None,  // Delay speaker mapping
@@ -1726,7 +1728,7 @@ pub async fn transcribe_media_command<R: Runtime>(
                 let _ = fs::remove_file(&wav_media_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp WAV file during original pass error: {:?}", job_id, e_del));
             }
             let _ = fs::remove_file(&expected_whisper_temp_json_path_orig).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp Whisper JSON during original pass error: {:?}", job_id, e_del));
-            if payload.num_speakers > 0 {
+            if !expected_rttm_temp_path.exists() {
                 let _ = fs::remove_file(&expected_rttm_temp_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp RTTM file during original pass error: {:?}", job_id, e_del));
             }
 
@@ -1820,7 +1822,8 @@ pub async fn transcribe_media_command<R: Runtime>(
                 &base_en_str,
                 &json_path_en,
                 &final_path_en_pb,
-                0, // No diarization for translation pass
+                0,     // No diarization for translation pass
+                false, // diarization_on
                 &PathBuf::new(),
                 true, // is_translation_pass
                 None, // Delay speaker mapping
@@ -2650,51 +2653,120 @@ fn merge_diarization_results_cmd(
     whisper_segments: &mut Vec<TranscriptSegment>,
     rttm_records: &[RttmRecord],
 ) {
-    if rttm_records.is_empty() {
-        info!("[Merge CMD] No RTTM records for merging.");
-        return;
-    }
     if whisper_segments.is_empty() {
-        info!("[Merge CMD] No whisper segments for merging.");
         return;
     }
 
-    let mut sorted_rttm = rttm_records.to_vec();
-    sorted_rttm.sort_by(|a, b| {
-        a.start_time
-            .partial_cmp(&b.start_time)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    for seg in whisper_segments.iter_mut() {
-        let seg_mid_point = seg.start_time + (seg.end_time - seg.start_time) / 2.0;
-        let mut best_speaker = "Unknown".to_string();
-        let mut max_overlap = 0.0f64;
-
-        for rttm_rec in &sorted_rttm {
-            let rttm_start = rttm_rec.start_time;
-            let rttm_end = rttm_rec.start_time + rttm_rec.duration;
-
-            let overlap_start = seg.start_time.max(rttm_start);
-            let overlap_end = seg.end_time.min(rttm_end);
-            let current_overlap = (overlap_end - overlap_start).max(0.0);
-
-            if current_overlap > max_overlap {
-                max_overlap = current_overlap;
-                best_speaker = rttm_rec.speaker_id.clone();
-            } else if current_overlap > 0.0 && current_overlap == max_overlap {
-                // Tie-breaking: prefer speaker whose turn contains the segment's midpoint
-                if seg_mid_point >= rttm_start && seg_mid_point < rttm_end {
-                    best_speaker = rttm_rec.speaker_id.clone();
+    // 1. Flatten all words into a single list
+    let mut all_words = Vec::new();
+    for seg in whisper_segments.iter() {
+        if let Some(words) = &seg.words {
+            if words.is_empty() {
+                // Fallback: Dummy word for segment if word-level data is empty
+                all_words.push(Word {
+                    start: seg.start_time,
+                    end: seg.end_time,
+                    text: seg.text.clone(),
+                    speaker: None,
+                    probability: 1.0,
+                });
+            } else {
+                for w in words {
+                    all_words.push(w.clone());
                 }
             }
-        }
-        if max_overlap > 0.0 {
-            // Only assign if there was any overlap
-            seg.speaker = best_speaker;
+        } else {
+            // Fallback: Create dummy word for the segment
+            all_words.push(Word {
+                start: seg.start_time,
+                end: seg.end_time,
+                text: seg.text.clone(),
+                speaker: None,
+                probability: 1.0,
+            });
         }
     }
-    info!("[Merge CMD] Finished merging diarization results.");
+
+    if all_words.is_empty() {
+        warn!("[Merge CMD] No words collected for re-clustering.");
+        return;
+    }
+
+    // 2. Assign speakers to each word based on RTTM overlap
+    if !rttm_records.is_empty() {
+        info!(
+            "[Merge CMD] Mapping speakers to {} words using {} RTTM records...",
+            all_words.len(),
+            rttm_records.len()
+        );
+        for word in all_words.iter_mut() {
+            let mut best_speaker = None;
+            let mut max_overlap = 0.0;
+
+            for rttm in rttm_records {
+                let rttm_end = rttm.start_time + rttm.duration;
+                let overlap_start = word.start.max(rttm.start_time);
+                let overlap_end = word.end.min(rttm_end);
+                let overlap = (overlap_end - overlap_start).max(0.0);
+
+                if overlap > max_overlap {
+                    max_overlap = overlap;
+                    best_speaker = Some(rttm.speaker_id.clone());
+                }
+            }
+            word.speaker = best_speaker;
+        }
+    }
+
+    // 3. Re-cluster words into segments
+    let mut new_segments = Vec::new();
+    let mut current_segment_words = Vec::new();
+    let mut current_speaker = all_words[0].speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+
+    for word in all_words {
+        let word_speaker = word.speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+        let last_word_end = current_segment_words.last().map(|w: &Word| w.end).unwrap_or(word.start);
+        
+        // Conditions for a new segment:
+        // - Speaker changed
+        // - Large silence gap (> 1.5s)
+        let speaker_changed = word_speaker != current_speaker;
+        let silence_gap = word.start - last_word_end > 1.5;
+
+        if !current_segment_words.is_empty() && (speaker_changed || silence_gap) {
+            // Finalize current segment
+            new_segments.push(create_segment_from_words_cmd(current_segment_words, current_speaker));
+            current_segment_words = Vec::new();
+            current_speaker = word_speaker;
+        }
+        current_segment_words.push(word);
+    }
+
+    // Add the final segment
+    if !current_segment_words.is_empty() {
+        new_segments.push(create_segment_from_words_cmd(current_segment_words, current_speaker));
+    }
+
+    let before_count = whisper_segments.len();
+    *whisper_segments = new_segments;
+    info!("[Merge CMD] Re-clustered {} segments into {} high-precision segments.", before_count, whisper_segments.len());
+}
+
+fn create_segment_from_words_cmd(words: Vec<Word>, speaker: String) -> TranscriptSegment {
+    let start_time = words.first().map(|w| w.start).unwrap_or(0.0);
+    let end_time = words.last().map(|w| w.end).unwrap_or(0.0);
+    let text = words.iter()
+        .map(|w| w.text.clone())
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    TranscriptSegment {
+        start_time,
+        end_time,
+        speaker,
+        text,
+        words: Some(words),
+    }
 }
 
 // --- END: Adapted Helper Functions ---
@@ -2709,6 +2781,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     expected_whisper_json_output_path: &PathBuf,
     _final_transcript_destination_path: &PathBuf, // Not used directly here anymore
     num_speakers: usize,
+    diarization_on: bool,
     expected_rttm_output_path: &PathBuf,
     is_translation_pass: bool,
     speaker_names: Option<&[String]>,
@@ -2754,7 +2827,9 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         )
         .await?;
 
-    if num_speakers > 0 && !is_translation_pass {
+    // --- Diarization Pass (only if not translation and requested) ---
+    // Note: We run diarization even if num_speakers is 0 (Automatic mode)
+    if diarization_on && !is_translation_pass {
         emit_progress_cmd(
             app_handle,
             job_id,

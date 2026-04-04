@@ -56,6 +56,7 @@ pub async fn run_transcription<R: Runtime>(
     model_name: String,
     language: String,
     num_speakers: usize,
+    diarization_on: bool,
     speaker_names: Vec<String>,
 ) -> Result<TranscriptionResult, CommandError> {
     let internal_job_id = Uuid::new_v4().to_string();
@@ -261,7 +262,7 @@ pub async fn run_transcription<R: Runtime>(
         ));
     }
 
-    let rttm_records: Option<Vec<RttmRecord>> = if num_speakers > 0 {
+    let rttm_records: Option<Vec<RttmRecord>> = if diarization_on {
         let _ = emit_progress(
             &app_handle,
             &internal_job_id,
@@ -956,8 +957,19 @@ fn merge_diarization_results(
     let mut all_words = Vec::new();
     for seg in whisper_segments.iter() {
         if let Some(words) = &seg.words {
-            for w in words {
-                all_words.push(w.clone());
+            if words.is_empty() {
+                // Fallback: Dummy word for segment if word-level data is empty
+                all_words.push(crate::projectview::shared_types::Word {
+                    start: seg.start_time,
+                    end: seg.end_time,
+                    text: seg.text.clone(),
+                    speaker: None,
+                    probability: 1.0,
+                });
+            } else {
+                for w in words {
+                    all_words.push(w.clone());
+                }
             }
         } else {
             // Fallback: If no word data (unlikely now), create a dummy word for the segment
