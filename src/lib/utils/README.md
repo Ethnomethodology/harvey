@@ -4,7 +4,7 @@
 
 ## Exported Utilities / Constants
 
-*   **`pdfThumbnailQueue.js`**: A specialized async queue manager for generating PDF thumbnails sequentially. It prevents the application from overwhelming the system or PDF.js by trying to render dozens of thumbnails concurrently.
+- **`pdfThumbnailQueue.js`**: A specialized async queue manager for generating PDF thumbnails sequentially. It prevents the application from overwhelming the system or PDF.js by trying to render dozens of thumbnails concurrently.
 
 ## Usage Example
 
@@ -14,5 +14,5 @@ import { queuePdfThumbnail } from '$lib/utils/pdfThumbnailQueue.js';
 // Enqueue a thumbnail generation task
 queuePdfThumbnail(pdfPath, canvasElement)
   .then(() => console.log('Thumbnail rendered'))
-  .catch(err => console.error(err));
+  .catch((err) => console.error(err));
 ```

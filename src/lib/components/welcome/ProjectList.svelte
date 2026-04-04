@@ -39,7 +39,7 @@
 {:else}
   <div class="flex justify-center items-center h-full py-10">
     <p class="text-gray-500 text-center">
-      No recent projects found.<br/>
+      No recent projects found.<br />
       Click 'Create Project' or 'Open Project...' to get started.
     </p>
   </div>

@@ -16,12 +16,12 @@ vite.config.ts.timestamp-*
 # Ignore personal VSCode settings
 /.vscode/
 /.vs/
-.log
+*.log
 /temp/
 /playwright-report/
 /test-results/
-/e2e-tests/screenshots/
-/screenshots/
+/e2e-tests/dummy-project-folder/
+/e2e-tests/logs/
 /test-results/
 /notebooks/
 /harvey-sidecars/

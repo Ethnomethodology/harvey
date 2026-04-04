@@ -1,165 +1,163 @@
 <!-- src/lib/components/projectview/transcription/TreeNode.svelte -->
 <script>
-    import { createEventDispatcher } from "svelte";
-    import {
-        FolderOpen,
-        FolderClosed,
-        MessageSquareText,
-        Music,
-        Film,
-        CircleHelp,
-        FileText,
-    } from "@lucide/svelte";
-    import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from "$lib/stores/projectStore.js";
+  import { createEventDispatcher } from 'svelte';
+  import {
+    FolderOpen,
+    FolderClosed,
+    MessageSquareText,
+    Music,
+    Film,
+    CircleHelp,
+    FileText
+  } from '@lucide/svelte';
+  import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '$lib/stores/projectStore.js';
 
-    // Use relative path for recursive import within the same directory (if this file is TreeNode.svelte)
-    // If TreeNode is imported elsewhere, this might need adjustment, but assuming it's self-recursive
-    import TreeNode from "./TreeNode.svelte";
+  // Use relative path for recursive import within the same directory (if this file is TreeNode.svelte)
+  // If TreeNode is imported elsewhere, this might need adjustment, but assuming it's self-recursive
+  import TreeNode from './TreeNode.svelte';
 
-    /* ---------- props ---------- */
-    export let node; // The FileEntry object for this node
-    export let selectedMediaPath; // Full path of the selected media file for highlighting
-    export let currentTranscriptPath; // Full path of the currently loaded transcript file for highlighting
-    // REMOVED: highlightTranscript prop
+  /* ---------- props ---------- */
+  export let node; // The FileEntry object for this node
+  export let selectedMediaPath; // Full path of the selected media file for highlighting
+  export let currentTranscriptPath; // Full path of the currently loaded transcript file for highlighting
+  // REMOVED: highlightTranscript prop
 
-    const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher();
 
-    /* ---------- event handling ---------- */
-    // Combined click handler for the main div
-    function handleRowClick() {
-        // Dispatch click for all nodes (including directories)
-        dispatch("itemclick", node);
-    }
+  /* ---------- event handling ---------- */
+  // Combined click handler for the main div
+  function handleRowClick() {
+    // Dispatch click for all nodes (including directories)
+    dispatch('itemclick', node);
+  }
 
-    // Combined double-click handler for the main div
-    function handleRowDoubleClick() {
-        // Dispatch double-click for all nodes
-        dispatch("itemdblclick", node);
-    }
+  // Combined double-click handler for the main div
+  function handleRowDoubleClick() {
+    // Dispatch double-click for all nodes
+    dispatch('itemdblclick', node);
+  }
 
-    // Context menu handler for the main div
-    function handleRowContextMenu(event) {
-        event.preventDefault(); // Prevent default browser context menu
-        // Forward the browser event and the associated item data
-        dispatch("itemcontextmenu", { event, item: node });
-    }
+  // Context menu handler for the main div
+  function handleRowContextMenu(event) {
+    event.preventDefault(); // Prevent default browser context menu
+    // Forward the browser event and the associated item data
+    dispatch('itemcontextmenu', { event, item: node });
+  }
 
-    /* ---------- expand / collapse ---------- */
-    // Default expanded state: Expand media stem (depth 3) and subdirs (depth 4)
-    // Assuming depths are now: harvey_files(1)/Media(2)/<stem>(3)/media|transcripts|notes(4)/file(5)
-    let expanded = node.depth <= 4; // Expand depths 3 and 4 by default
-    function toggleExpand(event) {
-        event.stopPropagation(); // Prevent click from bubbling to handleRowClick
-        if (node.is_directory) expanded = !expanded;
-    }
+  /* ---------- expand / collapse ---------- */
+  // Default expanded state: Expand media stem (depth 3) and subdirs (depth 4)
+  // Assuming depths are now: harvey_files(1)/Media(2)/<stem>(3)/media|transcripts|notes(4)/file(5)
+  let expanded = node.depth <= 4; // Expand depths 3 and 4 by default
+  function toggleExpand(event) {
+    event.stopPropagation(); // Prevent click from bubbling to handleRowClick
+    if (node.is_directory) expanded = !expanded;
+  }
 
-    /* ---------- helpers ---------- */
+  /* ---------- helpers ---------- */
 
-    // Define extensions for note types for icon matching
-    const NOTE_EXTENSIONS = new Set(["json", "md", "txt"]); // Adjusted to include json
+  // Define extensions for note types for icon matching
+  const NOTE_EXTENSIONS = new Set(['json', 'md', 'txt']); // Adjusted to include json
 
-    /* ---------- Highlighting Logic ---------- */
-    $: isMediaHighlighted =
-        !node.is_directory &&
-        node.file_type === "media" &&
-        node.path === selectedMediaPath;
-    $: isTranscriptHighlighted =
-        !node.is_directory &&
-        node.file_type.includes("transcript") &&
-        node.path === currentTranscriptPath;
-    $: shouldHighlight = isMediaHighlighted || isTranscriptHighlighted;
+  /* ---------- Highlighting Logic ---------- */
+  $: isMediaHighlighted =
+    !node.is_directory && node.file_type === 'media' && node.path === selectedMediaPath;
+  $: isTranscriptHighlighted =
+    !node.is_directory &&
+    node.file_type.includes('transcript') &&
+    node.path === currentTranscriptPath;
+  $: shouldHighlight = isMediaHighlighted || isTranscriptHighlighted;
 </script>
 
 <!-- List Item Structure -->
 <li class="text-xs select-none group/tree-li">
-    <!-- Clickable/Hoverable Row -->
-    <div
-        class="flex items-center justify-between w-full px-1.5 py-1 text-left rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        class:cursor-pointer={!node.is_directory}
-        class:cursor-default={node.is_directory}
-        class:bg-blue-100={isTranscriptHighlighted}
-        class:dark:bg-blue-800={isTranscriptHighlighted}
-        on:click={handleRowClick}
-        on:dblclick={handleRowDoubleClick}
-        on:contextmenu={handleRowContextMenu}
-        title={node.name}
-    >
-        <div class="flex items-center space-x-1.5 flex-grow overflow-hidden truncate">
-            <!-- Indentation based on depth is now handled by the parent <ul>'s margin-left -->
+  <!-- Clickable/Hoverable Row -->
+  <div
+    class="flex items-center justify-between w-full px-1.5 py-1 text-left rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+    class:cursor-pointer={!node.is_directory}
+    class:cursor-default={node.is_directory}
+    class:bg-blue-100={isTranscriptHighlighted}
+    class:dark:bg-blue-800={isTranscriptHighlighted}
+    on:click={handleRowClick}
+    on:dblclick={handleRowDoubleClick}
+    on:contextmenu={handleRowContextMenu}
+    title={node.name}
+  >
+    <div class="flex items-center space-x-1.5 flex-grow overflow-hidden truncate">
+      <!-- Indentation based on depth is now handled by the parent <ul>'s margin-left -->
 
-            <!-- Folder Toggle Icon OR File Icon -->
-            {#if node.is_directory}
-                <span
-                    on:click={toggleExpand}
-                    class="flex-shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                >
-                    {#if expanded}
-                        <FolderOpen class="w-4 h-4" />
-                    {:else}
-                        <FolderClosed class="w-4 h-4" />
-                    {/if}
-                </span>
-            {:else}
-                <!-- File Icon -->
-                <span
-                    class="flex-shrink-0 flex items-center justify-center w-4 h-4"
-                class:text-gray-600={!shouldHighlight}
-                class:dark:text-gray-400={!shouldHighlight}
-                class:text-blue-600={shouldHighlight}
-                class:dark:text-blue-400={shouldHighlight}
-            >
-                {#if node.file_type === "media" && AUDIO_EXTENSIONS.has(node.name
-                            .split(".")
-                            .pop()
-                            ?.toLowerCase() ?? "")}
-                    <Music class="w-4 h-4" />
-                {:else if node.file_type === "media" && VIDEO_EXTENSIONS.has(node.name
-                            .split(".")
-                            .pop()
-                            ?.toLowerCase() ?? "")}
-                    <Film class="w-4 h-4" />
-                {:else if node.file_type === "audio_transcript" || node.file_type === "video_transcript" || node.file_type === "standalone_transcript"}
-                    <MessageSquareText class="w-4 h-4" />
-                {:else if node.file_type === "note"}
-                    <FileText class="w-4 h-4" />
-                {:else}
-                    <CircleHelp class="w-4 h-4" />
-                {/if}
-            </span>
-        {/if}
-
-        <!-- Filename -->
+      <!-- Folder Toggle Icon OR File Icon -->
+      {#if node.is_directory}
         <span
-            class="text-left flex-grow truncate font-medium"
-            class:text-blue-700={shouldHighlight}
-            class:dark:text-blue-200={shouldHighlight}
-            class:text-gray-700={!shouldHighlight && node.is_directory}
-            class:text-gray-800={!shouldHighlight && !node.is_directory}
-            class:dark:text-gray-400={!shouldHighlight && node.is_directory}
-            class:dark:text-gray-200={!shouldHighlight && !node.is_directory}
+          on:click={toggleExpand}
+          class="flex-shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         >
-            {node.name}
+          {#if expanded}
+            <FolderOpen class="w-4 h-4" />
+          {:else}
+            <FolderClosed class="w-4 h-4" />
+          {/if}
         </span>
-        </div>
-    </div>
+      {:else}
+        <!-- File Icon -->
+        <span
+          class="flex-shrink-0 flex items-center justify-center w-4 h-4"
+          class:text-gray-600={!shouldHighlight}
+          class:dark:text-gray-400={!shouldHighlight}
+          class:text-blue-600={shouldHighlight}
+          class:dark:text-blue-400={shouldHighlight}
+        >
+          {#if node.file_type === 'media' && AUDIO_EXTENSIONS.has(node.name
+                .split('.')
+                .pop()
+                ?.toLowerCase() ?? '')}
+            <Music class="w-4 h-4" />
+          {:else if node.file_type === 'media' && VIDEO_EXTENSIONS.has(node.name
+                .split('.')
+                .pop()
+                ?.toLowerCase() ?? '')}
+            <Film class="w-4 h-4" />
+          {:else if node.file_type === 'audio_transcript' || node.file_type === 'video_transcript' || node.file_type === 'standalone_transcript'}
+            <MessageSquareText class="w-4 h-4" />
+          {:else if node.file_type === 'note'}
+            <FileText class="w-4 h-4" />
+          {:else}
+            <CircleHelp class="w-4 h-4" />
+          {/if}
+        </span>
+      {/if}
 
-    <!-- Recursive Rendering for Children -->
-    {#if node.is_directory && expanded && node.children && node.children.length}
-        <ul class="mt-0.5 space-y-0.5 border-l border-transparent" style:margin-left="1.375rem">
-            {#each node.children as child (child.path || child.name)}
-                <svelte:self
-                    node={child}
-                    {selectedMediaPath}
-                    {currentTranscriptPath}
-                    on:itemclick
-                    on:itemcontextmenu
-                    on:itemdblclick
-                />
-            {/each}
-        </ul>
-    {/if}
+      <!-- Filename -->
+      <span
+        class="text-left flex-grow truncate font-medium"
+        class:text-blue-700={shouldHighlight}
+        class:dark:text-blue-200={shouldHighlight}
+        class:text-gray-700={!shouldHighlight && node.is_directory}
+        class:text-gray-800={!shouldHighlight && !node.is_directory}
+        class:dark:text-gray-400={!shouldHighlight && node.is_directory}
+        class:dark:text-gray-200={!shouldHighlight && !node.is_directory}
+      >
+        {node.name}
+      </span>
+    </div>
+  </div>
+
+  <!-- Recursive Rendering for Children -->
+  {#if node.is_directory && expanded && node.children && node.children.length}
+    <ul class="mt-0.5 space-y-0.5 border-l border-transparent" style:margin-left="1.375rem">
+      {#each node.children as child (child.path || child.name)}
+        <svelte:self
+          node={child}
+          {selectedMediaPath}
+          {currentTranscriptPath}
+          on:itemclick
+          on:itemcontextmenu
+          on:itemdblclick
+        />
+      {/each}
+    </ul>
+  {/if}
 </li>
 
 <style>
-    /* Removed highlight-transcript class */
+  /* Removed highlight-transcript class */
 </style>

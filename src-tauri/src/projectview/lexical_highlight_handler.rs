@@ -1,9 +1,9 @@
 // src-tauri/src/projectview/lexical_highlight_handler.rs
 use super::db_handler;
 use crate::welcome::config::CommandError;
+use log::{error, info};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
-use log::{info, error};
 
 #[derive(Deserialize)]
 pub struct SaveHighlightsArgs<'a> {
@@ -17,7 +17,11 @@ pub struct SaveHighlightsArgs<'a> {
 
 #[tauri::command]
 pub fn save_lexical_highlights(args: SaveHighlightsArgs) -> Result<(), CommandError> {
-    db_handler::save_lexical_highlights_to_db(args.project_id, args.document_path, args.highlights_json)
+    db_handler::save_lexical_highlights_to_db(
+        args.project_id,
+        args.document_path,
+        args.highlights_json,
+    )
 }
 
 #[tauri::command]
@@ -32,7 +36,10 @@ pub fn save_highlight_changes(
         project_id, file_path, &doc_type
     );
 
-    let normalized_doc_type = if doc_type == "audio_transcript" || doc_type == "standalone_transcript" || doc_type == "video_transcript" {
+    let normalized_doc_type = if doc_type == "audio_transcript"
+        || doc_type == "standalone_transcript"
+        || doc_type == "video_transcript"
+    {
         "lexical".to_string()
     } else {
         doc_type.clone()
@@ -60,10 +67,12 @@ pub fn save_highlight_changes(
                 }
             });
 
-
     let mut highlights: Vec<JsonValue> = match existing_highlights_json {
         Some(json_str) => serde_json::from_str(&json_str).unwrap_or_else(|e| {
-            error!("Failed to parse existing highlights JSON: {}. Starting with a new list.", e);
+            error!(
+                "Failed to parse existing highlights JSON: {}. Starting with a new list.",
+                e
+            );
             Vec::new()
         }),
         None => Vec::new(),
@@ -87,12 +96,15 @@ pub fn save_highlight_changes(
             highlights.push(highlight);
         }
     } else {
-        return Err(CommandError::from("Highlight data is missing an 'id' field."));
+        return Err(CommandError::from(
+            "Highlight data is missing an 'id' field.",
+        ));
     }
 
     // 3. Serialize the updated highlights list back to JSON
-    let updated_highlights_json = serde_json::to_string(&highlights)
-        .map_err(|e| CommandError::from(format!("Failed to serialize updated highlights: {}", e)))?;
+    let updated_highlights_json = serde_json::to_string(&highlights).map_err(|e| {
+        CommandError::from(format!("Failed to serialize updated highlights: {}", e))
+    })?;
 
     // 4. Save the updated JSON back to the database with the normalized doc_type
     db_handler::save_annotations_to_db(
@@ -104,7 +116,10 @@ pub fn save_highlight_changes(
 
     // 5. If migration occurred, delete the old record
     if was_migrated {
-        info!("Migrating highlights from doc_type '{}' to '{}' for file: {}", &original_doc_type, &normalized_doc_type, &file_path);
+        info!(
+            "Migrating highlights from doc_type '{}' to '{}' for file: {}",
+            &original_doc_type, &normalized_doc_type, &file_path
+        );
         db_handler::delete_annotations_from_db(&project_id, &file_path, &original_doc_type)?;
     }
 

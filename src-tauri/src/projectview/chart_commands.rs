@@ -1,7 +1,9 @@
 // src-tauri/src/projectview/chart_commands.rs
+use crate::projectview::chart_handler::{
+    delete_chart_config, load_chart_configs, save_chart_config, ChartConfig,
+};
+use log::{error, info};
 use tauri::command;
-use crate::projectview::chart_handler::{save_chart_config, load_chart_configs, delete_chart_config, ChartConfig};
-use log::{info, error};
 
 #[command]
 pub async fn save_chart_config_command(
@@ -12,7 +14,13 @@ pub async fn save_chart_config_command(
     config_json: String,
 ) -> Result<ChartConfig, String> {
     info!("[Command] Saving chart '{}'", chart_name);
-    match save_chart_config(&project_id, &table_path, &chart_name, &chart_type, &config_json) {
+    match save_chart_config(
+        &project_id,
+        &table_path,
+        &chart_name,
+        &chart_type,
+        &config_json,
+    ) {
         Ok(chart) => Ok(chart),
         Err(e) => {
             error!("[Command] Failed to save chart: {}", e);

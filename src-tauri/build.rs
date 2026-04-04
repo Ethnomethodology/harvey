@@ -1,13 +1,12 @@
 // src-tauri/build.rs
 
 use anyhow::{Context, Result};
-use std::env;
-use std::fs::{self};
-use std::path::{Path, PathBuf};
-use zip::ZipArchive;
 use bzip2::read::BzDecoder;
+use std::env;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
 use tar::Archive;
-use std::io::{Read};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -24,10 +23,7 @@ fn main() -> Result<()> {
     // --- Copy Python scripts to target/debug/scripts for development (existing logic) ---
     let scripts_source_dir = manifest_dir.join("scripts");
     let profile = env::var("PROFILE").unwrap();
-    let scripts_target_dir = manifest_dir
-        .join("target")
-        .join(&profile)
-        .join("scripts");
+    let scripts_target_dir = manifest_dir.join("target").join(&profile).join("scripts");
     fs::create_dir_all(&scripts_target_dir).expect("Failed to create target scripts directory");
 
     let python_scripts_to_copy = vec!["convert_with_pandoc.py"];
@@ -36,11 +32,13 @@ fn main() -> Result<()> {
         let source_path = scripts_source_dir.join(script_name);
         let dest_path = scripts_target_dir.join(script_name);
         if source_path.exists() {
-            fs::copy(&source_path, &dest_path).expect(&format!(
-                "Failed to copy {} to {}",
-                source_path.display(),
-                dest_path.display()
-            ));
+            fs::copy(&source_path, &dest_path).unwrap_or_else(|_| {
+                panic!(
+                    "Failed to copy {} to {}",
+                    source_path.display(),
+                    dest_path.display()
+                )
+            });
             println!(
                 "cargo:info=Copied {} to {}",
                 source_path.display(),
@@ -75,29 +73,55 @@ fn bundle_micromamba() -> Result<()> {
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win-64",
         "x86_64-unknown-linux-gnu" => "linux-64",
         // For Windows ARM64, we download the x64 binary and run it via emulation.
-        "aarch64-pc-windows-msvc" => "win-64", 
-        _ => anyhow::bail!("Unsupported target triple for Micromamba: {}", target_triple),
+        "aarch64-pc-windows-msvc" => "win-64",
+        _ => anyhow::bail!(
+            "Unsupported target triple for Micromamba: {}",
+            target_triple
+        ),
     };
 
     let generic_binary_name = "micromamba";
-    let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
+    let exe_suffix = if target_triple.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
 
     // The binary is named after the target triple, which is what Tauri expects.
-    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, target_triple, exe_suffix));
+    let platform_path = binaries_dir.join(format!(
+        "{}-{}{}",
+        generic_binary_name, target_triple, exe_suffix
+    ));
 
     if platform_path.exists() {
-        println!("cargo:info=Micromamba for {} already exists. Skipping download.", target_triple);
+        println!(
+            "cargo:info=Micromamba for {} already exists. Skipping download.",
+            target_triple
+        );
         return Ok(());
     }
 
-    let url = format!("https://micro.mamba.pm/api/micromamba/{}/latest", mamba_platform);
-    println!("cargo:info=Downloading Micromamba for {} from {}", target_triple, url);
+    let url = format!(
+        "https://micro.mamba.pm/api/micromamba/{}/latest",
+        mamba_platform
+    );
+    println!(
+        "cargo:info=Downloading Micromamba for {} from {}",
+        target_triple, url
+    );
 
     let agent = ureq::builder().build();
-    let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
+    let response = agent
+        .get(&url)
+        .call()
+        .with_context(|| format!("Failed to download from {}", url))?;
 
     if response.status() != 200 {
-        anyhow::bail!("Failed to download from {}: HTTP {}", url, response.status());
+        anyhow::bail!(
+            "Failed to download from {}: HTTP {}",
+            url,
+            response.status()
+        );
     }
 
     let mut compressed_bytes = Vec::new();
@@ -124,8 +148,12 @@ fn bundle_micromamba() -> Result<()> {
     {
         fs::set_permissions(&platform_path, fs::Permissions::from_mode(0o755))?;
     }
-    
-    println!("cargo:info=Micromamba for {} downloaded successfully to {}", target_triple, platform_path.display());
+
+    println!(
+        "cargo:info=Micromamba for {} downloaded successfully to {}",
+        target_triple,
+        platform_path.display()
+    );
 
     Ok(())
 }

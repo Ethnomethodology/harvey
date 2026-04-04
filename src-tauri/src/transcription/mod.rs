@@ -1,13 +1,13 @@
+use crate::projectview::shared_types::TranscriptSegment;
+use crate::welcome::config::CommandError;
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
-use crate::welcome::config::CommandError;
-use std::sync::{Arc, atomic::AtomicBool};
-use crate::projectview::shared_types::TranscriptSegment;
+use std::sync::{atomic::AtomicBool, Arc};
 
-pub mod whisper_cpp;
-pub mod python_engine;
 pub mod faster_whisper;
 pub mod faster_whisper_live;
+pub mod python_engine;
+pub mod whisper_cpp;
 
 #[derive(Debug, Clone)]
 pub struct TranscriptionOptions {

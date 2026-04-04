@@ -3,12 +3,7 @@
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { ExternalLink, Link as LinkIcon, Trash2 } from '@lucide/svelte';
-  import { 
-    Modal, 
-    Button, 
-    Label, 
-    Input
-  } from 'flowbite-svelte';
+  import { Modal, Button, Label, Input } from 'flowbite-svelte';
 
   export let showModal = false;
   export let initialUrl = ''; // URL if editing, empty if adding
@@ -32,7 +27,7 @@
                 el.select();
               }
             } catch (e) {
-              console.warn("Error setting input selection:", e);
+              console.warn('Error setting input selection:', e);
               el.focus();
             }
           }
@@ -48,7 +43,7 @@
       dispatch('confirm', { url: url.trim() });
       closeModal();
     } else {
-      console.warn("Link URL is invalid or empty.");
+      console.warn('Link URL is invalid or empty.');
       modalElement?.querySelector('input')?.focus();
     }
   }
@@ -72,11 +67,11 @@
 
   async function openExternalLink() {
     if (url && url !== 'https://' && url.trim() !== '') {
-        try {
-            await openUrl(url);
-        } catch (e) {
-            console.error('Failed to open link:', e);
-        }
+      try {
+        await openUrl(url);
+      } catch (e) {
+        console.error('Failed to open link:', e);
+      }
     }
   }
 </script>
@@ -108,7 +103,10 @@
 
   <div bind:this={modalElement} class="space-y-4">
     <div class="space-y-2">
-      <Label for="link-url-input" class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+      <Label
+        for="link-url-input"
+        class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2"
+      >
         <LinkIcon size={14} class="text-gray-400" />
         URL Address
       </Label>
@@ -138,26 +136,14 @@
 
   <svelte:fragment slot="footer">
     {#if isEditing}
-      <Button
-        color="red"
-        outline
-        on:click={handleRemove}
-        title="Remove this link"
-        class="px-3"
-      >
+      <Button color="red" outline on:click={handleRemove} title="Remove this link" class="px-3">
         <Trash2 class="w-4 h-4 mr-2" />
         Remove
       </Button>
     {/if}
     <div class="flex space-x-3 ml-auto">
-      <Button color="alternative" on:click={closeModal} title="Cancel">
-        Cancel
-      </Button>
-      <Button
-        color="blue"
-        on:click={handleConfirm}
-        title={isEditing ? 'Update link' : 'Add link'}
-      >
+      <Button color="alternative" on:click={closeModal} title="Cancel">Cancel</Button>
+      <Button color="blue" on:click={handleConfirm} title={isEditing ? 'Update link' : 'Add link'}>
         {isEditing ? 'Update' : 'Add'}
       </Button>
     </div>

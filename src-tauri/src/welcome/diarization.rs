@@ -1,7 +1,7 @@
 // src-tauri/src/welcome/diarization.rs
 use super::python_env;
-use std::fs;
 use crate::welcome::config::{read_config, write_config};
+use std::fs;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
@@ -21,7 +21,9 @@ fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String>
 }
 
 // Helper to get the custom diarization hub path
-pub fn get_diarization_hub_path<R: Runtime>(app_handle: &AppHandle<R>) -> Result<std::path::PathBuf, String> {
+pub fn get_diarization_hub_path<R: Runtime>(
+    _app_handle: &AppHandle<R>,
+) -> Result<std::path::PathBuf, String> {
     let config = read_config().map_err(|e| e.to_string())?;
     let base_path = std::path::PathBuf::from(config.download_location);
     Ok(base_path.join("diarization"))
@@ -33,12 +35,16 @@ pub async fn check_diarization_model_access<R: Runtime>(
 ) -> Result<bool, String> {
     let script_path = app_handle
         .path()
-        .resolve("scripts/verify_diarization_model.py", tauri::path::BaseDirectory::Resource)
+        .resolve(
+            "scripts/verify_diarization_model.py",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| e.to_string())?;
 
     let hf_home = get_diarization_hub_path(&app_handle)?;
 
-    let output = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
+    let output = python_env::get_python_command(&app_handle)
+        .map_err(|e| e.to_string())?
         .args(&[script_path.to_string_lossy().to_string()])
         .env("HF_HOME", hf_home.to_string_lossy().to_string())
         .output()
@@ -60,25 +66,32 @@ pub async fn check_gated_model_access<R: Runtime>(
     token: String,
 ) -> Result<bool, String> {
     log::info!("Checking HF token validity and gated model access");
-    
+
     let client = reqwest::Client::new();
-    
+
     // 1. Verify token validity
     let whoami_url = "https://huggingface.co/api/whoami-v2";
-    let whoami_res = client.get(whoami_url)
+    let whoami_res = client
+        .get(whoami_url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
         .map_err(|e| format!("Network error checking HF token: {}", e))?;
 
     if !whoami_res.status().is_success() {
-        log::warn!("HF token verification failed (Status {})", whoami_res.status());
-        return Err("Invalid Hugging Face token. Please check your token and try again.".to_string());
+        log::warn!(
+            "HF token verification failed (Status {})",
+            whoami_res.status()
+        );
+        return Err(
+            "Invalid Hugging Face token. Please check your token and try again.".to_string(),
+        );
     }
 
     // 2. Check model access
     let url = "https://huggingface.co/api/models/pyannote/speaker-diarization-3.1";
-    let res = client.get(url)
+    let res = client
+        .get(url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
@@ -99,7 +112,7 @@ pub async fn check_gated_model_access<R: Runtime>(
 
 #[derive(Clone, serde::Serialize)]
 struct LogPayload {
-  message: String,
+    message: String,
 }
 
 #[tauri::command]
@@ -110,7 +123,8 @@ pub async fn download_diarization_model<R: Runtime>(
     let hf_home = get_diarization_hub_path(&app_handle)?;
 
     // Ensure the custom directory exists
-    fs::create_dir_all(&hf_home).map_err(|e| format!("Failed to create diarization directory: {}", e))?;
+    fs::create_dir_all(&hf_home)
+        .map_err(|e| format!("Failed to create diarization directory: {}", e))?;
 
     let script_path = app_handle
         .path()
@@ -118,9 +132,17 @@ pub async fn download_diarization_model<R: Runtime>(
         .map_err(|e| e.to_string())?
         .join("scripts/download_diarization_model.py");
 
-    app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
+    app_handle
+        .emit(
+            "diarization-installation-log",
+            LogPayload {
+                message: "Starting diarization model download...".into(),
+            },
+        )
+        .unwrap();
 
-    let (mut rx, _child) = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
+    let (mut rx, _child) = python_env::get_python_command(&app_handle)
+        .map_err(|e| e.to_string())?
         .args(&[script_path.to_string_lossy().to_string(), token.clone()])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "0")
         .env("HF_HOME", hf_home.to_string_lossy().to_string())
@@ -131,17 +153,45 @@ pub async fn download_diarization_model<R: Runtime>(
     while let Some(event) = rx.recv().await {
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                app_handle.emit("diarization-installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                app_handle
+                    .emit(
+                        "diarization-installation-log",
+                        LogPayload {
+                            message: String::from_utf8_lossy(&line).to_string(),
+                        },
+                    )
+                    .unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                app_handle.emit("diarization-installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                app_handle
+                    .emit(
+                        "diarization-installation-log",
+                        LogPayload {
+                            message: String::from_utf8_lossy(&line).to_string(),
+                        },
+                    )
+                    .unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code == Some(0) {
-                    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model downloaded successfully.".into() }).unwrap();
+                    app_handle
+                        .emit(
+                            "diarization-installation-log",
+                            LogPayload {
+                                message: "Diarization model downloaded successfully.".into(),
+                            },
+                        )
+                        .unwrap();
                     success = true;
                 } else {
-                    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model download failed.".into() }).unwrap();
+                    app_handle
+                        .emit(
+                            "diarization-installation-log",
+                            LogPayload {
+                                message: "Diarization model download failed.".into(),
+                            },
+                        )
+                        .unwrap();
                 }
                 break;
             }
@@ -149,7 +199,9 @@ pub async fn download_diarization_model<R: Runtime>(
         }
     }
 
-    app_handle.emit("diarization-installation-finished", ()).unwrap();
+    app_handle
+        .emit("diarization-installation-finished", ())
+        .unwrap();
 
     if success {
         Ok(())
@@ -164,12 +216,16 @@ pub async fn get_diarization_cache_path<R: Runtime>(
 ) -> Result<String, String> {
     let script_path = app_handle
         .path()
-        .resolve("scripts/get_diarization_cache_path.py", tauri::path::BaseDirectory::Resource)
+        .resolve(
+            "scripts/get_diarization_cache_path.py",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| e.to_string())?;
 
     let hf_home = get_diarization_hub_path(&app_handle)?;
 
-    let output = python_env::get_python_command(&app_handle).map_err(|e| e.to_string())?
+    let output = python_env::get_python_command(&app_handle)
+        .map_err(|e| e.to_string())?
         .args(&[script_path.to_string_lossy().to_string()])
         .env("HF_HOME", hf_home.to_string_lossy().to_string())
         .output()
@@ -184,15 +240,16 @@ pub async fn get_diarization_cache_path<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn delete_diarization_model<R: Runtime>(
-    app_handle: AppHandle<R>,
-) -> Result<(), String> {
+pub async fn delete_diarization_model<R: Runtime>(app_handle: AppHandle<R>) -> Result<(), String> {
     // Use the dynamic cache path from the helper function
     let cache_path_str = get_diarization_cache_path(app_handle.clone()).await?;
     let hf_hub_path = std::path::PathBuf::from(cache_path_str);
 
     if !hf_hub_path.exists() {
-        log::info!("HuggingFace hub directory not found at {:?}, nothing to delete.", hf_hub_path);
+        log::info!(
+            "HuggingFace hub directory not found at {:?}, nothing to delete.",
+            hf_hub_path
+        );
         return Ok(());
     }
 

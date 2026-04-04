@@ -1,12 +1,11 @@
-
-use tauri::{AppHandle, Runtime, Manager, Emitter};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
-use std::path::{PathBuf};
-use log::{error, info};
+use crate::projectview::transcription_commands::{LiveTranscriptionResult, LiveTranscriptionState};
 use crate::welcome::python_env::get_python_path;
-use crate::projectview::transcription_commands::{LiveTranscriptionState, LiveTranscriptionResult};
+use log::{error, info};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 pub async fn start_faster_whisper_live<R: Runtime>(
     app_handle: AppHandle<R>,
@@ -20,8 +19,12 @@ pub async fn start_faster_whisper_live<R: Runtime>(
 ) -> Result<bool, String> {
     let python_path = get_python_path().map_err(|e| e.to_string())?;
 
-    let script_path = app_handle.path()
-        .resolve("scripts/run_live_transcription.py", tauri::path::BaseDirectory::Resource)
+    let script_path = app_handle
+        .path()
+        .resolve(
+            "scripts/run_live_transcription.py",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| format!("Failed to resolve live transcription script path: {}", e))?;
 
     let mut args = vec![
@@ -30,8 +33,10 @@ pub async fn start_faster_whisper_live<R: Runtime>(
         model_path,
         "--language".to_string(),
         language,
-        "--step".to_string(), "5000".to_string(),
-        "--length".to_string(), "5000".to_string(),
+        "--step".to_string(),
+        "5000".to_string(),
+        "--length".to_string(),
+        "5000".to_string(),
     ];
 
     let mut command = app_handle
@@ -50,12 +55,12 @@ pub async fn start_faster_whisper_live<R: Runtime>(
     // Additional configuration from read_config could be added here (threads, device)
     // For now, we use defaults in the script.
 
-    info!("[Faster-Whisper Live] Spawning Python script: {:?} {:?}", python_path, args);
+    info!(
+        "[Faster-Whisper Live] Spawning Python script: {:?} {:?}",
+        python_path, args
+    );
 
-    let (mut rx, child) = command
-        .args(args)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let (mut rx, child) = command.args(args).spawn().map_err(|e| e.to_string())?;
 
     *state.whisper_child.lock().await = Some(child);
     state.is_running.store(true, Ordering::SeqCst);
@@ -85,10 +90,7 @@ pub async fn start_faster_whisper_live<R: Runtime>(
                         let _ = app_handle_clone.emit("live_transcription_ready", ());
                     }
 
-                    let cleaned_text = text
-                        .replace("[Start speaking]", "")
-                        .trim()
-                        .to_string();
+                    let cleaned_text = text.replace("[Start speaking]", "").trim().to_string();
 
                     if !cleaned_text.is_empty() && cleaned_text != last_text {
                         let is_final = !cleaned_text.ends_with("...");
@@ -97,12 +99,15 @@ pub async fn start_faster_whisper_live<R: Runtime>(
                         } else {
                             0.0
                         };
-                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { 
-                            text: cleaned_text.clone(), 
-                            is_final, 
-                            start_time: segment_start_time, 
-                            end_time 
-                        });
+                        let _ = app_handle_clone.emit(
+                            "live_transcription_result",
+                            LiveTranscriptionResult {
+                                text: cleaned_text.clone(),
+                                is_final,
+                                start_time: segment_start_time,
+                                end_time,
+                            },
+                        );
                         if is_final {
                             last_text = cleaned_text;
                             segment_start_time = end_time;
@@ -110,7 +115,10 @@ pub async fn start_faster_whisper_live<R: Runtime>(
                     }
                 }
                 CommandEvent::Stderr(line) => {
-                    error!("[Faster-Whisper Live][stderr]: {}", String::from_utf8_lossy(&line));
+                    error!(
+                        "[Faster-Whisper Live][stderr]: {}",
+                        String::from_utf8_lossy(&line)
+                    );
                 }
                 CommandEvent::Error(err) => {
                     error!("[Faster-Whisper Live][error]: {}", err);

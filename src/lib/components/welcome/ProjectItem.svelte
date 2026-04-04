@@ -32,7 +32,7 @@
         displayPath = project.path;
       }
     } catch (e) {
-      console.error("Error getting OS type:", e);
+      console.error('Error getting OS type:', e);
       displayPath = project.path; // Fallback
     }
   });
@@ -55,14 +55,19 @@
   <div
     class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all duration-150 ease-in-out flex justify-between items-center w-full text-left"
     on:click={openRecent}
-    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') openRecent(); }}
+    on:keydown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') openRecent();
+    }}
     role="button"
     tabindex="0"
     title={`Open project: ${project.name}\nPath: ${project.path}`}
   >
-
     <div class="min-w-0 mr-2 flex-grow">
-      <h3 class="font-medium text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">{project.name}</h3>
+      <h3
+        class="font-medium text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate"
+      >
+        {project.name}
+      </h3>
       <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{displayPath}</p>
     </div>
     <button
@@ -73,8 +78,15 @@
       aria-haspopup="true"
       aria-expanded={openMenuProjectPath === project.path}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
-        <path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z" />
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        class="w-5 h-5"
+      >
+        <path
+          d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z"
+        />
       </svg>
     </button>
   </div>
@@ -87,16 +99,43 @@
       aria-labelledby="menu-button-for-{project.path}"
       tabindex="0"
       on:click|stopPropagation
-      on:keydown={(e) => { if (e.key === 'Escape') openMenuProjectPath = null; }}
+      on:keydown={(e) => {
+        if (e.key === 'Escape') openMenuProjectPath = null;
+      }}
       transition:fly={{ y: -5, duration: 150 }}
     >
       <div class="py-1" role="none">
-        <button on:click={() => onMenuAction('Open')} class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1">Open</button>
-        <button on:click={() => onMenuAction('Locate')} class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1">{revealButtonLabel}</button>
-        <button on:click={() => onMenuAction('Rename')} class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1">Rename</button>
-        <hr class="my-1 border-gray-200 dark:border-gray-700">
-        <button on:click={() => onMenuAction('Remove')} class="text-red-600 dark:text-red-400 block w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20" role="menuitem" tabindex="-1">Remove</button>
-        <button on:click={() => onMenuAction('Delete')} class="text-red-600 dark:text-red-400 block w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20" role="menuitem" tabindex="-1">Delete from Disk</button>
+        <button
+          on:click={() => onMenuAction('Open')}
+          class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+          role="menuitem"
+          tabindex="-1">Open</button
+        >
+        <button
+          on:click={() => onMenuAction('Locate')}
+          class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+          role="menuitem"
+          tabindex="-1">{revealButtonLabel}</button
+        >
+        <button
+          on:click={() => onMenuAction('Rename')}
+          class="text-gray-700 dark:text-gray-200 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+          role="menuitem"
+          tabindex="-1">Rename</button
+        >
+        <hr class="my-1 border-gray-200 dark:border-gray-700" />
+        <button
+          on:click={() => onMenuAction('Remove')}
+          class="text-red-600 dark:text-red-400 block w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20"
+          role="menuitem"
+          tabindex="-1">Remove</button
+        >
+        <button
+          on:click={() => onMenuAction('Delete')}
+          class="text-red-600 dark:text-red-400 block w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20"
+          role="menuitem"
+          tabindex="-1">Delete from Disk</button
+        >
       </div>
     </div>
   {/if}

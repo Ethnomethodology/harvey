@@ -1,260 +1,281 @@
 <!-- src/lib/components/projectview/modals/SplitTranscriptModal.svelte -->
 <script>
-    import { createEventDispatcher } from 'svelte';
-    import { project, setStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
-    import { 
-		Modal,
-        Button, 
-        Label, 
-        Select, 
-        Helper,
-        Badge,
-        Alert
-    } from 'flowbite-svelte';
-    import { basename } from '@tauri-apps/api/path';
-    import { normalizePath } from '$lib/services/projectService.js';
-    import { invoke } from '@tauri-apps/api/core';
-    import { AlertTriangle, Split, X, FileText, SquareSplitHorizontal, SquareSplitVertical } from '@lucide/svelte';
+  import { createEventDispatcher } from 'svelte';
+  import { project, setStandaloneTranscriptSplit } from '$lib/stores/projectStore.js';
+  import { Modal, Button, Label, Select, Helper, Badge, Alert } from 'flowbite-svelte';
+  import { basename } from '@tauri-apps/api/path';
+  import { normalizePath } from '$lib/services/projectService.js';
+  import { invoke } from '@tauri-apps/api/core';
+  import {
+    AlertTriangle,
+    Split,
+    X,
+    FileText,
+    SquareSplitHorizontal,
+    SquareSplitVertical
+  } from '@lucide/svelte';
 
-    const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher();
 
-    let selectedPartnerPath = '';
-    let currentFileName = '';
-    let transcriptOptions = [];
-    
-    let currentTranscriptRowCount = 0;
-    let partnerTranscriptRowCount = 0;
-    let isLoadingCounts = false;
+  let selectedPartnerPath = '';
+  let currentFileName = '';
+  let transcriptOptions = [];
 
-    $: {
-        const p = $project;
-        const currentPath = p.currentStandaloneTranscriptPath || p.activeTranscriptPathInDataTab;
-        if (currentPath) {
-            basename(currentPath).then(name => currentFileName = name);
-            
-            if (p.currentStandaloneTranscriptPath) {
-                transcriptOptions = p.standaloneTranscriptFiles
-                    .map(f => {
-                        const fullPath = normalizePath(`${p.baseDirectory}/${f.relativePath || f.relative_path}`);
-                        return {
-                            path: fullPath,
-                            name: f.name || f.relativePath || f.relative_path
-                        };
-                    })
-                    .filter(f => f.path !== currentPath)
-                    .map(f => ({
-                        value: f.path,
-                        name: f.name
-                    }));
-            } else if (p.activeTranscriptPathInDataTab) {
-                // Find associated media file to get its transcripts
-                function findMediaFileInTree(nodes, transcriptPath) {
-                    if (!Array.isArray(nodes)) return null;
-                    for (const node of nodes) {
-                        if (node.file_type === 'media' && node.associated_transcripts) {
-                            if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
-                                return node;
-                            }
-                        }
-                        if (node.children) {
-                            const found = findMediaFileInTree(node.children, transcriptPath);
-                            if (found) return found;
-                        }
-                    }
-                    return null;
-                }
+  let currentTranscriptRowCount = 0;
+  let partnerTranscriptRowCount = 0;
+  let isLoadingCounts = false;
 
-                const mediaFile = findMediaFileInTree(p.files, p.activeTranscriptPathInDataTab);
-                if (mediaFile && mediaFile.associated_transcripts) {
-                    transcriptOptions = mediaFile.associated_transcripts
-                        .filter(t => t.path !== currentPath)
-                        .map(t => {
-                            let label = t.language_code || 'Original';
-                            if (t.name) label += ` (${t.name})`;
-                            return {
-                                value: t.path,
-                                name: label
-                            };
-                        });
-                }
-            }
-            
-            if (transcriptOptions.length > 0 && !selectedPartnerPath) {
-                // Pre-select the first option if none selected
-                if (!transcriptOptions.some(opt => opt.value === selectedPartnerPath)) {
-                    selectedPartnerPath = transcriptOptions[0].value;
-                }
-            }
-        }
-    }
+  $: {
+    const p = $project;
+    const currentPath = p.currentStandaloneTranscriptPath || p.activeTranscriptPathInDataTab;
+    if (currentPath) {
+      basename(currentPath).then((name) => (currentFileName = name));
 
-    // Reactive row count calculation
-    $: if ($project.showSplitTranscriptModal && ($project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab) && selectedPartnerPath) {
-        calculateRowCounts($project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab, selectedPartnerPath);
-    }
-
-    async function calculateRowCounts(currentPath, partnerPath) {
-        isLoadingCounts = true;
-        try {
-            // Count current transcript rows (from store if available, else file)
-            if ($project.currentStandaloneTranscriptLexicalJson && $project.currentStandaloneTranscriptPath === currentPath) {
-                currentTranscriptRowCount = countRowsInJson($project.currentStandaloneTranscriptLexicalJson);
-            } else if ($project.currentMediaNoteTranscriptJson && $project.activeTranscriptPathInDataTab === currentPath) {
-                currentTranscriptRowCount = countRowsInJson($project.currentMediaNoteTranscriptJson);
-            } else {
-                const content = await invoke('read_file_content', { path: currentPath });
-                currentTranscriptRowCount = countRowsInRaw(content);
-            }
-
-            // Count partner transcript rows (always file)
-            const partnerContent = await invoke('read_file_content', { path: partnerPath });
-            partnerTranscriptRowCount = countRowsInRaw(partnerContent);
-        } catch (e) {
-            console.error('[SplitTranscriptModal] Error counting rows:', e);
-        } finally {
-            isLoadingCounts = false;
-        }
-    }
-
-    function countRowsInJson(jsonString) {
-        try {
-            const parsed = JSON.parse(jsonString);
-            const table = parsed.root.children.find(c => c.type === 'table');
-            return table?.children?.length || 0;
-        } catch (e) { return 0; }
-    }
-
-    function countRowsInRaw(content) {
-        if (!content) return 0;
-        try {
-            const parsed = JSON.parse(content);
-            if (parsed.root) {
-                const table = parsed.root.children.find(c => c.type === 'table');
-                return table?.children?.length || 0;
-            } else if (Array.isArray(parsed)) {
-                return parsed.length + 1;
-            }
-            return 0;
-        } catch (e) { return 0; }
-    }
-
-    function handleConfirm() {
-        if (selectedPartnerPath) {
-            setStandaloneTranscriptSplit(
-                $project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab,
-                selectedPartnerPath, 
-                $project.pendingSplitOrientation
+      if (p.currentStandaloneTranscriptPath) {
+        transcriptOptions = p.standaloneTranscriptFiles
+          .map((f) => {
+            const fullPath = normalizePath(
+              `${p.baseDirectory}/${f.relativePath || f.relative_path}`
             );
-            handleClose();
+            return {
+              path: fullPath,
+              name: f.name || f.relativePath || f.relative_path
+            };
+          })
+          .filter((f) => f.path !== currentPath)
+          .map((f) => ({
+            value: f.path,
+            name: f.name
+          }));
+      } else if (p.activeTranscriptPathInDataTab) {
+        // Find associated media file to get its transcripts
+        function findMediaFileInTree(nodes, transcriptPath) {
+          if (!Array.isArray(nodes)) return null;
+          for (const node of nodes) {
+            if (node.file_type === 'media' && node.associated_transcripts) {
+              if (node.associated_transcripts.some((t) => t.path === transcriptPath)) {
+                return node;
+              }
+            }
+            if (node.children) {
+              const found = findMediaFileInTree(node.children, transcriptPath);
+              if (found) return found;
+            }
+          }
+          return null;
         }
-    }
 
-    function handleClose() {
-        project.update(p => ({ ...p, showSplitTranscriptModal: false }));
-        selectedPartnerPath = '';
-        currentTranscriptRowCount = 0;
-        partnerTranscriptRowCount = 0;
+        const mediaFile = findMediaFileInTree(p.files, p.activeTranscriptPathInDataTab);
+        if (mediaFile && mediaFile.associated_transcripts) {
+          transcriptOptions = mediaFile.associated_transcripts
+            .filter((t) => t.path !== currentPath)
+            .map((t) => {
+              let label = t.language_code || 'Original';
+              if (t.name) label += ` (${t.name})`;
+              return {
+                value: t.path,
+                name: label
+              };
+            });
+        }
+      }
+
+      if (transcriptOptions.length > 0 && !selectedPartnerPath) {
+        // Pre-select the first option if none selected
+        if (!transcriptOptions.some((opt) => opt.value === selectedPartnerPath)) {
+          selectedPartnerPath = transcriptOptions[0].value;
+        }
+      }
     }
+  }
+
+  // Reactive row count calculation
+  $: if (
+    $project.showSplitTranscriptModal &&
+    ($project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab) &&
+    selectedPartnerPath
+  ) {
+    calculateRowCounts(
+      $project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab,
+      selectedPartnerPath
+    );
+  }
+
+  async function calculateRowCounts(currentPath, partnerPath) {
+    isLoadingCounts = true;
+    try {
+      // Count current transcript rows (from store if available, else file)
+      if (
+        $project.currentStandaloneTranscriptLexicalJson &&
+        $project.currentStandaloneTranscriptPath === currentPath
+      ) {
+        currentTranscriptRowCount = countRowsInJson(
+          $project.currentStandaloneTranscriptLexicalJson
+        );
+      } else if (
+        $project.currentMediaNoteTranscriptJson &&
+        $project.activeTranscriptPathInDataTab === currentPath
+      ) {
+        currentTranscriptRowCount = countRowsInJson($project.currentMediaNoteTranscriptJson);
+      } else {
+        const content = await invoke('read_file_content', { path: currentPath });
+        currentTranscriptRowCount = countRowsInRaw(content);
+      }
+
+      // Count partner transcript rows (always file)
+      const partnerContent = await invoke('read_file_content', { path: partnerPath });
+      partnerTranscriptRowCount = countRowsInRaw(partnerContent);
+    } catch (e) {
+      console.error('[SplitTranscriptModal] Error counting rows:', e);
+    } finally {
+      isLoadingCounts = false;
+    }
+  }
+
+  function countRowsInJson(jsonString) {
+    try {
+      const parsed = JSON.parse(jsonString);
+      const table = parsed.root.children.find((c) => c.type === 'table');
+      return table?.children?.length || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function countRowsInRaw(content) {
+    if (!content) return 0;
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.root) {
+        const table = parsed.root.children.find((c) => c.type === 'table');
+        return table?.children?.length || 0;
+      } else if (Array.isArray(parsed)) {
+        return parsed.length + 1;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function handleConfirm() {
+    if (selectedPartnerPath) {
+      setStandaloneTranscriptSplit(
+        $project.currentStandaloneTranscriptPath || $project.activeTranscriptPathInDataTab,
+        selectedPartnerPath,
+        $project.pendingSplitOrientation
+      );
+      handleClose();
+    }
+  }
+
+  function handleClose() {
+    project.update((p) => ({ ...p, showSplitTranscriptModal: false }));
+    selectedPartnerPath = '';
+    currentTranscriptRowCount = 0;
+    partnerTranscriptRowCount = 0;
+  }
 </script>
 
 <Modal
-	bind:open={$project.showSplitTranscriptModal}
-	size="md"
-	autoclose={false}
-	outsideclose={true}
-	class="w-full"
-	backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
-	dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
-	bodyClass="p-6 space-y-6 bg-white dark:bg-gray-900"
-	headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
-	footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
-	on:close={handleClose}
+  bind:open={$project.showSplitTranscriptModal}
+  size="md"
+  autoclose={false}
+  outsideclose={true}
+  class="w-full"
+  backdropClass="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm"
+  dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[10001] flex"
+  bodyClass="p-6 space-y-6 bg-white dark:bg-gray-900"
+  headerClass="px-6 py-4 flex items-center justify-between border-b dark:border-gray-700 bg-gray-50/50"
+  footerClass="px-6 py-4 flex items-center justify-end space-x-3 rtl:space-x-reverse border-t dark:border-gray-700 bg-gray-50/80 backdrop-blur"
+  on:close={handleClose}
 >
-	<div slot="header" class="flex items-center gap-2">
-		{#if $project.pendingSplitOrientation === 'vertical'}
-			<SquareSplitVertical class="w-5 h-5 text-gray-500" />
-		{:else}
-			<SquareSplitHorizontal class="w-5 h-5 text-gray-500" />
-		{/if}
-		<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-			Split Transcript View
-		</h3>
-	</div>
+  <div slot="header" class="flex items-center gap-2">
+    {#if $project.pendingSplitOrientation === 'vertical'}
+      <SquareSplitVertical class="w-5 h-5 text-gray-500" />
+    {:else}
+      <SquareSplitHorizontal class="w-5 h-5 text-gray-500" />
+    {/if}
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Split Transcript View</h3>
+  </div>
 
-	<div class="space-y-6">
-		<div class="space-y-2">
-			<Label class="text-gray-500 dark:text-gray-400">Current Transcript</Label>
-			<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-lg">
-				<div class="flex items-center gap-2 overflow-hidden">
-					<FileText size={16} class="text-gray-400 shrink-0" />
-					<span class="text-sm font-semibold truncate text-gray-700 dark:text-gray-200" title={currentFileName}>
-						{currentFileName}
-					</span>
-				</div>
-				{#if currentTranscriptRowCount > 0}
-					<Badge color="dark" rounded class="px-2 py-0.5 text-[10px] shrink-0 whitespace-nowrap">
-						{currentTranscriptRowCount} rows
-					</Badge>
-				{/if}
-			</div>
-		</div>
+  <div class="space-y-6">
+    <div class="space-y-2">
+      <Label class="text-gray-500 dark:text-gray-400">Current Transcript</Label>
+      <div
+        class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-lg"
+      >
+        <div class="flex items-center gap-2 overflow-hidden">
+          <FileText size={16} class="text-gray-400 shrink-0" />
+          <span
+            class="text-sm font-semibold truncate text-gray-700 dark:text-gray-200"
+            title={currentFileName}
+          >
+            {currentFileName}
+          </span>
+        </div>
+        {#if currentTranscriptRowCount > 0}
+          <Badge color="dark" rounded class="px-2 py-0.5 text-[10px] shrink-0 whitespace-nowrap">
+            {currentTranscriptRowCount} rows
+          </Badge>
+        {/if}
+      </div>
+    </div>
 
-		<div class="space-y-2">
-			<Label for="partnerSelect">Select Partner Transcript</Label>
-			<Select
-				id="partnerSelect"
-				items={transcriptOptions}
-				bind:value={selectedPartnerPath}
-				disabled={transcriptOptions.length === 0}
-				placeholder="Choose a transcript to compare..."
-			/>
-			<div class="flex justify-between items-center mt-1">
-				{#if transcriptOptions.length === 0}
-					<Helper color="orange" class="italic">
-						No other transcripts available to split with.
-					</Helper>
-				{:else}
-					<Helper>Choose the second transcript for side-by-side view.</Helper>
-				{/if}
-				
-				{#if partnerTranscriptRowCount > 0}
-					<Badge color="dark" rounded class="px-2 py-0.5 text-[10px] shrink-0 whitespace-nowrap">
-						{partnerTranscriptRowCount} rows
-					</Badge>
-				{/if}
-			</div>
-		</div>
+    <div class="space-y-2">
+      <Label for="partnerSelect">Select Partner Transcript</Label>
+      <Select
+        id="partnerSelect"
+        items={transcriptOptions}
+        bind:value={selectedPartnerPath}
+        disabled={transcriptOptions.length === 0}
+        placeholder="Choose a transcript to compare..."
+      />
+      <div class="flex justify-between items-center mt-1">
+        {#if transcriptOptions.length === 0}
+          <Helper color="orange" class="italic">
+            No other transcripts available to split with.
+          </Helper>
+        {:else}
+          <Helper>Choose the second transcript for side-by-side view.</Helper>
+        {/if}
 
-		{#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
-			<Alert color="yellow" class="items-start">
-				<AlertTriangle slot="icon" class="w-5 h-5 shrink-0" />
-				<div class="flex flex-col gap-1 ml-2">
-					<span class="text-xs font-bold uppercase tracking-wider">Row Count Mismatch</span>
-					<p class="text-[11px] leading-relaxed">
-						These transcripts have different row counts ({currentTranscriptRowCount} vs {partnerTranscriptRowCount}). 
-						Scroll synchronization may not align perfectly.
-					</p>
-				</div>
-			</Alert>
-		{/if}
-	</div>
+        {#if partnerTranscriptRowCount > 0}
+          <Badge color="dark" rounded class="px-2 py-0.5 text-[10px] shrink-0 whitespace-nowrap">
+            {partnerTranscriptRowCount} rows
+          </Badge>
+        {/if}
+      </div>
+    </div>
 
-	<svelte:fragment slot="footer">
-		<Button color="alternative" on:click={handleClose} title="Cancel and close">
-			Cancel
-		</Button>
-		<Button 
-			color="blue" 
-			on:click={handleConfirm} 
-			disabled={!selectedPartnerPath || isLoadingCounts}
-			title={!selectedPartnerPath ? "Please select a partner transcript" : "Open split view"}
-		>
-			{#if isLoadingCounts}
-				Checking...
-			{:else}
-				<Split size={18} class="mr-2" />
-				Split View
-			{/if}
-		</Button>
-	</svelte:fragment>
+    {#if !isLoadingCounts && selectedPartnerPath && currentTranscriptRowCount > 0 && partnerTranscriptRowCount > 0 && currentTranscriptRowCount !== partnerTranscriptRowCount}
+      <Alert color="yellow" class="items-start">
+        <AlertTriangle slot="icon" class="w-5 h-5 shrink-0" />
+        <div class="flex flex-col gap-1 ml-2">
+          <span class="text-xs font-bold uppercase tracking-wider">Row Count Mismatch</span>
+          <p class="text-[11px] leading-relaxed">
+            These transcripts have different row counts ({currentTranscriptRowCount} vs {partnerTranscriptRowCount}).
+            Scroll synchronization may not align perfectly.
+          </p>
+        </div>
+      </Alert>
+    {/if}
+  </div>
+
+  <svelte:fragment slot="footer">
+    <Button color="alternative" on:click={handleClose} title="Cancel and close">Cancel</Button>
+    <Button
+      color="blue"
+      on:click={handleConfirm}
+      disabled={!selectedPartnerPath || isLoadingCounts}
+      title={!selectedPartnerPath ? 'Please select a partner transcript' : 'Open split view'}
+    >
+      {#if isLoadingCounts}
+        Checking...
+      {:else}
+        <Split size={18} class="mr-2" />
+        Split View
+      {/if}
+    </Button>
+  </svelte:fragment>
 </Modal>

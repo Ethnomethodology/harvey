@@ -17,7 +17,7 @@ export class HorizontalRuleNode extends DecoratorNode {
   exportJSON() {
     return {
       type: 'horizontalrule',
-      version: 1,
+      version: 1
     };
   }
 
@@ -42,7 +42,7 @@ export class HorizontalRuleNode extends DecoratorNode {
   }
 
   isInline() {
-      return false;
+    return false;
   }
 }
 

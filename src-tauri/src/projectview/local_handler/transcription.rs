@@ -1,21 +1,18 @@
 // src-tauri/src/projectview/local_handler/transcription.rs
 
-use crate::projectview::shared_types::{TranscriptSegment, ProgressPayload, TranscriptionResult};
-use crate::projectview::shared_utils::{get_project_xml_path_from_item};
+use crate::projectview::shared_types::{ProgressPayload, TranscriptSegment, TranscriptionResult};
+use crate::projectview::shared_utils::get_project_xml_path_from_item;
 use crate::projectview::transcription_commands::{
-    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, 
-    create_lexical_paragraph_json_value,
-    create_lexical_table_from_segments
+    create_lexical_paragraph_json_value, create_lexical_table_from_segments,
+    map_speaker_ids_to_names, prepare_output_paths, save_transcript_json,
 };
-use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
-use crate::welcome::python_env::{get_python_command, get_env_command};
+use crate::welcome::python_env::{get_env_command, get_python_command};
+use crate::transcription::{TranscriptionEngine, TranscriptionOptions, faster_whisper::FasterWhisperEngine, whisper_cpp::WhisperCppEngine};
+use serde_json;
 
 use log::{debug, error, info, warn};
-use serde::{Deserialize}; // Removed Serialize
 use std::{
-    cmp::Ordering as CmpOrdering,
-    collections::HashMap,
     fs::{self, File},
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -26,16 +23,13 @@ use std::{
     time::Duration,
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+use tauri_plugin_shell::process::CommandEvent;
 use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::projectview::utils::get_ffmpeg_path;
 
-// Structs specific to parsing whisper output
-#[derive(Deserialize, Debug)] struct WhisperJsonOutput { transcription: Option<Vec<WhisperJsonSegment>> }
-#[derive(Deserialize, Debug)] struct WhisperJsonSegment { timestamps: WhisperJsonTimestamps, text: String }
-#[derive(Deserialize, Debug)] struct WhisperJsonTimestamps { from: String, to: String }
+// Removed old Whisper JSON structs - using Engines instead
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +42,12 @@ struct TranscriptionJobCompletedPayload {
     error_message: Option<String>,
 }
 
-#[derive(Debug, Clone)] struct RttmRecord { start_time: f64, duration: f64, speaker_id: String }
+#[derive(Debug, Clone)]
+struct RttmRecord {
+    start_time: f64,
+    duration: f64,
+    speaker_id: String,
+}
 
 #[tauri::command]
 pub async fn run_transcription<R: Runtime>(
@@ -57,247 +56,427 @@ pub async fn run_transcription<R: Runtime>(
     model_name: String,
     language: String,
     num_speakers: usize,
-    speaker_names: Vec<String>
+    diarization_on: bool,
+    speaker_names: Vec<String>,
 ) -> Result<TranscriptionResult, CommandError> {
     let internal_job_id = Uuid::new_v4().to_string();
-    info!( "[Transcription][LocalRun][{}] Start: Media='{}', Model='{}', Lang='{}', Speakers={}", internal_job_id, media_path, model_name, language, num_speakers);
+    info!(
+        "[Transcription][LocalRun][{}] Start: Media='{}', Model='{}', Lang='{}', Speakers={}",
+        internal_job_id, media_path, model_name, language, num_speakers
+    );
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
 
     if cancel_flag.load(Ordering::Relaxed) {
-        warn!("[Transcription][LocalRun][{}] Cancelled before starting any processing.", internal_job_id);
-        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-            job_id: internal_job_id.clone(),
-            status: "cancelled".to_string(),
-            job_finished_path: media_path.clone(),
-            transcript_file_path: None,
-            translated_transcript_file_path: None,
-            error_message: Some("Transcription cancelled by user before WAV conversion.".to_string()),
-        });
-        return Err(CommandError::from("Transcription cancelled by user before WAV conversion."));
+        warn!(
+            "[Transcription][LocalRun][{}] Cancelled before starting any processing.",
+            internal_job_id
+        );
+        let _ = app_handle.emit(
+            "custom_transcription_job_completed",
+            TranscriptionJobCompletedPayload {
+                job_id: internal_job_id.clone(),
+                status: "cancelled".to_string(),
+                job_finished_path: media_path.clone(),
+                transcript_file_path: None,
+                translated_transcript_file_path: None,
+                error_message: Some(
+                    "Transcription cancelled by user before WAV conversion.".to_string(),
+                ),
+            },
+        );
+        return Err(CommandError::from(
+            "Transcription cancelled by user before WAV conversion.",
+        ));
     }
 
     let project_xml_path_buf = get_project_xml_path_from_item(&PathBuf::from(&media_path))?;
     let project_xml_path_str = project_xml_path_buf.to_string_lossy().to_string();
-    info!("[Transcription][LocalRun][{}] Found Project XML: {}", internal_job_id, project_xml_path_str);
+    info!(
+        "[Transcription][LocalRun][{}] Found Project XML: {}",
+        internal_job_id, project_xml_path_str
+    );
 
     let _ = emit_progress(&app_handle, &internal_job_id, 1.0, "Preparing audio...").await;
 
-    let wav_media_path_result = convert_to_wav_if_needed(&app_handle, &media_path, &internal_job_id, &cancel_flag).await;
+    let wav_media_path_result =
+        convert_to_wav_if_needed(&app_handle, &media_path, &internal_job_id, &cancel_flag).await;
     let wav_media_path = match wav_media_path_result {
         Ok(path) => path,
         Err(e) => {
             let error_message = format!("{}", e);
             if error_message.to_lowercase().contains("cancel") {
                 warn!("[Transcription][LocalRun][{}] WAV conversion was cancelled. Emitting cancelled event.", internal_job_id);
-                let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-                    job_id: internal_job_id.clone(),
-                    status: "cancelled".to_string(),
-                    job_finished_path: media_path.clone(),
-                    transcript_file_path: None,
-                    translated_transcript_file_path: None,
-                    error_message: Some(error_message.clone()),
-                });
-            }
-            return Err(CommandError::from(format!("WAV conversion failed: {}", error_message)));
-        }
-    };
-    let _ = emit_progress(&app_handle, &internal_job_id, 4.0, "Audio ready.").await;
-    info!("[Transcription][LocalRun][{}] Using WAV path: {}", internal_job_id, wav_media_path.display());
-
-    let whisper_model_path_str = resolve_whisper_model_path(&model_name, &internal_job_id).await?;
-    debug!("[Transcription][LocalRun][{}] Whisper model path: '{}'", internal_job_id, whisper_model_path_str);
-
-    let (output_path_base_str, expected_whisper_output_path, expected_rttm_path, final_transcript_path, _, _, _) =
-        prepare_output_paths(&wav_media_path.to_string_lossy(), &internal_job_id, false)?;
-    debug!("[Transcription][LocalRun][{}] Paths - Base:'{}', Whisper:'{}', RTTM:'{}', Final:'{}'", internal_job_id, output_path_base_str, expected_whisper_output_path.display(), expected_rttm_path.display(), final_transcript_path.display());
-
-    if cancel_flag.load(Ordering::Relaxed) {
-        warn!("[Transcription][LocalRun][{}] Cancelled before Whisper processing.", internal_job_id);
-        if wav_media_path.to_string_lossy() != media_path && wav_media_path.extension().map_or(false, |ext| ext == "wav") {
-            let _ = fs::remove_file(&wav_media_path);
-            info!("[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}", internal_job_id, wav_media_path.display());
-        }
-        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-            job_id: internal_job_id.clone(),
-            status: "cancelled".to_string(),
-            job_finished_path: media_path.clone(),
-            transcript_file_path: None,
-            translated_transcript_file_path: None,
-            error_message: Some("Transcription cancelled by user before Whisper.".to_string()),
-        });
-        return Err(CommandError::from("Transcription cancelled by user before Whisper processing."));
-    }
-
-    let _ = emit_progress(&app_handle, &internal_job_id, 5.0, "Running transcription...").await;
-    let whisper_output_path_result = run_whisper_cpp_sidecar(
-        &app_handle,
-        &wav_media_path.to_string_lossy(),
-        &whisper_model_path_str,
-        &language,
-        &internal_job_id,
-        &cancel_flag,
-        &output_path_base_str,
-        &expected_whisper_output_path,
-    ).await;
-
-    let whisper_output_path = match whisper_output_path_result {
-        Ok(path) => path,
-        Err(e) => {
-            let error_message = format!("{}", e);
-            if error_message.to_lowercase().contains("cancel") {
-                warn!("[Transcription][LocalRun][{}] Whisper processing was cancelled. Emitting cancelled event.", internal_job_id);
-                if expected_whisper_output_path.exists() {
-                    let _ = fs::remove_file(&expected_whisper_output_path);
-                    info!("[Transcription][LocalRun][{}] Cleaned up potential whisper output: {}", internal_job_id, expected_whisper_output_path.display());
-                }
-                if wav_media_path.to_string_lossy() != media_path && wav_media_path.extension().map_or(false, |ext| ext == "wav") {
-                    let _ = fs::remove_file(&wav_media_path);
-                    info!("[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}", internal_job_id, wav_media_path.display());
-                }
-                let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-                    job_id: internal_job_id.clone(),
-                    status: "cancelled".to_string(),
-                    job_finished_path: media_path.clone(),
-                    transcript_file_path: None,
-                    translated_transcript_file_path: None,
-                    error_message: Some(error_message.clone()),
-                });
-            }
-            return Err(CommandError::from(format!("Whisper processing failed: {}", error_message)));
-        }
-    };
-
-    let _ = emit_progress(&app_handle, &internal_job_id, 45.0, "Parsing results...").await;
-    let mut whisper_segments_plain = parse_whisper_json(&whisper_output_path)?; 
-    debug!("[Transcription][LocalRun][{}] Parsed {} plain text segments.", internal_job_id, whisper_segments_plain.len());
-
-    if cancel_flag.load(Ordering::Relaxed) {
-        warn!("[Transcription][LocalRun][{}] Cancelled before Diarization processing.", internal_job_id);
-        if expected_whisper_output_path.exists() { let _ = fs::remove_file(&expected_whisper_output_path); info!("[Transcription][LocalRun][{}] Cleaned up whisper output: {}", internal_job_id, expected_whisper_output_path.display());}
-        if wav_media_path.to_string_lossy() != media_path && wav_media_path.extension().map_or(false, |ext| ext == "wav") {
-            let _ = fs::remove_file(&wav_media_path); info!("[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}", internal_job_id, wav_media_path.display());
-        }
-        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-            job_id: internal_job_id.clone(),
-            status: "cancelled".to_string(),
-            job_finished_path: media_path.clone(),
-            transcript_file_path: None,
-            translated_transcript_file_path: None,
-            error_message: Some("Transcription cancelled by user before Diarization.".to_string()),
-        });
-        return Err(CommandError::from("Transcription cancelled by user before Diarization processing."));
-    }
-
-    let rttm_records: Option<Vec<RttmRecord>> = if num_speakers > 0 {
-        let _ = emit_progress(&app_handle, &internal_job_id, 50.0, "Running diarization...").await;
-        match run_python_diarization(
-            &app_handle,
-            &wav_media_path.to_string_lossy(),
-            num_speakers,
-            &expected_rttm_path,
-            &internal_job_id,
-            &cancel_flag
-        ).await {
-            Ok(rttm_path) => {
-                match parse_rttm_file(&rttm_path) {
-                    Ok(records) => {
-                        debug!("[Transcription][LocalRun][{}] Diarization success, {} turns.", internal_job_id, records.len());
-                        let _ = emit_progress(&app_handle, &internal_job_id, 85.0, "Merging results...").await;
-                        Some(records)
-                    }
-                    Err(e) => {
-                        error!("[Transcription][LocalRun][{}] Failed parse RTTM '{}': {}", internal_job_id, rttm_path.display(), e);
-                        let _ = emit_progress(&app_handle, &internal_job_id, 85.0, "RTTM parse failed.").await;
-                        None
-                    }
-                }
-            },
-            Err(e) => {
-                let error_message = format!("{}", e);
-                if error_message.to_lowercase().contains("cancel") {
-                    warn!("[Transcription][LocalRun][{}] Diarization was cancelled. Emitting cancelled event.", internal_job_id);
-                    if expected_rttm_path.exists() { let _ = fs::remove_file(&expected_rttm_path); info!("[Transcription][LocalRun][{}] Cleaned up RTTM output: {}", internal_job_id, expected_rttm_path.display());}
-                    if expected_whisper_output_path.exists() { let _ = fs::remove_file(&expected_whisper_output_path); info!("[Transcription][LocalRun][{}] Cleaned up whisper output: {}", internal_job_id, expected_whisper_output_path.display());}
-                    if wav_media_path.to_string_lossy() != media_path && wav_media_path.extension().map_or(false, |ext| ext == "wav") {
-                        let _ = fs::remove_file(&wav_media_path); info!("[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}", internal_job_id, wav_media_path.display());
-                    }
-                    let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                let _ = app_handle.emit(
+                    "custom_transcription_job_completed",
+                    TranscriptionJobCompletedPayload {
                         job_id: internal_job_id.clone(),
                         status: "cancelled".to_string(),
                         job_finished_path: media_path.clone(),
                         transcript_file_path: None,
                         translated_transcript_file_path: None,
                         error_message: Some(error_message.clone()),
-                    });
+                    },
+                );
+            }
+            return Err(CommandError::from(format!(
+                "WAV conversion failed: {}",
+                error_message
+            )));
+        }
+    };
+    let _ = emit_progress(&app_handle, &internal_job_id, 4.0, "Audio ready.").await;
+    info!(
+        "[Transcription][LocalRun][{}] Using WAV path: {}",
+        internal_job_id,
+        wav_media_path.display()
+    );
+
+    let whisper_model_path_str = resolve_whisper_model_path(&model_name, &internal_job_id).await?;
+    debug!(
+        "[Transcription][LocalRun][{}] Whisper model path: '{}'",
+        internal_job_id, whisper_model_path_str
+    );
+
+    let (
+        output_path_base_str,
+        expected_whisper_output_path,
+        expected_rttm_path,
+        final_transcript_path,
+        _,
+        _,
+        _,
+    ) = prepare_output_paths(&wav_media_path.to_string_lossy(), &internal_job_id, false)?;
+    debug!(
+        "[Transcription][LocalRun][{}] Paths - Base:'{}', Whisper:'{}', RTTM:'{}', Final:'{}'",
+        internal_job_id,
+        output_path_base_str,
+        expected_whisper_output_path.display(),
+        expected_rttm_path.display(),
+        final_transcript_path.display()
+    );
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        warn!(
+            "[Transcription][LocalRun][{}] Cancelled before Whisper processing.",
+            internal_job_id
+        );
+        if wav_media_path.to_string_lossy() != media_path
+            && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+        {
+            let _ = fs::remove_file(&wav_media_path);
+            info!(
+                "[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}",
+                internal_job_id,
+                wav_media_path.display()
+            );
+        }
+        let _ = app_handle.emit(
+            "custom_transcription_job_completed",
+            TranscriptionJobCompletedPayload {
+                job_id: internal_job_id.clone(),
+                status: "cancelled".to_string(),
+                job_finished_path: media_path.clone(),
+                transcript_file_path: None,
+                translated_transcript_file_path: None,
+                error_message: Some("Transcription cancelled by user before Whisper.".to_string()),
+            },
+        );
+        return Err(CommandError::from(
+            "Transcription cancelled by user before Whisper processing.",
+        ));
+    }
+
+    let _ = emit_progress(
+        &app_handle,
+        &internal_job_id,
+        5.0,
+        "Running transcription...",
+    )
+    .await;
+
+    // --- NEW: Use the Engine Architecture ---
+    let config = read_config().unwrap_or_default();
+    let engine_type = config.selected_transcription_engine.clone().unwrap_or_else(|| "faster-whisper".to_string());
+    
+    let options = TranscriptionOptions {
+        language_code: if language == "auto" { None } else { Some(language.clone()) },
+        model_path: whisper_model_path_str.clone(),
+        output_dir: expected_whisper_output_path.parent().unwrap_or(Path::new("")).to_path_buf(),
+        translate: false, // Default for now
+        initial_prompt: None,
+        hotwords: None,
+    };
+
+    let mut whisper_segments_plain = match engine_type.as_str() {
+        "whisper-cpp" => {
+            let engine = WhisperCppEngine::new(app_handle.clone());
+            engine.transcribe(&wav_media_path, &options, &internal_job_id, cancel_flag.clone()).await?
+        }
+        _ => {
+            let engine = FasterWhisperEngine::new(app_handle.clone());
+            engine.transcribe(&wav_media_path, &options, &internal_job_id, cancel_flag.clone()).await?
+        }
+    };
+
+    let _ = emit_progress(&app_handle, &internal_job_id, 45.0, "Transcription finished.").await;
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        warn!(
+            "[Transcription][LocalRun][{}] Cancelled before Diarization processing.",
+            internal_job_id
+        );
+        if expected_whisper_output_path.exists() {
+            let _ = fs::remove_file(&expected_whisper_output_path);
+            info!(
+                "[Transcription][LocalRun][{}] Cleaned up whisper output: {}",
+                internal_job_id,
+                expected_whisper_output_path.display()
+            );
+        }
+        if wav_media_path.to_string_lossy() != media_path
+            && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+        {
+            let _ = fs::remove_file(&wav_media_path);
+            info!(
+                "[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}",
+                internal_job_id,
+                wav_media_path.display()
+            );
+        }
+        let _ = app_handle.emit(
+            "custom_transcription_job_completed",
+            TranscriptionJobCompletedPayload {
+                job_id: internal_job_id.clone(),
+                status: "cancelled".to_string(),
+                job_finished_path: media_path.clone(),
+                transcript_file_path: None,
+                translated_transcript_file_path: None,
+                error_message: Some(
+                    "Transcription cancelled by user before Diarization.".to_string(),
+                ),
+            },
+        );
+        return Err(CommandError::from(
+            "Transcription cancelled by user before Diarization processing.",
+        ));
+    }
+
+    let rttm_records: Option<Vec<RttmRecord>> = if diarization_on {
+        let _ = emit_progress(
+            &app_handle,
+            &internal_job_id,
+            50.0,
+            "Running diarization...",
+        )
+        .await;
+        match run_python_diarization(
+            &app_handle,
+            &wav_media_path.to_string_lossy(),
+            num_speakers,
+            &expected_rttm_path,
+            &internal_job_id,
+            &cancel_flag,
+        )
+        .await
+        {
+            Ok(rttm_path) => match parse_rttm_file(&rttm_path) {
+                Ok(records) => {
+                    debug!(
+                        "[Transcription][LocalRun][{}] Diarization success, {} turns.",
+                        internal_job_id,
+                        records.len()
+                    );
+                    let _ =
+                        emit_progress(&app_handle, &internal_job_id, 85.0, "Merging results...")
+                            .await;
+                    Some(records)
+                }
+                Err(e) => {
+                    error!(
+                        "[Transcription][LocalRun][{}] Failed parse RTTM '{}': {}",
+                        internal_job_id,
+                        rttm_path.display(),
+                        e
+                    );
+                    let _ =
+                        emit_progress(&app_handle, &internal_job_id, 85.0, "RTTM parse failed.")
+                            .await;
+                    None
+                }
+            },
+            Err(e) => {
+                let error_message = format!("{}", e);
+                if error_message.to_lowercase().contains("cancel") {
+                    warn!("[Transcription][LocalRun][{}] Diarization was cancelled. Emitting cancelled event.", internal_job_id);
+                    if expected_rttm_path.exists() {
+                        let _ = fs::remove_file(&expected_rttm_path);
+                        info!(
+                            "[Transcription][LocalRun][{}] Cleaned up RTTM output: {}",
+                            internal_job_id,
+                            expected_rttm_path.display()
+                        );
+                    }
+                    if expected_whisper_output_path.exists() {
+                        let _ = fs::remove_file(&expected_whisper_output_path);
+                        info!(
+                            "[Transcription][LocalRun][{}] Cleaned up whisper output: {}",
+                            internal_job_id,
+                            expected_whisper_output_path.display()
+                        );
+                    }
+                    if wav_media_path.to_string_lossy() != media_path
+                        && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+                    {
+                        let _ = fs::remove_file(&wav_media_path);
+                        info!(
+                            "[Transcription][LocalRun][{}] Cleaned up temporary WAV file: {}",
+                            internal_job_id,
+                            wav_media_path.display()
+                        );
+                    }
+                    let _ = app_handle.emit(
+                        "custom_transcription_job_completed",
+                        TranscriptionJobCompletedPayload {
+                            job_id: internal_job_id.clone(),
+                            status: "cancelled".to_string(),
+                            job_finished_path: media_path.clone(),
+                            transcript_file_path: None,
+                            translated_transcript_file_path: None,
+                            error_message: Some(error_message.clone()),
+                        },
+                    );
                     return Err(CommandError::from(error_message));
-                 } else {
-                    error!("[Transcription][LocalRun][{}] Diarization failed: {}.", internal_job_id, error_message);
+                } else {
+                    error!(
+                        "[Transcription][LocalRun][{}] Diarization failed: {}.",
+                        internal_job_id, error_message
+                    );
                     warn!("Diarization script failed. Ensure the Python environment is correctly set up and `pyannote.audio` is installed.");
-                    let _ = emit_progress(&app_handle, &internal_job_id, 85.0, "Diarization failed.").await;
+                    let _ =
+                        emit_progress(&app_handle, &internal_job_id, 85.0, "Diarization failed.")
+                            .await;
                     None
                 }
             }
         }
     } else {
-        info!("[Transcription][LocalRun][{}] Skipping diarization (num_speakers=0).", internal_job_id);
+        info!(
+            "[Transcription][LocalRun][{}] Skipping diarization (num_speakers=0).",
+            internal_job_id
+        );
         let _ = emit_progress(&app_handle, &internal_job_id, 85.0, "Skipping diarization.").await;
         None
     };
 
     if let Some(rttm_data) = &rttm_records {
         if !rttm_data.is_empty() {
-            debug!("[Transcription][LocalRun][{}] Merging diarization results...", internal_job_id);
-            merge_diarization_results(&mut whisper_segments_plain, rttm_data); 
-            let _ = emit_progress(&app_handle, &internal_job_id, 90.0, "Mapping speaker names...").await;
+            debug!(
+                "[Transcription][LocalRun][{}] Merging diarization results...",
+                internal_job_id
+            );
+            merge_diarization_results(&mut whisper_segments_plain, rttm_data);
+            let _ = emit_progress(
+                &app_handle,
+                &internal_job_id,
+                90.0,
+                "Mapping speaker names...",
+            )
+            .await;
             map_speaker_ids_to_names(&mut whisper_segments_plain, &speaker_names);
         } else {
-            warn!("[Transcription][LocalRun][{}] Diarization ran but resulted in 0 RTTM records.", internal_job_id);
-            let _ = emit_progress(&app_handle, &internal_job_id, 90.0, "No speaker segments found.").await;
+            warn!(
+                "[Transcription][LocalRun][{}] Diarization ran but resulted in 0 RTTM records.",
+                internal_job_id
+            );
+            let _ = emit_progress(
+                &app_handle,
+                &internal_job_id,
+                90.0,
+                "No speaker segments found.",
+            )
+            .await;
         }
     } else {
-        debug!("[Transcription][LocalRun][{}] No RTTM data to merge.", internal_job_id);
+        debug!(
+            "[Transcription][LocalRun][{}] No RTTM data to merge.",
+            internal_job_id
+        );
     }
 
-    let _ = emit_progress(&app_handle, &internal_job_id, 95.0, "Saving final transcript...").await;
-    
+    let _ = emit_progress(
+        &app_handle,
+        &internal_job_id,
+        95.0,
+        "Saving final transcript...",
+    )
+    .await;
+
     let lexical_table_json_value = create_lexical_table_from_segments(&whisper_segments_plain);
     let lexical_table_json_string = serde_json::to_string_pretty(&lexical_table_json_value)
-        .map_err(|e| CommandError::from(format!("Failed to serialize Lexical Table JSON: {}", e)))?;
+        .map_err(|e| {
+            CommandError::from(format!("Failed to serialize Lexical Table JSON: {}", e))
+        })?;
 
-    debug!("[Transcription][LocalRun][{}] Saving final Lexical Table JSON to: {:?}", internal_job_id, final_transcript_path);
+    debug!(
+        "[Transcription][LocalRun][{}] Saving final Lexical Table JSON to: {:?}",
+        internal_job_id, final_transcript_path
+    );
     save_transcript_json(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
         lexical_table_json_string,
         Some(language.clone()), // Pass the original language code
-    ).await?;
-    info!("[Transcription][LocalRun][{}] Final transcript saved.", internal_job_id);
+    )
+    .await?;
+    info!(
+        "[Transcription][LocalRun][{}] Final transcript saved.",
+        internal_job_id
+    );
 
-    let segments_for_frontend_result: Vec<TranscriptSegment> = whisper_segments_plain.iter().cloned().map(|seg_plain| {
-        let cell_content_lexical_value = create_lexical_paragraph_json_value(&seg_plain.text);
-        let cell_content_lexical_string = serde_json::to_string(&cell_content_lexical_value)
-            .unwrap_or_else(|_| serde_json::to_string(&create_lexical_paragraph_json_value("")).unwrap());
+    let segments_for_frontend_result: Vec<TranscriptSegment> = whisper_segments_plain
+        .iter()
+        .cloned()
+        .map(|seg_plain| {
+            let cell_content_lexical_value = create_lexical_paragraph_json_value(&seg_plain.text);
+            let cell_content_lexical_string = serde_json::to_string(&cell_content_lexical_value)
+                .unwrap_or_else(|_| {
+                    serde_json::to_string(&create_lexical_paragraph_json_value("")).unwrap()
+                });
 
-        TranscriptSegment {
-            start_time: seg_plain.start_time,
-            end_time: seg_plain.end_time,
-            speaker: seg_plain.speaker.clone(),
-            text: cell_content_lexical_string,
-        }
-    }).collect();
+            TranscriptSegment {
+                start_time: seg_plain.start_time,
+                end_time: seg_plain.end_time,
+                speaker: seg_plain.speaker.clone(),
+                text: cell_content_lexical_string,
+                words: seg_plain.words.clone(),
+            }
+        })
+        .collect();
 
-    info!("[Transcription][LocalRun][{}] Process complete.", internal_job_id);
-    let _ = emit_progress(&app_handle, &internal_job_id, 100.0, "Transcription complete.").await;
+    info!(
+        "[Transcription][LocalRun][{}] Process complete.",
+        internal_job_id
+    );
+    let _ = emit_progress(
+        &app_handle,
+        &internal_job_id,
+        100.0,
+        "Transcription complete.",
+    )
+    .await;
 
-    let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
-        job_id: internal_job_id.clone(),
-        status: "done".to_string(),
-        job_finished_path: media_path.clone(),
-        transcript_file_path: Some(final_transcript_path.to_string_lossy().into_owned()),
-        translated_transcript_file_path: None,
-        error_message: None,
-    });
+    let _ = app_handle.emit(
+        "custom_transcription_job_completed",
+        TranscriptionJobCompletedPayload {
+            job_id: internal_job_id.clone(),
+            status: "done".to_string(),
+            job_finished_path: media_path.clone(),
+            transcript_file_path: Some(final_transcript_path.to_string_lossy().into_owned()),
+            translated_transcript_file_path: None,
+            error_message: None,
+        },
+    );
 
     Ok(TranscriptionResult {
         segments: segments_for_frontend_result,
@@ -310,26 +489,43 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
     app_handle: &AppHandle<R>,
     input_path_str: &str,
     job_id: &str, // Now internal_job_id from caller
-    cancel_flag: &Arc<AtomicBool>)
--> Result<PathBuf, CommandError> {
-    info!("[FFmpeg][{}] Checking audio file: {}", job_id, input_path_str);
+    cancel_flag: &Arc<AtomicBool>,
+) -> Result<PathBuf, CommandError> {
+    info!(
+        "[FFmpeg][{}] Checking audio file: {}",
+        job_id, input_path_str
+    );
     let input_path = PathBuf::from(input_path_str);
-    let extension = input_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+    let extension = input_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
 
     if extension == "wav" {
-        info!("[FFmpeg][{}] Input is already WAV. Skipping conversion.", job_id);
+        info!(
+            "[FFmpeg][{}] Input is already WAV. Skipping conversion.",
+            job_id
+        );
         return Ok(input_path);
     }
 
     let output_wav_path = input_path.with_extension("wav");
-    info!("[FFmpeg][{}] Target WAV path: {}", job_id, output_wav_path.display());
+    info!(
+        "[FFmpeg][{}] Target WAV path: {}",
+        job_id,
+        output_wav_path.display()
+    );
 
     if output_wav_path.exists() {
         match output_wav_path.metadata() {
             Ok(m) if m.len() > 0 => {
-                info!("[FFmpeg][{}] Target WAV file already exists and is not empty. Reusing.", job_id);
+                info!(
+                    "[FFmpeg][{}] Target WAV file already exists and is not empty. Reusing.",
+                    job_id
+                );
                 return Ok(output_wav_path);
-            },
+            }
             _ => {
                 warn!("[FFmpeg][{}] Target WAV file exists but is empty or metadata error. Overwriting.", job_id);
             }
@@ -342,11 +538,15 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
     let ffmpeg_path = get_ffmpeg_path(app_handle)?;
 
     let args: Vec<String> = vec![
-        "-i".into(), input_path_str.to_string(),
+        "-i".into(),
+        input_path_str.to_string(),
         "-vn".into(),
-        "-acodec".into(), "pcm_s16le".into(),
-        "-ar".into(), "16000".into(),
-        "-ac".into(), "1".into(),
+        "-acodec".into(),
+        "pcm_s16le".into(),
+        "-ar".into(),
+        "16000".into(),
+        "-ac".into(),
+        "1".into(),
         "-y".into(),
         output_wav_path.to_string_lossy().to_string(),
     ];
@@ -355,7 +555,11 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
     let (mut rx, child) = get_env_command(app_handle, &ffmpeg_path.to_string_lossy())?
         .args(args)
         .spawn()?;
-    debug!("[FFmpeg][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
+    debug!(
+        "[FFmpeg][{}] Spawned FFmpeg process (PID: {:?})",
+        job_id,
+        child.pid()
+    );
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
     let mut ffmpeg_exit_code: Option<i32> = None;
@@ -363,9 +567,14 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
-            warn!("[FFmpeg][{}] Cancellation requested. Killing FFmpeg process...", job_id);
+            warn!(
+                "[FFmpeg][{}] Cancellation requested. Killing FFmpeg process...",
+                job_id
+            );
             let _ = child.kill();
-            if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
+            if output_wav_path.exists() {
+                let _ = fs::remove_file(&output_wav_path);
+            }
             return Err(CommandError::from("Audio conversion cancelled."));
         }
 
@@ -397,35 +606,75 @@ pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
 
     let stderr_output = ffmpeg_stderr.join("\n");
     if ffmpeg_error.is_some() || ffmpeg_exit_code != Some(0) {
-        error!("[FFmpeg][{}] FFmpeg process failed. Code: {:?}, Error: {:?}\nStderr:\n{}", job_id, ffmpeg_exit_code, ffmpeg_error, stderr_output);
-        if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
-        return Err(CommandError::from(format!("FFmpeg conversion failed. Code: {:?}. Error: {}", ffmpeg_exit_code, ffmpeg_error.unwrap_or_default())));
+        error!(
+            "[FFmpeg][{}] FFmpeg process failed. Code: {:?}, Error: {:?}\nStderr:\n{}",
+            job_id, ffmpeg_exit_code, ffmpeg_error, stderr_output
+        );
+        if output_wav_path.exists() {
+            let _ = fs::remove_file(&output_wav_path);
+        }
+        return Err(CommandError::from(format!(
+            "FFmpeg conversion failed. Code: {:?}. Error: {}",
+            ffmpeg_exit_code,
+            ffmpeg_error.unwrap_or_default()
+        )));
     }
 
     if !output_wav_path.exists() {
-        error!("[FFmpeg][{}] FFmpeg reported success, but output file is missing: {}", job_id, output_wav_path.display());
-        return Err(CommandError::from(format!("FFmpeg conversion failed: output file missing ({})", output_wav_path.display())));
+        error!(
+            "[FFmpeg][{}] FFmpeg reported success, but output file is missing: {}",
+            job_id,
+            output_wav_path.display()
+        );
+        return Err(CommandError::from(format!(
+            "FFmpeg conversion failed: output file missing ({})",
+            output_wav_path.display()
+        )));
     }
     match output_wav_path.metadata() {
         Ok(m) if m.len() == 0 => {
-            error!("[FFmpeg][{}] FFmpeg reported success, but output file is empty: {}", job_id, output_wav_path.display());
+            error!(
+                "[FFmpeg][{}] FFmpeg reported success, but output file is empty: {}",
+                job_id,
+                output_wav_path.display()
+            );
             let _ = fs::remove_file(&output_wav_path);
-            return Err(CommandError::from(format!("FFmpeg conversion failed: output file is empty ({})", output_wav_path.display())));
-        },
+            return Err(CommandError::from(format!(
+                "FFmpeg conversion failed: output file is empty ({})",
+                output_wav_path.display()
+            )));
+        }
         Err(e) => {
-            error!("[FFmpeg][{}] FFmpeg reported success, but failed to get metadata for {}: {}", job_id, output_wav_path.display(), e);
+            error!(
+                "[FFmpeg][{}] FFmpeg reported success, but failed to get metadata for {}: {}",
+                job_id,
+                output_wav_path.display(),
+                e
+            );
             let _ = fs::remove_file(&output_wav_path);
-            return Err(CommandError::from(format!("FFmpeg conversion failed: output metadata error ({})", e)));
-        },
+            return Err(CommandError::from(format!(
+                "FFmpeg conversion failed: output metadata error ({})",
+                e
+            )));
+        }
         Ok(_) => {}
     }
 
-    info!("[FFmpeg][{}] Successfully converted '{}' to WAV: {}", job_id, input_path_str, output_wav_path.display());
+    info!(
+        "[FFmpeg][{}] Successfully converted '{}' to WAV: {}",
+        job_id,
+        input_path_str,
+        output_wav_path.display()
+    );
     Ok(output_wav_path)
 }
 
 // --- Helper: Resolve Whisper Model Path ---
-async fn resolve_whisper_model_path( model_name: &str, job_id: &str) -> Result<String, CommandError> { // job_id is internal_job_id
+async fn resolve_whisper_model_path(
+    model_name: &str,
+    job_id: &str,
+) -> Result<String, CommandError> {
+    // job_id is internal_job_id
     let config = read_config()?;
     let base_model_dir_str = if !config.download_location.trim().is_empty() {
         config.download_location
@@ -435,227 +684,21 @@ async fn resolve_whisper_model_path( model_name: &str, job_id: &str) -> Result<S
     let model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
 
     if !model_dir_path.exists() || !model_dir_path.is_dir() {
-        let e = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());
-        error!("[Transcription][LocalRun][{}] Error resolving model path: {}", job_id, e);
+        let e = format!(
+            "Model directory not found: '{}'. Please download the model first.",
+            model_dir_path.display()
+        );
+        error!(
+            "[Transcription][LocalRun][{}] Error resolving model path: {}",
+            job_id, e
+        );
         return Err(CommandError::from(e));
     }
     let model_file_path = find_model_file(&model_dir_path)?;
     Ok(model_file_path.to_string_lossy().to_string())
 }
 
-// --- Helper: Run whisper-cli Sidecar ---
-async fn run_whisper_cpp_sidecar<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    media_path: &str,
-    whisper_model_path_str: &str,
-    language: &str,
-    job_id: &str, // Now internal_job_id from caller
-    cancel_flag: &Arc<AtomicBool>,
-    output_path_base_str: &str,
-    expected_output_path: &Path
-) -> Result<PathBuf, CommandError> {
-    let sidecar_name = "whisper-cli";
-    let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
-    debug!("[Transcription][LocalRun][{}] Using Whisper language: '{}'", job_id, lang_arg);
-
-    let args: Vec<String> = vec![
-        "-m".into(), whisper_model_path_str.to_string(),
-        "-f".into(), media_path.to_string(),
-        "-l".into(), lang_arg.to_string(),
-        "-oj".into(),
-        "-of".into(), output_path_base_str.to_string(),
-    ];
-    debug!("[Transcription][LocalRun][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
-
-    let shell_scope = app_handle.shell();
-
-    let mut command = shell_scope.sidecar(sidecar_name)?;
-    command = command.args(args);
-
-    // On Windows, ffmpeg.exe is in the sidecar dir, which whisper-cli needs to find.
-    // We must add the sidecar directory to the PATH for the child process.
-    if cfg!(target_os = "windows") {
-        if let Ok(resource_dir) = app_handle.path().resource_dir() {
-            let sidecars_path = resource_dir.join("sidecars");
-            if sidecars_path.exists() {
-                let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
-                    .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?
-                    .to_string_lossy()
-                    .to_string();
-                let existing_path = std::env::var("PATH").unwrap_or_default();
-                let new_path = format!("{};{}", cleaned_sidecars_path, existing_path);
-                command = command.env("PATH", new_path.clone());
-                info!("[Transcription][LocalRun][{}] Setting PATH for whisper-cli: {}", job_id, new_path);
-            }
-        }
-    }
-
-    // Read config for threads
-    if let Ok(config) = read_config() {
-        if let Some(trans_conf) = config.advanced_transcription {
-            if let Some(threads) = trans_conf.num_threads {
-                command = command.args(["-t".to_string(), threads.to_string()]);
-                debug!("[Transcription][LocalRun][{}] Added thread count arg: {}", job_id, threads);
-            }
-        }
-    }
-
-    let (mut rx, child) = command.spawn()
-     .map_err(|e| {
-         error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);
-         CommandError::from(format!("Failed to execute whisper-cli sidecar: {}. Ensure it's bundled and executable.", e))
-     })?;
-    info!("[Transcription][LocalRun][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
-
-    let mut stderr_lines: Vec<String> = Vec::new(); // Corrected
-    let mut _stdout_lines: Vec<String> = Vec::new(); // Corrected
-    let mut process_error: Option<String> = None;
-    let mut exit_code: Option<i32> = None;
-
-    loop {
-        if cancel_flag.load(Ordering::Relaxed) {
-            warn!("[Transcription][LocalRun][{}] Cancellation requested during '{}'. Killing process...", job_id, sidecar_name);
-            let _ = child.kill();
-            if expected_output_path.exists() { let _ = fs::remove_file(expected_output_path); }
-            return Err(CommandError::from("whisper-cli process cancelled."));
-        }
-
-        tokio::select! {
-            biased;
-            maybe_event = rx.recv() => {
-                match maybe_event {
-                    Some(event) => match event {
-                        CommandEvent::Stdout(line) => { _stdout_lines.push(String::from_utf8_lossy(&line).to_string()); },
-                        CommandEvent::Stderr(line) => { let l = String::from_utf8_lossy(&line).to_string(); debug!("[{}][stderr][{}] {}", sidecar_name, job_id, l.trim_end()); stderr_lines.push(l); },
-                        CommandEvent::Error(msg) => { error!("[{}][error][{}] {}", sidecar_name, job_id, msg); process_error = Some(msg); break; },
-                        CommandEvent::Terminated(payload) => { info!("[{}][term][{}] Process terminated. Code: {:?}, Signal: {:?}", sidecar_name, job_id, payload.code, payload.signal); exit_code = payload.code; if payload.signal.is_some() && exit_code.is_none() { exit_code = Some(-1); } break; },
-                        _ => {}
-                    },
-                    None => {
-                        if exit_code.is_none() && process_error.is_none() { warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id); exit_code = Some(-1); }
-                        break;
-                    }
-                }
-            }
-            _ = sleep(Duration::from_millis(100)) => {
-                continue;
-            }
-        }
-    }
-
-    let final_stderr = stderr_lines.join("\n");
-    info!("[Transcription][LocalRun][{}] Sidecar '{}' finished. Code: {:?}, Error: {:?}.", job_id, sidecar_name, exit_code, process_error);
-
-    if !final_stderr.is_empty() {
-        if process_error.is_some() || exit_code != Some(0) {
-            error!("[Transcription][LocalRun][{}] '{}' Stderr output on failure:\n{}", job_id, sidecar_name, final_stderr);
-        } else {
-            debug!("[Transcription][LocalRun][{}] '{}' Stderr output on success:\n{}", job_id, sidecar_name, final_stderr);
-        }
-    }
-
-    if process_error.is_some() || exit_code != Some(0) {
-        let ec_str = exit_code.map_or("N/A".to_string(), |c| c.to_string());
-        let error_message = format!("Sidecar '{}' failed. Exit Code: {}. Error: {}. Stderr: {}",
-            sidecar_name,
-            ec_str,
-            process_error.unwrap_or_default(),
-            final_stderr.chars().take(500).collect::<String>()
-        );
-        error!("[Transcription][LocalRun][{}] {}", job_id, error_message);
-        if expected_output_path.exists() { let _ = fs::remove_file(expected_output_path); }
-        return Err(CommandError::from(error_message));
-    }
-
-    let mut attempts = 0;
-    while !expected_output_path.exists() && attempts < 5 {
-        attempts += 1;
-        warn!("[Transcription][LocalRun][{}] Output JSON '{:?}' not found yet, waiting {}ms (attempt {}/5)...", job_id, expected_output_path, 300, attempts);
-        sleep(Duration::from_millis(300)).await;
-        if cancel_flag.load(Ordering::Relaxed) {
-            if expected_output_path.exists() { let _ = fs::remove_file(expected_output_path); }
-            return Err(CommandError::from("Cancelled while waiting for whisper output file."));
-        }
-    }
-
-    if !expected_output_path.exists() {
-        return Err(CommandError::from(format!("Sidecar '{}' completed successfully, but output file is missing: {:?}", sidecar_name, expected_output_path)));
-    }
-    match expected_output_path.metadata() {
-        Ok(m) if m.len() == 0 => {
-            warn!("[Transcription][LocalRun][{}] Output JSON file exists but is empty: {:?}", job_id, expected_output_path);
-            let _ = fs::remove_file(expected_output_path);
-            return Err(CommandError::from(format!("Sidecar '{}' completed, but output file was empty: {:?}", sidecar_name, expected_output_path)));
-        },
-        Err(e) => {
-            error!("[Transcription][LocalRun][{}] Failed to get metadata for output file {}: {}", job_id, expected_output_path.display(), e);
-            let _ = fs::remove_file(expected_output_path);
-            return Err(CommandError::from(format!("Output file validation error: {}", e)));
-        },
-        Ok(_) => {}
-    }
-
-    info!("[Transcription][LocalRun][{}] Output JSON created successfully by '{}': {:?}", job_id, sidecar_name, expected_output_path);
-    Ok(expected_output_path.to_path_buf())
-}
-
-fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
-    debug!("[JSON Parse] Reading whisper output: {:?}", json_path);
-    let file = File::open(json_path)?;
-    let reader = BufReader::new(file);
-    let output: WhisperJsonOutput = serde_json::from_reader(reader)
-        .map_err(|e| CommandError::from(format!("Failed to parse whisper JSON from '{}': {}", json_path.display(), e)))?;
-
-    let mut segments = Vec::new();
-    if let Some(transcription) = output.transcription {
-        for (idx, w_seg) in transcription.iter().enumerate() {
-             let start_time = parse_whisper_timestamp(&w_seg.timestamps.from)
-                .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid start time '{}': {}", idx, w_seg.timestamps.from, e_msg)))?;
-            let end_time = parse_whisper_timestamp(&w_seg.timestamps.to)
-                 .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid end time '{}': {}", idx, w_seg.timestamps.to, e_msg)))?;
-
-            if end_time < start_time {
-                warn!("[JSON Parse] Skipping segment {} due to end time ({}) < start time ({}): '{}'", idx, end_time, start_time, w_seg.text.trim());
-                continue;
-            }
-            segments.push(TranscriptSegment {
-                start_time,
-                end_time,
-                speaker: "Unknown".to_string(),
-                text: w_seg.text.trim().to_string(),
-            });
-        }
-    } else {
-        warn!("[JSON Parse] No 'transcription' array found in whisper JSON file: {:?}", json_path);
-    }
-    info!("[JSON Parse] Parsed {} segments from {}", segments.len(), json_path.display());
-    Ok(segments)
-}
-
-fn parse_whisper_timestamp(timestamp_str: &str) -> Result<f64, String> {
-    let parts: Vec<&str> = timestamp_str.split(':').collect();
-    if parts.len() != 3 {
-        return Err(format!("Invalid time format (expected hh:mm:ss,ms): '{}'", timestamp_str));
-    }
-    let hours: u64 = parts[0].parse().map_err(|e| format!("Invalid hours '{}': {}", parts[0], e))?;
-    let minutes: u64 = parts[1].parse().map_err(|e| format!("Invalid minutes '{}': {}", parts[1], e))?;
-
-    let sec_ms_parts: Vec<&str> = parts[2].split(',').collect();
-    if sec_ms_parts.len() != 2 {
-        let sec_ms_parts_dot: Vec<&str> = parts[2].split('.').collect();
-         if sec_ms_parts_dot.len() != 2 {
-             return Err(format!("Invalid seconds/milliseconds format (expected ss,ms or ss.ms): '{}'", parts[2]));
-         }
-         let seconds: u64 = sec_ms_parts_dot[0].parse().map_err(|e| format!("Invalid seconds '{}': {}", sec_ms_parts_dot[0], e))?;
-         let millis: u32 = sec_ms_parts_dot[1].parse().map_err(|e| format!("Invalid milliseconds '{}': {}", sec_ms_parts_dot[1], e))?;
-         Ok((hours * 3600 + minutes * 60 + seconds) as f64 + (millis as f64 / 1000.0))
-
-    } else {
-        let seconds: u64 = sec_ms_parts[0].parse().map_err(|e| format!("Invalid seconds '{}': {}", sec_ms_parts[0], e))?;
-        let millis: u32 = sec_ms_parts[1].parse().map_err(|e| format!("Invalid milliseconds '{}': {}", sec_ms_parts[1], e))?;
-        Ok((hours * 3600 + minutes * 60 + seconds) as f64 + (millis as f64 / 1000.0))
-    }
-}
+// Removed redundant sidecar and parsing functions
 
 async fn run_python_diarization<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -663,24 +706,41 @@ async fn run_python_diarization<R: Runtime>(
     num_speakers: usize,
     output_rttm_path: &Path,
     job_id: &str,
-    cancel_flag: &Arc<AtomicBool>
+    cancel_flag: &Arc<AtomicBool>,
 ) -> Result<PathBuf, CommandError> {
-    info!("[PyDiarize][{}] Starting diarization for: {}", job_id, media_path);
+    info!(
+        "[PyDiarize][{}] Starting diarization for: {}",
+        job_id, media_path
+    );
     if let Some(parent_dir) = output_rttm_path.parent() {
         fs::create_dir_all(parent_dir)?;
     } else {
-        return Err(CommandError::from(format!("Could not get parent directory for RTTM output: {}", output_rttm_path.display())));
+        return Err(CommandError::from(format!(
+            "Could not get parent directory for RTTM output: {}",
+            output_rttm_path.display()
+        )));
     }
 
     let script_path = app_handle
         .path()
-        .resolve("scripts/run_diarization.py", tauri::path::BaseDirectory::Resource)
+        .resolve(
+            "scripts/run_diarization.py",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| CommandError::from(e.to_string()))?;
 
     // Read the Hugging Face token
-    let config_dir = app_handle.path().app_config_dir().map_err(|_| CommandError::from("Failed to get app config dir"))?;
+    let config_dir = app_handle
+        .path()
+        .app_config_dir()
+        .map_err(|_| CommandError::from("Failed to get app config dir"))?;
     let token_path = config_dir.join("hf_token");
-    let token = fs::read_to_string(token_path).map_err(|e| CommandError::from(format!("Failed to read Hugging Face token: {}. Please save it in the configuration.", e)))?;
+    let token = fs::read_to_string(token_path).map_err(|e| {
+        CommandError::from(format!(
+            "Failed to read Hugging Face token: {}. Please save it in the configuration.",
+            e
+        ))
+    })?;
 
     let args = vec![
         script_path.to_string_lossy().to_string(),
@@ -689,9 +749,13 @@ async fn run_python_diarization<R: Runtime>(
         token,
     ];
 
-    debug!("[PyDiarize][{}] Running script '{}'", job_id, script_path.display());
+    debug!(
+        "[PyDiarize][{}] Running script '{}'",
+        job_id,
+        script_path.display()
+    );
     let mut command = get_python_command(&app_handle)?;
-    
+
     if let Ok(hf_home) = crate::welcome::diarization::get_diarization_hub_path(app_handle) {
         command = command.env("HF_HOME", hf_home.to_string_lossy().to_string());
     }
@@ -703,7 +767,11 @@ async fn run_python_diarization<R: Runtime>(
           error!("Failed to spawn Python script: {}. Ensure Python environment and pyannote.audio are set up.", e);
           CommandError::from(format!("Failed to execute Python diarization script: {}.", e))
       })?;
-    debug!("[PyDiarize][{}] Spawned Python process (PID: {:?})", job_id, child.pid());
+    debug!(
+        "[PyDiarize][{}] Spawned Python process (PID: {:?})",
+        job_id,
+        child.pid()
+    );
 
     let mut stderr_lines: Vec<String> = Vec::new();
     let mut stdout_lines: Vec<String> = Vec::new();
@@ -712,9 +780,14 @@ async fn run_python_diarization<R: Runtime>(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
-            warn!("[PyDiarize][{}] Cancellation requested. Killing process...", job_id);
+            warn!(
+                "[PyDiarize][{}] Cancellation requested. Killing process...",
+                job_id
+            );
             let _ = child.kill();
-            if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
+            if output_rttm_path.exists() {
+                let _ = fs::remove_file(output_rttm_path);
+            }
             return Err(CommandError::from("Diarization process cancelled."));
         }
 
@@ -738,19 +811,31 @@ async fn run_python_diarization<R: Runtime>(
 
     let rttm_output = stdout_lines.join("");
     let final_stderr = stderr_lines.join("\n");
-    info!("[PyDiarize][{}] Python script finished. Code: {:?}, Error: {:?}.", job_id, exit_code, process_error);
+    info!(
+        "[PyDiarize][{}] Python script finished. Code: {:?}, Error: {:?}.",
+        job_id, exit_code, process_error
+    );
 
     if !final_stderr.is_empty() {
-        if process_error.is_some() || exit_code != Some(0) { error!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr); }
-        else { debug!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr); }
+        if process_error.is_some() || exit_code != Some(0) {
+            error!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr);
+        } else {
+            debug!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr);
+        }
     }
 
     if process_error.is_some() || exit_code != Some(0) {
         let ec_str = exit_code.map_or("N/A".to_string(), |c| c.to_string());
-        let error_message = format!("Python script failed. Exit Code: {}. Error: {}. Stderr: {}",
-            ec_str, process_error.unwrap_or_default(), final_stderr.chars().take(500).collect::<String>());
+        let error_message = format!(
+            "Python script failed. Exit Code: {}. Error: {}. Stderr: {}",
+            ec_str,
+            process_error.unwrap_or_default(),
+            final_stderr.chars().take(500).collect::<String>()
+        );
         error!("[PyDiarize][{}] Error: {}", job_id, error_message);
-        if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
+        if output_rttm_path.exists() {
+            let _ = fs::remove_file(output_rttm_path);
+        }
         return Err(CommandError::from(error_message));
     }
 
@@ -759,17 +844,31 @@ async fn run_python_diarization<R: Runtime>(
 
     match output_rttm_path.metadata() {
         Ok(m) if m.len() == 0 => {
-            warn!("[PyDiarize][{}] Output RTTM file exists but is empty: {:?}", job_id, output_rttm_path);
-        },
+            warn!(
+                "[PyDiarize][{}] Output RTTM file exists but is empty: {:?}",
+                job_id, output_rttm_path
+            );
+        }
         Err(e) => {
-            error!("[PyDiarize][{}] Failed to get metadata for RTTM output file {}: {}", job_id, output_rttm_path.display(), e);
+            error!(
+                "[PyDiarize][{}] Failed to get metadata for RTTM output file {}: {}",
+                job_id,
+                output_rttm_path.display(),
+                e
+            );
             let _ = fs::remove_file(output_rttm_path);
-            return Err(CommandError::from(format!("RTTM output file validation error: {}", e)));
-        },
+            return Err(CommandError::from(format!(
+                "RTTM output file validation error: {}",
+                e
+            )));
+        }
         Ok(_) => {}
     }
 
-    info!("[PyDiarize][{}] RTTM file created successfully: {:?}", job_id, output_rttm_path);
+    info!(
+        "[PyDiarize][{}] RTTM file created successfully: {:?}",
+        job_id, output_rttm_path
+    );
     Ok(output_rttm_path.to_path_buf())
 }
 
@@ -789,12 +888,20 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
 
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 8 {
-            warn!("[RTTM Parse] Skipping malformed line {} ({} fields): '{}'", line_number, parts.len(), line);
+            warn!(
+                "[RTTM Parse] Skipping malformed line {} ({} fields): '{}'",
+                line_number,
+                parts.len(),
+                line
+            );
             continue;
         }
 
         if parts.first().map_or(false, |&t| t != "SPEAKER") {
-            debug!("[RTTM Parse] Skipping non-SPEAKER line {}: '{}'", line_number, line);
+            debug!(
+                "[RTTM Parse] Skipping non-SPEAKER line {}: '{}'",
+                line_number, line
+            );
             continue;
         }
 
@@ -805,7 +912,10 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
         let start_time: f64 = match start_str.parse() {
             Ok(t) if t >= 0.0 => t,
             _ => {
-                warn!("[RTTM Parse] Skipping line {} due to invalid start time '{}'", line_number, start_str);
+                warn!(
+                    "[RTTM Parse] Skipping line {} due to invalid start time '{}'",
+                    line_number, start_str
+                );
                 continue;
             }
         };
@@ -813,99 +923,160 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
         let duration: f64 = match duration_str.parse() {
             Ok(d) if d > 0.0 => d,
             _ => {
-                warn!("[RTTM Parse] Skipping line {} due to invalid duration '{}'", line_number, duration_str);
+                warn!(
+                    "[RTTM Parse] Skipping line {} due to invalid duration '{}'",
+                    line_number, duration_str
+                );
                 continue;
             }
         };
 
-        records.push(RttmRecord { start_time, duration, speaker_id });
+        records.push(RttmRecord {
+            start_time,
+            duration,
+            speaker_id,
+        });
     }
-    info!("[RTTM Parse] Parsed {} SPEAKER records from {}", records.len(), rttm_path.display());
+    info!(
+        "[RTTM Parse] Parsed {} SPEAKER records from {}",
+        records.len(),
+        rttm_path.display()
+    );
     Ok(records)
 }
 
 fn merge_diarization_results(
     whisper_segments: &mut Vec<TranscriptSegment>,
-    rttm_records: &[RttmRecord])
-{
-    if rttm_records.is_empty() {
-        info!("[Merge] No RTTM records provided for merging.");
-        return;
-    }
+    rttm_records: &[RttmRecord],
+) {
     if whisper_segments.is_empty() {
-        info!("[Merge] No whisper segments provided for merging.");
         return;
     }
 
-    info!("[Merge] Merging {} whisper segments with {} RTTM speaker turns...", whisper_segments.len(), rttm_records.len());
-
-    let mut sorted_rttm = rttm_records.to_vec();
-    sorted_rttm.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap_or(CmpOrdering::Equal));
-
-    let mut rttm_index = 0;
-
-    for whisper_seg in whisper_segments.iter_mut() {
-        let whisper_start = whisper_seg.start_time;
-        let whisper_end = whisper_seg.end_time;
-
-        if whisper_end <= whisper_start {
-            warn!("[Merge] Skipping invalid whisper segment with start >= end: {:.3}s - {:.3}s", whisper_start, whisper_end);
-            continue;
-        }
-
-        while rttm_index < sorted_rttm.len() {
-            let rttm_rec = &sorted_rttm[rttm_index];
-            let rttm_turn_end = rttm_rec.start_time + rttm_rec.duration;
-            if rttm_turn_end <= whisper_start {
-                rttm_index += 1;
+    // 1. Flatten all words into a single list
+    let mut all_words = Vec::new();
+    for seg in whisper_segments.iter() {
+        if let Some(words) = &seg.words {
+            if words.is_empty() {
+                // Fallback: Dummy word for segment if word-level data is empty
+                all_words.push(crate::projectview::shared_types::Word {
+                    start: seg.start_time,
+                    end: seg.end_time,
+                    text: seg.text.clone(),
+                    speaker: None,
+                    probability: 1.0,
+                });
             } else {
-                break;
+                for w in words {
+                    all_words.push(w.clone());
+                }
             }
-        }
-
-        let mut speaker_overlaps: HashMap<String, f64> = HashMap::new();
-        let mut speaker_contains_midpoint: Option<String> = None;
-        let whisper_mid_point = whisper_start + (whisper_end - whisper_start) / 2.0;
-
-        for i in rttm_index..sorted_rttm.len() {
-            let rttm_rec = &sorted_rttm[i];
-            let rttm_start = rttm_rec.start_time;
-            let rttm_end = rttm_rec.start_time + rttm_rec.duration;
-
-            if rttm_start >= whisper_end {
-                break; 
-            }
-
-            let overlap_start = whisper_start.max(rttm_start);
-            let overlap_end = whisper_end.min(rttm_end);
-            let overlap_duration = (overlap_end - overlap_start).max(0.0);
-
-            if overlap_duration > 0.0 {
-                *speaker_overlaps.entry(rttm_rec.speaker_id.clone()).or_insert(0.0) += overlap_duration;
-            }
-
-            if speaker_contains_midpoint.is_none() && whisper_mid_point >= rttm_start && whisper_mid_point < rttm_end {
-                speaker_contains_midpoint = Some(rttm_rec.speaker_id.clone());
-            }
-        }
-        
-        if let Some((dominant_speaker, max_overlap)) = speaker_overlaps.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(CmpOrdering::Equal)) {
-             debug!("[Merge] Assigning '{}' (overlap {:.3}s) to seg {:.3}-{:.3}", dominant_speaker, max_overlap, whisper_start, whisper_end);
-            whisper_seg.speaker = dominant_speaker;
-        } else if let Some(midpoint_speaker) = speaker_contains_midpoint {
-             warn!("[Merge] No overlap found for seg {:.3}-{:.3}. Using midpoint speaker '{}'", whisper_start, whisper_end, midpoint_speaker);
-            whisper_seg.speaker = midpoint_speaker;
         } else {
-            debug!("[Merge] No overlap or midpoint speaker found for seg {:.3}-{:.3}. Keeping original speaker '{}'.", whisper_start, whisper_end, whisper_seg.speaker);
+            // Fallback: If no word data (unlikely now), create a dummy word for the segment
+            all_words.push(crate::projectview::shared_types::Word {
+                start: seg.start_time,
+                end: seg.end_time,
+                text: seg.text.clone(),
+                speaker: None,
+                probability: 1.0,
+            });
         }
     }
-    info!("[Merge] Finished merging diarization results.");
+
+    if all_words.is_empty() {
+        return;
+    }
+
+    // 2. Assign speakers to each word based on RTTM overlap
+    if !rttm_records.is_empty() {
+        info!(
+            "[Merge] Mapping speakers to {} words using {} RTTM records...",
+            all_words.len(),
+            rttm_records.len()
+        );
+        for word in all_words.iter_mut() {
+            let mut best_speaker = None;
+            let mut max_overlap = 0.0;
+
+            for rttm in rttm_records {
+                let rttm_end = rttm.start_time + rttm.duration;
+                let overlap_start = word.start.max(rttm.start_time);
+                let overlap_end = word.end.min(rttm_end);
+                let overlap = (overlap_end - overlap_start).max(0.0);
+
+                if overlap > max_overlap {
+                    max_overlap = overlap;
+                    best_speaker = Some(rttm.speaker_id.clone());
+                }
+            }
+            word.speaker = best_speaker;
+        }
+    }
+
+    // 3. Re-cluster words into segments
+    let mut new_segments = Vec::new();
+    if all_words.is_empty() {
+        return;
+    }
+
+    let mut current_segment_words = Vec::new();
+    let mut current_speaker = all_words[0].speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+
+    for word in all_words {
+        let word_speaker = word.speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+        let last_word_end = current_segment_words.last().map(|w: &crate::projectview::shared_types::Word| w.end).unwrap_or(word.start);
+        
+        // Conditions for a new segment:
+        // - Speaker changed
+        // - Large silence gap (> 1.5s)
+        let speaker_changed = word_speaker != current_speaker;
+        let silence_gap = word.start - last_word_end > 1.5;
+
+        if !current_segment_words.is_empty() && (speaker_changed || silence_gap) {
+            // Finalize current segment
+            new_segments.push(create_segment_from_words(current_segment_words, current_speaker));
+            current_segment_words = Vec::new();
+            current_speaker = word_speaker;
+        }
+        current_segment_words.push(word);
+    }
+
+    // Add the final segment
+    if !current_segment_words.is_empty() {
+        new_segments.push(create_segment_from_words(current_segment_words, current_speaker));
+    }
+
+    *whisper_segments = new_segments;
+    info!("[Merge] Re-clustered into {} segments.", whisper_segments.len());
+}
+
+fn create_segment_from_words(words: Vec<crate::projectview::shared_types::Word>, speaker: String) -> TranscriptSegment {
+    let start_time = words.first().map(|w| w.start).unwrap_or(0.0);
+    let end_time = words.last().map(|w| w.end).unwrap_or(0.0);
+    let text = words.iter()
+        .map(|w| w.text.clone())
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    TranscriptSegment {
+        start_time,
+        end_time,
+        speaker,
+        text,
+        words: Some(words),
+    }
 }
 
 fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
-    debug!("[Helper] Searching for model file in directory: {:?}", model_dir);
+    debug!(
+        "[Helper] Searching for model file in directory: {:?}",
+        model_dir
+    );
     if !model_dir.exists() || !model_dir.is_dir() {
-        return Err(CommandError::from(format!("Model directory not found or is not a directory: {}", model_dir.display())));
+        return Err(CommandError::from(format!(
+            "Model directory not found or is not a directory: {}",
+            model_dir.display()
+        )));
     }
 
     for entry_result in fs::read_dir(model_dir)? {
@@ -923,28 +1094,38 @@ fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
                 }
             }
             Err(e) => {
-                warn!("[Helper] Failed to read directory entry in '{}': {}", model_dir.display(), e);
+                warn!(
+                    "[Helper] Failed to read directory entry in '{}': {}",
+                    model_dir.display(),
+                    e
+                );
             }
         }
     }
 
-    Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
+    Err(CommandError::from(format!(
+        "No model file (.bin, .gguf, .pt) found within directory: {}",
+        model_dir.display()
+    )))
 }
 
 pub(crate) async fn emit_progress<R: Runtime>(
     app_handle: &AppHandle<R>,
     job_id: &str,
     percent: f32,
-    message: &str)
--> Result<(), tauri::Error> {
+    message: &str,
+) -> Result<(), tauri::Error> {
     let clamped_percent = percent.max(0.0).min(100.0);
-    debug!("[Progress Emit][{}] {:.1}% - {}", job_id, clamped_percent, message);
+    debug!(
+        "[Progress Emit][{}] {:.1}% - {}",
+        job_id, clamped_percent, message
+    );
     app_handle.emit(
         "TRANSCRIPTION_PROGRESS",
         ProgressPayload {
             job_id: job_id.to_string(),
             percent: clamped_percent,
             message: message.to_string(),
-        }
+        },
     )
 }
