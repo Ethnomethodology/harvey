@@ -3,12 +3,8 @@
   import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
   import { project } from '$lib/stores/projectStore.js';
   import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
-  import { createEventDispatcher } from 'svelte';
   import { Sun, Moon, Monitor, Pencil, PencilOff } from '@lucide/svelte';
   import { Button } from 'flowbite-svelte';
-
-
-  const dispatch = createEventDispatcher();
 
   // --- Theme Icons ---
   $: currentThemeName = $themePreference.charAt(0).toUpperCase() + $themePreference.slice(1);
@@ -33,27 +29,8 @@
   <!-- Drag Handle Background -->
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-  <!-- Section 1: Left Bar (w-12) — Import button -->
-  <div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
-    <button
-      type="button"
-      class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      on:click={(e) => dispatch('requestImport', e)}
-      title="Import Audio or Video"
-      aria-label="Import Audio or Video"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-        stroke="currentColor"
-        class="w-5 h-5"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-    </button>
-  </div>
+  <!-- Traffic light spacer (macOS titleBarStyle Overlay) -->
+  <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
 
   <!-- Section 2: Left Panel (w-64) — Project name -->
   <div

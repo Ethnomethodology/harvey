@@ -18,6 +18,7 @@
         checkUnsavedChangesThenProceed,
         importDocumentFile,
         importTableFile,
+        importTableSheet,
         importImageFile,
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
@@ -28,6 +29,7 @@
         clearProjectDataStore,
         createManualTranscript,
         createNewDocument,
+        saveTableSchema,
     } from "$lib/services/projectService.js";
     import {
         getDownloadedModels,
@@ -105,6 +107,7 @@
     import panelStateStore from "$lib/stores/panelStateStore.svelte.js";
     import CreateGroupModal from "$lib/components/projectview/modals/CreateGroupModal.svelte";
     import CreateTableModal from "$lib/components/projectview/modals/CreateTableModal.svelte";
+    import TableSheetSelectionModal from "$lib/components/projectview/modals/TableSheetSelectionModal.svelte";
 
     let transcribeModalRef;
     let transcriptionViewRef;
@@ -133,6 +136,13 @@
     let showCreateTableModal = false;
     let fileToAddForGroup = null;
     let headerConfirmationData = {};
+    // --- Full table import state (mirrors DataLeftPanel logic) ---
+    let showTableSheetSelectionModal = false;
+    let tableSheetSelectionData = { sheets: [], filename: '', sourceFilePath: '', projectXmlPath: '' };
+    let pendingSheetNamesToImport = [];
+    let pendingTableImports = [];
+    let importedTablePathsToRevert = [];
+    let isActivelyImportingTable = false;
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
     let unlistenCloseRequested = null;
@@ -1806,25 +1816,8 @@
                     }
                 }
             } else if (actionType === "table") {
-                const importResult = await importTableFile();
-                if (
-                    importResult &&
-                    importResult.table_path &&
-                    String(importResult.table_path).trim() !== ""
-                ) {
-                    headerConfirmationData = {
-                        tablePath: importResult.table_path,
-                        previewData: importResult.preview_data,
-                    };
-                    showHeaderConfirmationModal = true;
-                } else {
-                    // Canceled or error already handled in importTableFile
-                    project.update((p) => ({
-                        ...p,
-                        isLoading: false,
-                        isImportingAsset: false,
-                    }));
-                }
+                await handleTableImport();
+                return; // handleTableImport manages its own loading state
             } else if (actionType === "image") {
                 const importedPath = await importImageFile();
                 if (importedPath) {
@@ -1893,26 +1886,193 @@
         triggerMediaImport(actionType);
     }
 
-    async function handleHeaderConfirmation(event) {
-        const { hasHeaders } = event.detail;
-        const { tablePath } = headerConfirmationData;
+    // ---------------------------------------------------------------------------
+    // Full table import flow (mirrors DataLeftPanel.handleTableImport)
+    // ---------------------------------------------------------------------------
+    async function handleTableImport() {
         try {
-            await invoke("set_table_headers", {
-                tablePathStr: tablePath,
-                hasHeaders,
-            });
-            await refreshProjectFiles();
-            if (await ensureTab("data")) {
-                prepareDocumentView(tablePath, "tables", hasHeaders);
+            const importResult = await importTableFile();
+            if (!importResult) {
+                project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
+                return;
             }
-        } catch (error) {
-            console.error(`[ProjectView] Error setting table headers:`, error);
-            await message(
-                `Error setting table headers: ${error.message || error}`,
-                { title: "Error", type: "error" },
-            );
+            isActivelyImportingTable = true;
+
+            // Multi-sheet XLSX: show sheet selection first
+            if (importResult.sheets && importResult.sheets.length > 1) {
+                tableSheetSelectionData = {
+                    sheets: importResult.sheets,
+                    filename: importResult.filename,
+                    sourceFilePath: importResult.sourceFilePath,
+                    projectXmlPath: importResult.projectXmlPath
+                };
+                showTableSheetSelectionModal = true;
+                return;
+            }
+
+            // Single sheet / CSV: go straight to header confirmation
+            if (Array.isArray(importResult) && importResult.length > 0) {
+                pendingTableImports = importResult;
+                importedTablePathsToRevert = [];
+                processNextTableImport();
+            } else {
+                project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
+            }
+        } catch (e) {
+            console.error('[ProjectView] Error in handleTableImport:', e);
+            message(e.message || String(e), { title: 'Import Error', type: 'error' });
+            project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
         }
     }
+
+    async function handleTableSheetSelectionConfirm(event) {
+        const { selectedSheets } = event.detail;
+        showTableSheetSelectionModal = false;
+        if (!selectedSheets || selectedSheets.length === 0) {
+            isActivelyImportingTable = false;
+            project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: 'Table import cancelled.' }));
+            return;
+        }
+        pendingSheetNamesToImport = [...selectedSheets];
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
+        await processNextTableImport();
+    }
+
+    function handleTableSheetSelectionCancel() {
+        showTableSheetSelectionModal = false;
+        isActivelyImportingTable = false;
+        project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: 'Table import cancelled.' }));
+    }
+
+    async function processNextTableImport() {
+        if (!isActivelyImportingTable) return;
+
+        // Extract the next pending sheet
+        if (pendingSheetNamesToImport.length > 0) {
+            const nextSheet = pendingSheetNamesToImport.shift();
+            try {
+                project.update((p) => ({ ...p, isImportingAsset: true, statusMessage: `Extracting sheet ${nextSheet}...` }));
+                const result = await importTableSheet(
+                    tableSheetSelectionData.sourceFilePath,
+                    tableSheetSelectionData.projectXmlPath,
+                    nextSheet,
+                    tableSheetSelectionData.filename
+                );
+                if (!isActivelyImportingTable) return;
+                project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: '' }));
+                if (result && result.table_path) {
+                    pendingTableImports.push(result);
+                    showNextHeaderConfirmation();
+                } else {
+                    await processNextTableImport();
+                }
+            } catch (e) {
+                console.error(`[ProjectView] Error extracting sheet ${nextSheet}:`, e);
+                if (isActivelyImportingTable) {
+                    message(`Error extracting sheet ${nextSheet}: ${e?.message || e}`, { title: 'Import Error', type: 'error' });
+                    await triggerTableImportCancel();
+                }
+            }
+            return;
+        }
+
+        // Process pending header confirmations
+        if (pendingTableImports.length > 0) {
+            showNextHeaderConfirmation();
+            return;
+        }
+
+        // All done — open the final imported table
+        if (importedTablePathsToRevert.length > 0) {
+            const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
+            const count = importedTablePathsToRevert.length;
+            if (await ensureTab('data')) {
+                prepareDocumentView(lastImported, 'tables');
+            }
+            message(
+                `${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`,
+                { title: 'Import Success', type: 'info' }
+            );
+        }
+        importedTablePathsToRevert = [];
+        isActivelyImportingTable = false;
+        project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: '' }));
+    }
+
+    function showNextHeaderConfirmation() {
+        const next = pendingTableImports[0];
+        headerConfirmationData = {
+            tablePath: next.table_path,
+            previewData: next.preview_data,
+            filename: next.filename
+        };
+        showNextHeaderConfirmation_modal();
+    }
+
+    function showNextHeaderConfirmation_modal() {
+        showHeaderConfirmationModal = true;
+    }
+
+    async function triggerTableImportCancel() {
+        showHeaderConfirmationModal = false;
+        if (!isActivelyImportingTable) return;
+        isActivelyImportingTable = false;
+
+        const pathsToDelete = [...importedTablePathsToRevert];
+        if (headerConfirmationData.tablePath && !pathsToDelete.includes(headerConfirmationData.tablePath)) {
+            pathsToDelete.push(headerConfirmationData.tablePath);
+        }
+        for (const pending of pendingTableImports) {
+            if (pending.table_path && !pathsToDelete.includes(pending.table_path)) {
+                pathsToDelete.push(pending.table_path);
+            }
+        }
+
+        if (pathsToDelete.length > 0) {
+            for (const path of pathsToDelete) {
+                try {
+                    const xmlPath = get(project).xmlPath;
+                    if (xmlPath) {
+                        await invoke('delete_project_item', { itemPath: path, projectXmlPath: xmlPath });
+                    }
+                } catch (e) {
+                    console.error(`[ProjectView] Failed to revert table: ${path}`, e);
+                }
+            }
+            await refreshProjectFiles();
+            message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+        }
+
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
+        headerConfirmationData = {};
+        project.update((p) => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
+    }
+
+    async function handleHeaderConfirmation(event) {
+        const { hasHeaders, schema } = event.detail;
+        showHeaderConfirmationModal = false;
+        try {
+            await invoke('set_table_headers', { tablePathStr: headerConfirmationData.tablePath, hasHeaders });
+            if (schema && Object.keys(schema).length > 0) {
+                await saveTableSchema(headerConfirmationData.tablePath, schema);
+            }
+            importedTablePathsToRevert.push(headerConfirmationData.tablePath);
+            pendingTableImports.shift();
+            await refreshProjectFiles();
+            processNextTableImport();
+        } catch (error) {
+            console.error('[ProjectView] Error confirming table headers/schema:', error);
+            message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
+            await triggerTableImportCancel();
+        }
+    }
+
+    async function handleHeaderConfirmationCancel() {
+        await triggerTableImportCancel();
+    }
+    // ---------------------------------------------------------------------------
 
     async function handleTableCreated(event) {
         const { path } = event.detail;
@@ -1947,7 +2107,6 @@
                 {activeSubItemType}
                 on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
-                on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => {
                     showConfigurationModal = true;
@@ -1964,7 +2123,6 @@
         {:else if selectedTab === "transcription"}
             <TranscriptionTopBar
                 bind:this={transcriptionTopBarRef}
-                on:requestImport={handleImportMediaInSidebar}
                 on:cancelTranslationRequest={handleCancelTranslationRequest}
                 on:runTranslationInBackground={() =>
                     setRanTranslationInBackground(true)}
@@ -1976,7 +2134,6 @@
             />
         {:else if selectedTab === "tags"}
             <SimpleTopBar
-                on:requestImport={handleImportMediaInSidebar}
                 on:close={handleCloseProject}
             />
         {/if}
@@ -1987,6 +2144,19 @@
         <div
             class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-2 px-1 border-r border-gray-300 dark:border-gray-700"
         >
+            <!-- Import button at the top -->
+            <button
+                title="Import"
+                aria-label="Import"
+                on:click={handleImportMediaInSidebar}
+                class="w-10 h-10 mx-auto mb-2 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:outline-2 focus:outline-blue-500"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+            </button>
+            <!-- Divider -->
+            <div class="w-8 mx-auto mb-2 border-t border-gray-200 dark:border-gray-700"></div>
             <div class="flex-grow flex flex-col space-y-2">
                 <button
                     title="Data"
@@ -2235,6 +2405,15 @@
         tablePath={headerConfirmationData.tablePath}
         previewData={headerConfirmationData.previewData}
         on:confirm={handleHeaderConfirmation}
+        on:cancel={handleHeaderConfirmationCancel}
+    />
+
+    <TableSheetSelectionModal
+        bind:showModal={showTableSheetSelectionModal}
+        sheets={tableSheetSelectionData.sheets}
+        filename={tableSheetSelectionData.filename}
+        on:confirm={handleTableSheetSelectionConfirm}
+        on:cancel={handleTableSheetSelectionCancel}
     />
 
     <CreateTableModal
