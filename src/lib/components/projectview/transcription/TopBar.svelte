@@ -662,10 +662,10 @@
       <!-- Waveform Toggle Button -->
       <button
         on:click={cycleWaveformLayout}
-        class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$waveformLayoutStore ===
+        class="p-1.5 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 {$waveformLayoutStore ===
         'none'
-          ? 'bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600'
-          : 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'}"
+          ? 'bg-white border-gray-200 text-gray-400 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+          : 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-500/20 dark:border-blue-800/50 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/30'}"
         title="Toggle Waveform Panel ({$waveformLayoutStore})"
       >
         <div
