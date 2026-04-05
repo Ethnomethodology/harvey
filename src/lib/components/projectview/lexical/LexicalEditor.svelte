@@ -3464,17 +3464,6 @@
 
               const localMinWidth = 20;
 
-              // Handle string/percentage widths
-              if (typeof currentWidthVal === 'string') {
-                if (currentWidthVal.endsWith('%')) {
-                  const pct = parseFloat(currentWidthVal);
-                  const tableWidth = tableElement.getBoundingClientRect().width / zoom;
-                  currentWidthVal = (tableWidth * pct) / 100;
-                } else {
-                  currentWidthVal = parseFloat(currentWidthVal);
-                }
-              }
-
               // Ensure ALL columns have valid widths from DOM if missing to avoid abrupt layout shifts
               const colCount = tableMap.columns;
               while (currentWidths.length < colCount) {
@@ -3482,13 +3471,14 @@
               }
 
               for (let i = 0; i < colCount; i++) {
+                let w = currentWidths[i];
                 if (
-                  currentWidths[i] === undefined ||
-                  currentWidths[i] === null ||
-                  isNaN(currentWidths[i]) ||
-                  (typeof currentWidths[i] === 'string' && currentWidths[i].endsWith('%'))
+                  w === undefined ||
+                  w === null ||
+                  (typeof w === 'number' && isNaN(w)) ||
+                  (typeof w === 'string' && w.endsWith('%'))
                 ) {
-                  // Find any cell in this column to get its width
+                  // Find any cell in this column to get its width from the DOM
                   const cellInfo = tableMap.grid.find((row) => row[i] && row[i].node);
                   if (cellInfo) {
                     const rowWithCell = tableMap.grid.find((r) => r[i]);
@@ -3502,8 +3492,9 @@
                   } else {
                     currentWidths[i] = localMinWidth;
                   }
-                } else if (typeof currentWidths[i] === 'string') {
-                  currentWidths[i] = parseFloat(currentWidths[i]);
+                } else if (typeof w === 'string') {
+                  // E.g., '100px' or '100'
+                  currentWidths[i] = parseFloat(w) || localMinWidth;
                 }
               }
 
