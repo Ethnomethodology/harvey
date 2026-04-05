@@ -24,6 +24,7 @@
   import { get } from 'svelte/store';
   import { slide } from 'svelte/transition';
   import { refresher } from '$lib/stores/refresherStore.js';
+  import { Plus } from '@lucide/svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -457,8 +458,16 @@
     <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-gray-700">
       {#key activeItemPath + activeViewType}
         {#if activeViewType === 'placeholder' || !activeItemPath}
-          <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-            <span>Select an item from the Data panel to view or edit.</span>
+          <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400 p-4">
+            <div class="flex flex-col items-center justify-center space-y-3 text-center">
+              <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">Get started with your project</h3>
+              <p class="text-[15px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                Import your own data using the <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white mx-1.5 shadow-sm align-middle"><Plus class="w-4 h-4" strokeWidth={2.5} /></span> <strong>plus button</strong> on the left sidebar.
+              </p>
+              <p class="text-[15px] text-gray-600 dark:text-gray-400 leading-relaxed mt-2">
+                If you need help, look for the <span class="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 mx-1 align-middle"><svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5 bi bi-question-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/></svg></span> <strong>help button</strong> on the bottom left.
+              </p>
+            </div>
           </div>
         {:else if activeViewType === 'documents'}
           <DocumentView bind:this={documentViewRef} itemPath={activeItemPath} />
