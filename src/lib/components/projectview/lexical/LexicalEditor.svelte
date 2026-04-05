@@ -456,6 +456,11 @@
       }
     }
 
+    // Check if click was inside a portaled dropdown menu
+    if (event.target && event.target.closest && event.target.closest('.lexical-dropdown-menu')) {
+      clickedInsideDropdown = true;
+    }
+
     if (!clickedInsideDropdown) {
       closeAllDropdowns();
     }
@@ -4377,7 +4382,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each blockTypeOptions as option (option.value)}
                 <div
@@ -4415,7 +4420,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64 lexical-dropdown-menu"
             >
               {#each fontOptions as option (option.value)}
                 <div
@@ -4464,7 +4469,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64 lexical-dropdown-menu"
             >
               {#each fontSizeOptions as size (size)}
                 <div
@@ -4526,7 +4531,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col lexical-dropdown-menu"
             >
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -4611,7 +4616,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each insertOptions as option (option.label)}
                 <div
@@ -4652,7 +4657,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each alignmentOptions as option (option.value)}
                 <div
@@ -4721,7 +4726,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg lexical-dropdown-menu"
             >
               {#each colorOptions as option (option.value)}
                 <div
@@ -4768,7 +4773,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg lexical-dropdown-menu"
             >
               {#each highlightOptions as option (option.value)}
                 <div
@@ -4891,7 +4896,7 @@
                   </button>
                   {#if showSearchOptionsDropdown}
                     <div
-                      class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]"
+                      class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px] lexical-dropdown-menu"
                     >
                       <button
                         class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 whitespace-nowrap"
