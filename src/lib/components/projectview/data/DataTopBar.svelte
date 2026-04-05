@@ -92,20 +92,20 @@
   const isStandaloneTranscript = $derived(!!$project.currentStandaloneTranscriptPath);
   const isLexicalDocument = $derived(
     isStandaloneTranscript ||
-    ($project.selectedDocumentPath &&
-      $project.selectedDocumentPath.toLowerCase().endsWith('.json'))
+      ($project.selectedDocumentPath &&
+        $project.selectedDocumentPath.toLowerCase().endsWith('.json'))
   );
   const isImage = $derived(
     $project.selectedDocumentPath &&
-    ($project.selectedDocumentType === 'images' ||
-      $project.selectedDocumentType === 'image' ||
-      /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test($project.selectedDocumentPath))
+      ($project.selectedDocumentType === 'images' ||
+        $project.selectedDocumentType === 'image' ||
+        /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test($project.selectedDocumentPath))
   );
   const isTable = $derived(
     $project.selectedDocumentPath &&
-    ($project.selectedDocumentType === 'tables' ||
-      $project.selectedDocumentType === 'table' ||
-      /\.(csv|xlsx)$/i.test($project.selectedDocumentPath))
+      ($project.selectedDocumentType === 'tables' ||
+        $project.selectedDocumentType === 'table' ||
+        /\.(csv|xlsx)$/i.test($project.selectedDocumentPath))
   );
   const isGroup = $derived(!!$project.selectedGroupId);
   let pathForExportModal = $state('');
@@ -136,7 +136,6 @@
       }));
     }
   }
-
 
   function handleDocumentTranslateConfirm(event) {
     const { documentPath, model, targetLanguage, sourceLanguage } = event.detail;
@@ -223,14 +222,16 @@
   const isMediaNoteTranscriptDirty = $derived($project.isMediaNoteTranscriptDirty);
   const isPdfAnnotationsDirty = $derived($project.isPdfAnnotationsDirty);
   const activeDocumentEditorRef = $derived($project.activeDocumentEditorRef);
-  const activeStandaloneTranscriptEditorRef = $derived($project.activeStandaloneTranscriptEditorRef);
+  const activeStandaloneTranscriptEditorRef = $derived(
+    $project.activeStandaloneTranscriptEditorRef
+  );
   const activeMediaNoteEditorRef = $derived($project.activeMediaNoteEditorRef);
 
   const isAnythingDirty = $derived(
     isDocumentDirty ||
-    isStandaloneTranscriptDirty ||
-    isMediaNoteTranscriptDirty ||
-    isPdfAnnotationsDirty
+      isStandaloneTranscriptDirty ||
+      isMediaNoteTranscriptDirty ||
+      isPdfAnnotationsDirty
   );
   const showDirtyIndicator = $derived(isAnythingDirty);
   let isExportModalOpen = $state(false);
@@ -238,7 +239,6 @@
   let currentActivePath = $state();
 
   let displayTitle = $state('');
-
 
   // New reactive block for displayTitle
   $effect(() => {
@@ -654,7 +654,7 @@
 
   <!-- Section 2: Left Panel equivalent (w-64) — Project name + file name -->
   <div
-    class="w-64 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out"
+    class="w-56 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out"
   >
     <span
       class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
