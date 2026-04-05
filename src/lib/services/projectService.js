@@ -55,6 +55,7 @@ import {
 
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
 import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
+import { $createExtendedTextNode as _createExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
@@ -1024,26 +1025,25 @@ export async function importDocumentFile() {
         if (nodes.length === 0 && targetElement.childNodes.length > 0) {
           console.warn('[importDocumentFile] Initial generation empty, using manual high-fidelity conversion.');
           
-          const manualNodes = [];
           const iterateDOM = (domNode, currentFormat = 0) => {
-            const localNodes = [];
+            const nodes = [];
             for (const child of domNode.childNodes) {
               if (child.nodeType === 3) { // Text
                 if (child.textContent.trim().length > 0 || child.textContent === ' ') {
                   const t = _createTextNode(child.textContent);
                   if (currentFormat > 0) t.setFormat(currentFormat);
-                  localNodes.push(t);
+                  nodes.push(t);
                 }
               } else if (child.nodeType === 1) { // Element
                 const tag = child.nodeName.toLowerCase();
                 if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
                   const h = _createHeadingNode(tag);
                   h.append(...iterateDOM(child, currentFormat));
-                  manualNodes.push(h);
+                  nodes.push(h);
                 } else if (tag === 'p') {
                   const p = _createParagraphNode();
                   p.append(...iterateDOM(child, currentFormat));
-                  manualNodes.push(p);
+                  nodes.push(p);
                 } else if (tag === 'blockquote') {
                   const q = _createQuoteNode();
                   const children = iterateDOM(child, currentFormat);
@@ -1051,10 +1051,28 @@ export async function importDocumentFile() {
                   // Check for GitHub Alerts [!IMPORTANT], [!NOTE], etc.
                   let alertLabel = null;
                   let alertColor = '#3b82f6'; // Default Blue
+                  let targetTextNode = null;
                   
-                  if (children.length > 0 && children[0].getType() === 'text') {
-                    const firstText = children[0].getTextContent();
-                    const match = firstText.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+                  // Helper to find the first significant text node (skip whitespace/newlines)
+                  const findFirstSignificantTextNode = (nodes) => {
+                    for (const node of nodes) {
+                      const type = node.getType();
+                      if (type === 'text') {
+                        if (node.getTextContent().trim().length > 0) return node;
+                      } else if (type === 'paragraph' || type === 'quote' || type === 'listitem') {
+                        const found = findFirstSignificantTextNode(node.getChildren());
+                        if (found) return found;
+                      }
+                    }
+                    return null;
+                  };
+
+                  targetTextNode = findFirstSignificantTextNode(children);
+                  
+                  if (targetTextNode) {
+                    const firstText = targetTextNode.getTextContent();
+                    // Allow leading spaces before the [!TAG]
+                    const match = firstText.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
                     if (match) {
                       const type = match[1].toUpperCase();
                       alertLabel = type;
@@ -1062,8 +1080,8 @@ export async function importDocumentFile() {
                       else if (type === 'CAUTION') alertColor = '#f97316'; // Orange
                       else if (type === 'TIP') alertColor = '#22c55e'; // Green
                       
-                      // Strip prefix from text
-                      children[0].setTextContent(firstText.replace(match[0], ''));
+                      // Strip prefix from text (preserving original case for the rest)
+                      targetTextNode.setTextContent(firstText.replace(match[0], ''));
                     }
                   }
                   
@@ -1077,13 +1095,13 @@ export async function importDocumentFile() {
                   }
                   
                   q.append(...children);
-                  manualNodes.push(q);
+                  nodes.push(q);
                 } else if (tag === 'strong' || tag === 'b') {
-                  localNodes.push(...iterateDOM(child, currentFormat | IS_BOLD));
+                  nodes.push(...iterateDOM(child, currentFormat | IS_BOLD));
                 } else if (tag === 'em' || tag === 'i') {
-                  localNodes.push(...iterateDOM(child, currentFormat | IS_ITALIC));
+                  nodes.push(...iterateDOM(child, currentFormat | IS_ITALIC));
                 } else if (tag === 'u') {
-                  localNodes.push(...iterateDOM(child, currentFormat | IS_UNDERLINE));
+                  nodes.push(...iterateDOM(child, currentFormat | IS_UNDERLINE));
                 } else if (tag === 'ul' || tag === 'ol') {
                   const list = _createListNode(tag === 'ul' ? 'bullet' : 'number');
                   for (const liItem of child.childNodes) {
@@ -1093,20 +1111,20 @@ export async function importDocumentFile() {
                       list.append(li);
                     }
                   }
-                  manualNodes.push(list);
+                  nodes.push(list);
                 } else if (tag === 'br') {
-                   localNodes.push(_createLineBreakNode());
+                   nodes.push(_createLineBreakNode());
                 } else {
                   // Fallback for unknown tags: recurse into children
-                  localNodes.push(...iterateDOM(child, currentFormat));
+                  nodes.push(...iterateDOM(child, currentFormat));
                 }
               }
             }
-            return localNodes;
+            return nodes;
           };
 
-          iterateDOM(targetElement);
-          nodes = manualNodes;
+          const nodesGenerated = iterateDOM(targetElement);
+          nodes = nodesGenerated;
           console.log(`[importDocumentFile] Manual high-fidelity conversion produced ${nodes.length} structural nodes.`);
         }
 
