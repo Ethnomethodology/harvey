@@ -3203,10 +3203,10 @@
       const wrapperRect = editorWrapper.getBoundingClientRect();
 
       // Check if we are in the gutter (first 60px of the wrapper)
-      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
+      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 40;
 
       // If we are in the gutter, scan slightly to the right to find the row at this Y level
-      const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
+      const scanX = isWithinGutterX ? wrapperRect.left + 50 : x;
 
       // Use elementsFromPoint to find the row
       const elements = document.elementsFromPoint(scanX, y);
@@ -3249,7 +3249,7 @@
             // Position button in the gutter (left: 20px relative to wrapper)
             playButtonPosition = {
               top: rect.top - wrapperRect.top + editorWrapper.scrollTop + rect.height / 2,
-              left: 20
+              left: 12 // Position inside lexical-content's default 24px padding
             };
             showPlayButton = true;
           }
@@ -4927,7 +4927,6 @@
 
   <div
     class="lexical-wrapper flex-grow min-h-0 relative overflow-visible"
-    style={enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}
     bind:this={editorWrapper}
   >
     <div
