@@ -1065,13 +1065,20 @@
                         toolbarConfig={{
                           undo: true,
                           redo: true,
+                          blockType: true,
                           bold: true,
                           italic: true,
                           underline: true,
                           strikethrough: true,
+                          link: true,
+                          insertMenu: false,
+                          indent: true,
+                          outdent: true,
+                          align: true,
                           textColor: true,
                           highlight: true,
-                          clearFormatting: true
+                          clearFormatting: true,
+                          search: true
                         }}
                         on:change={handleEditorUpdate}
                         on:textcountchange={(e) =>
@@ -1110,13 +1117,20 @@
                           toolbarConfig={{
                             undo: true,
                             redo: true,
+                            blockType: true,
                             bold: true,
                             italic: true,
                             underline: true,
                             strikethrough: true,
+                            link: true,
+                            insertMenu: false,
+                            indent: true,
+                            outdent: true,
+                            align: true,
                             textColor: true,
                             highlight: true,
-                            clearFormatting: true
+                            clearFormatting: true,
+                            search: true
                           }}
                           on:change={handleSecondaryEditorUpdate}
                           enableFloatingToolbar={false}
