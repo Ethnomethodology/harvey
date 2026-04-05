@@ -1142,9 +1142,38 @@ export async function importDocumentFile() {
           }
         }
 
+        // Final structural check: RootNode only accepts block elements.
+        // Group any top-level inline nodes (text, linebreak, link, extended-text) into paragraphs.
+        const blockNodes = [];
+        let pendingInline = [];
+        const flushInline = () => {
+          if (pendingInline.length > 0) {
+            const p = _createParagraphNode();
+            p.append(...pendingInline);
+            blockNodes.push(p);
+            pendingInline = [];
+          }
+        };
+
+        for (const node of nodes) {
+          const type = node.getType();
+          if (
+            type === 'text' ||
+            type === 'linebreak' ||
+            type === 'link' ||
+            type === 'extended-text'
+          ) {
+            pendingInline.push(node);
+          } else {
+            flushInline();
+            blockNodes.push(node);
+          }
+        }
+        flushInline();
+
         root.clear();
-        if (nodes.length > 0) {
-          root.append(...nodes);
+        if (blockNodes.length > 0) {
+          root.append(...blockNodes);
         }
 
         // Determine if there is actual content: non-empty text, or any node that isn't a paragraph
