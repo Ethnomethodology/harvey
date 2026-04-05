@@ -5156,8 +5156,8 @@
     background-color: transparent; /* Default for light mode, will be overridden by dark mode or specific hover */
     margin-right: 2px;
     line-height: 1.2;
-    min-height: 28px;
-    height: 28px;
+    min-height: 24px;
+    height: 24px;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),
