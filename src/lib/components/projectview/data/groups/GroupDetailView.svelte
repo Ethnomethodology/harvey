@@ -857,7 +857,7 @@
     </div>
 
     <!-- Toolbar (Below Header Rule) -->
-    {#if panelState.groupDetailViewMode === 'list' && !isLoading}
+    {#if panelState.groupDetailViewMode === 'list' && !isLoading && allFiles.length > 0}
       <div class="mb-4 flex justify-between items-center">
         <div class="relative inline-block text-left">
           <Button
@@ -1111,7 +1111,7 @@
                 {/each}
               </TableBody>
             </Table>
-          {:else}
+          {:else if allFiles.length > 0}
             <p class="text-gray-500 dark:text-gray-400 text-center py-8">
               No files match your search.
             </p>
