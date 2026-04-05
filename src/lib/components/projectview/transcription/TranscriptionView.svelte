@@ -2,7 +2,7 @@
 <script>
   import { tick, createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
-  import { slide } from 'svelte/transition'; // Import slide transition
+  import { slide } from 'svelte/transition';
   import { project } from '$lib/stores/projectStore.js';
   import {
     transcriptStore,
@@ -13,13 +13,14 @@
     splitTranscriptSegment,
     mergeTranscriptSegments,
     selectMedia,
-    markTranscriptAsSaved, // <-- Added this import
+    markTranscriptAsSaved,
     deactivateDualMode,
-    updatePlayerCurrentSegmentIndex
+    updatePlayerCurrentSegmentIndex,
+    updateManualSegmentSettings
   } from '$lib/stores/transcriptStore.js';
   import {
     saveTranscriptData,
-    requestTranscription as requestTranscriptionService, // Renamed to avoid conflict
+    requestTranscription as requestTranscriptionService,
     convertAndSaveTranscriptAsDoc,
     loadTranscriptFile,
     replaceTranscriptText,
@@ -32,85 +33,49 @@
   import TopBar from './TopBar.svelte';
   import LeftPanel from './LeftPanel.svelte';
   import panelStateStore from '$lib/stores/panelStateStore.svelte.js';
-  import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Added
+  import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
   import MediaPlayer from '../shared/MediaPlayer.svelte';
-  import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Added for horizontal waveform
+  import InteractiveWaveform from '../shared/InteractiveWaveform.svelte';
   import VerticalWaveform from './VerticalWaveform.svelte';
   import EditableTranscript from './EditableTranscript.svelte';
   import RichTextPreview from './RichTextPreview.svelte';
-  import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte'; // <-- Added this import
+  import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
   import ManualSettingsModal from '$lib/components/projectview/modals/ManualSettingsModal.svelte';
-  import { updateManualSegmentSettings } from '$lib/stores/transcriptStore.js';
-import { getErrorMessage } from '$lib/utils/errorUtils.js';
+  import { getErrorMessage } from '$lib/utils/errorUtils.js';
 
   const dispatch = createEventDispatcher();
 
-  export let mediaPlayerRef = null;
-  let verticalWaveformRef = null;
-  let horizontalWaveformRef = null; // Added for horizontal waveform
-  let verticalWaveformWidthPx = 0; // To store the actual pixel width of the vertical waveform panel
-  const HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX = 75; // Default height for the horizontal waveform container
-  let horizontalWaveformContainerHeightPx = HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX; // Initialize with default
+  // --- Props (Runes) ---
+  let { mediaPlayerRef = $bindable(null) } = $props();
 
-  $: {
-    if (currentWaveformLayout === 'vertical') {
-      horizontalWaveformContainerHeightPx = verticalWaveformWidthPx;
-    } else if (currentWaveformLayout === 'horizontal') {
-      horizontalWaveformContainerHeightPx = HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX;
-    } else {
-      // 'none'
-      horizontalWaveformContainerHeightPx = 0;
-    }
-  }
+  // --- Internal State (Runes) ---
+  let verticalWaveformRef = $state(null);
+  let horizontalWaveformRef = $state(null);
+  let verticalWaveformWidthPx = $state(0);
+  const HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX = 75;
+  let horizontalWaveformContainerHeightPx = $state(HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX);
 
-  let editableTranscriptRef;
-  let richTextPreviewRef;
-  let topBarRef;
-  let leftPanelRef;
+  let editableTranscriptRef = $state();
+  let richTextPreviewRef = $state();
+  let topBarRef = $state();
+  let leftPanelRef = $state();
+  let lastNavigateClickRatio = $state(0.5);
 
-  let lastNavigateClickRatio = 0.5; // To store the click position ratio from waveform
+  let currentWaveformLayout = $state();
+  let isMediaPlayerTrimming = $state(false);
+  let mediaPlayerTrimStart = $state(0);
+  let mediaPlayerTrimEnd = $state(0);
+  let isMediaPlayerHidden = $state(false);
+  let isSegmentEditingActive = $state(false);
+  let currentEditSegmentStart = $state(0);
+  let currentEditSegmentEnd = $state(0);
+  let wasPlayingBeforeEdit = $state(false);
+  let isManualSettingsModalOpen = $state(false);
+  let lastCenterScrollIndex = $state(-1);
+  let showConfirmConversionModal = $state(false);
 
-  // Reactive state for left panel visibility from store
-
-  let currentWaveformLayout; // Will be updated by store subscription
-  const unsubscribeWaveformLayout = waveformLayoutStore.subscribe((value) => {
-    currentWaveformLayout = value;
-    console.log('[TranscriptionView] currentWaveformLayout updated to:', currentWaveformLayout);
-  });
-
-  onDestroy(() => {
-    if (unsubscribeWaveformLayout) unsubscribeWaveformLayout();
-  });
-
-  // Reactive statements for panel widths
-  $: middlePanelWidthClass = (() => {
-    if (currentWaveformLayout === 'vertical') {
-      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
-    } else {
-      // 'horizontal' or 'none'
-      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
-    }
-  })();
-
-  $: rightPanelWidthClass = (() => {
-    if (currentWaveformLayout === 'vertical') {
-      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
-    } else {
-      // 'horizontal' or 'none'
-      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
-    }
-  })();
-
-  // State for MediaPlayer within THIS TranscriptionView
-  // These are bound to the MediaPlayer's props.
-  let isMediaPlayerTrimming = false;
-  let mediaPlayerTrimStart = 0;
-  let mediaPlayerTrimEnd = 0;
-
-  let isMediaPlayerHidden = false; // New state variable
-
-  // Reactive media type detection
-  $: isVideoMedia = (() => {
+  // --- Derived State (Runes) ---
+  const isVideoMedia = $derived((() => {
     const selectedMedia = $transcriptStore.selectedMediaFile;
     if (selectedMedia && selectedMedia.path) {
       const extension = selectedMedia.path.split('.').pop()?.toLowerCase();
@@ -118,9 +83,9 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
       return videoExtensions.includes(extension);
     }
     return false;
-  })();
+  })());
 
-  $: isAudioMedia = (() => {
+  const isAudioMedia = $derived((() => {
     const selectedMedia = $transcriptStore.selectedMediaFile;
     if (selectedMedia && selectedMedia.path) {
       const extension = selectedMedia.path.split('.').pop()?.toLowerCase();
@@ -128,25 +93,55 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
       return audioExtensions.includes(extension);
     }
     return false;
-  })();
+  })());
 
-  // Logic to show media player by default if the new media is a video
-  $: {
+  const panelEditModeActive = $derived(mediaEditorStore.isLexicalEditMode);
+
+  const middlePanelWidthClass = $derived((() => {
+    if (currentWaveformLayout === 'vertical') {
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
+    } else {
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
+    }
+  })());
+
+  const rightPanelWidthClass = $derived((() => {
+    if (currentWaveformLayout === 'vertical') {
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
+    } else {
+      return !panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
+    }
+  })());
+
+  // --- Effects (Runes) ---
+  $effect(() => {
+    if (currentWaveformLayout === 'vertical') {
+      horizontalWaveformContainerHeightPx = verticalWaveformWidthPx;
+    } else if (currentWaveformLayout === 'horizontal') {
+      horizontalWaveformContainerHeightPx = HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX;
+    } else {
+      horizontalWaveformContainerHeightPx = 0;
+    }
+  });
+
+  $effect(() => {
     if (isVideoMedia) {
       isMediaPlayerHidden = false;
     }
-  }
+  });
 
-  let isSegmentEditingActive = false;
-  let currentEditSegmentStart = 0;
-  let currentEditSegmentEnd = 0;
+  // --- Subscriptions ---
+  let unsubscribeWaveformLayout;
+  onMount(() => {
+    unsubscribeWaveformLayout = waveformLayoutStore.subscribe((value) => {
+      currentWaveformLayout = value;
+      console.log('[TranscriptionView] currentWaveformLayout updated to:', currentWaveformLayout);
+    });
+  });
 
-  $: panelEditModeActive = mediaEditorStore.isLexicalEditMode;
-
-  let wasPlayingBeforeEdit = false;
-
-  // State for ManualSettingsModal
-  let isManualSettingsModalOpen = false;
+  onDestroy(() => {
+    if (unsubscribeWaveformLayout) unsubscribeWaveformLayout();
+  });
 
   async function handlePreviousRequest() {
     editableTranscriptRef?.previous();
@@ -160,25 +155,17 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     const index = event.detail;
     const segment = get(transcriptStore).segments?.[index];
     if (segment && typeof segment.start_time === 'number') {
-      // Commit any pending edits in the editable transcript before switching/saving
       if (panelEditModeActive && editableTranscriptRef) {
         editableTranscriptRef.commitCurrentSegmentEdits();
         await tick();
       }
-
-      // Sync store index
       updatePlayerCurrentSegmentIndex(index);
-
       editableTranscriptRef?.loadSegment?.(index);
-    } else {
-      console.warn(`[TranscriptionView] Invalid segment data for index ${index} on click.`);
     }
   }
 
   async function handlePanelNavigate(event) {
     const detail = event.detail;
-
-    // Commit any pending edits in the editable transcript before navigating/saving
     if (panelEditModeActive && editableTranscriptRef) {
       editableTranscriptRef.commitCurrentSegmentEdits();
       await tick();
@@ -187,21 +174,11 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     if (detail && detail.action) {
       if (mediaPlayerRef) {
         switch (detail.action) {
-          case 'toggle-play':
-            mediaPlayerRef.handleTogglePlay();
-            break;
-          case 'rewind':
-            mediaPlayerRef.rewind10s();
-            break;
-          case 'forward':
-            mediaPlayerRef.forward10s();
-            break;
-          case 'speed-up':
-            mediaPlayerRef.changeSpeed(1);
-            break;
-          case 'speed-down':
-            mediaPlayerRef.changeSpeed(-1);
-            break;
+          case 'toggle-play': mediaPlayerRef.handleTogglePlay(); break;
+          case 'rewind': mediaPlayerRef.rewind10s(); break;
+          case 'forward': mediaPlayerRef.forward10s(); break;
+          case 'speed-up': mediaPlayerRef.changeSpeed(1); break;
+          case 'speed-down': mediaPlayerRef.changeSpeed(-1); break;
         }
       }
       return;
@@ -210,58 +187,35 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     if (detail && typeof detail.time === 'number') {
       lastNavigateClickRatio = detail.ratio ?? 0.5;
       if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
-      // Reset ratio after a delay to ensure it doesn't affect subsequent non-click scrolls
-      setTimeout(() => {
-        lastNavigateClickRatio = 0.5;
-      }, 500);
+      setTimeout(() => { lastNavigateClickRatio = 0.5; }, 500);
     } else if (detail && typeof detail.index === 'number') {
       const index = detail.index;
       const segment = get(transcriptStore).segments?.[index];
       if (segment) {
-        // Eagerly update boundaries to prevent race conditions in MediaPlayer's loop logic
         currentEditSegmentStart = segment.start_time;
         currentEditSegmentEnd = segment.end_time;
-
-        // Ensure store index is synced on navigation (e.g., Next/Prev buttons)
         updatePlayerCurrentSegmentIndex(index);
-
         if (mediaPlayerRef) {
-          // Explicit segment navigation always seeks to the segment start boundary.
-          // We skip the 'isSegmentEditingActive' clamping here because that clamping
-          // was intended to keep the player inside a segment during manual waveform seeks,
-          // but it incorrectly blocks moving to the NEXT segment because the next segment's
-          // start is exactly the previous segment's end.
           const seekTime = segment.start_time;
           mediaPlayerRef.seekTo(seekTime, index);
-          if (verticalWaveformRef) {
-            verticalWaveformRef.scrollToTime(seekTime);
-          }
-          if (horizontalWaveformRef) {
-            horizontalWaveformRef.scrollToTime(seekTime);
-          }
+          verticalWaveformRef?.scrollToTime(seekTime);
+          horizontalWaveformRef?.scrollToTime(seekTime);
         }
       }
-    } else {
-      console.warn('[TranscriptionView] Unexpected navigation event detail:', detail);
     }
   }
 
   function handleGlobalKeydown(event) {
-    const isMac =
-      typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? event.metaKey : event.ctrlKey;
     if (modKey && event.key.toLowerCase() === 'e') {
-      // Check if user is typing in some other input outside transcriptional panels if needed
-      // For now, E is safe to toggle
       event.preventDefault();
       handleToggleEditMode();
     }
   }
 
-  // This handler is for when the MediaPlayer component itself enters trim mode (e.g., user clicks its trim button)
-  // or when its bound `isTrimming` prop changes.
   function handleMediaPlayerTrimModeEntered(event) {
-    isMediaPlayerTrimming = true; // Ensure TranscriptionView's state is synced
+    isMediaPlayerTrimming = true;
     mediaPlayerTrimStart = event.detail.startTime;
     mediaPlayerTrimEnd = event.detail.endTime;
   }
@@ -273,8 +227,6 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
   function handleWaveformTrimUpdate(event) {
     const { startTime, endTime } = event.detail;
     if (mediaPlayerRef) mediaPlayerRef.updateTrimTimes(startTime, endTime);
-    // These local states are already bound or updated via handleMediaPlayerTrimModeEntered
-    // isMediaPlayerTrimming = true; // Not needed here if MediaPlayer manages its own button UI
     mediaPlayerTrimStart = startTime;
     mediaPlayerTrimEnd = endTime;
   }
@@ -290,33 +242,19 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     const { startTime, endTime } = event.detail;
     if (editableTranscriptRef) {
       editableTranscriptRef.updateTimesFromExternal(startTime, endTime);
-    } else {
-      console.error(
-        '[TranscriptionView] EditableTranscript ref not available for waveform update.'
-      );
     }
   }
 
   export async function handleToggleEditMode() {
-    console.log(
-      '[TranscriptionView] handleToggleEditMode called. Current panelEditModeActive:',
-      panelEditModeActive
-    );
-
     if (panelEditModeActive) {
-      // Explicitly exiting edit mode
       mediaEditorStore.isLexicalEditMode = false;
     } else {
-      // Explicitly entering edit mode
       mediaEditorStore.isLexicalEditMode = true;
       await tick();
       editableTranscriptRef?.focusEditor?.();
     }
   }
 
-  /**
-   * Exits edit mode if it's currently active.
-   */
   export async function exitEditModeIfActive() {
     if (panelEditModeActive || get(transcriptStore).transcriptDirty) {
       await handleSaveTranscript();
@@ -324,68 +262,32 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
   }
 
   export async function enterManualEditMode() {
-    console.log('[TranscriptionView] enterManualEditMode called.');
-    panelEditModeActive = true;
-
-    // Ensure store knows we are on segment 0
+    mediaEditorStore.isLexicalEditMode = true;
     updatePlayerCurrentSegmentIndex(0);
-
     await tick();
-
-    // Check if segments are available in the store
     const store = get(transcriptStore);
     if (store.segments && store.segments.length > 0) {
-      // Add a small delay to ensure EditableTranscript has received the store update
-      // and updated its local 'segments' array via subscription.
       setTimeout(async () => {
-        // Automatically select the first segment
         await handleSegmentClick({ detail: 0 });
         editableTranscriptRef?.focusEditor?.();
       }, 100);
-    } else {
-      console.warn(
-        '[TranscriptionView] enterManualEditMode: No segments found in store to select.'
-      );
     }
   }
 
   export async function handleSaveTranscript(isAutoSave = false) {
-    // CRITICAL: Commit any pending edits in the editable transcript before saving
     if (panelEditModeActive && editableTranscriptRef) {
       editableTranscriptRef.commitCurrentSegmentEdits();
-      await tick(); // Allow store to update from the commit
+      await tick();
     }
-
-    if (!get(transcriptStore).transcriptDirty) {
-      return;
-    }
-
-    const tsStore = get(transcriptStore);
-
+    if (!get(transcriptStore).transcriptDirty) return;
     try {
-      project.update((p) => ({
-        ...p,
-        isLoading: true,
-        statusMessage: 'Saving transcript...'
-      })); // Global loading state
-      await saveTranscriptData(); // This service will use get(transcriptStore) for currentTranscriptPath and segments
-      project.update((p) => ({
-        ...p,
-        isLoading: false,
-        statusMessage: 'Transcript saved.'
-      })); // Global status
+      project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' }));
+      await saveTranscriptData();
+      project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' }));
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      project.update((p) => ({
-        ...p,
-        isLoading: false,
-        error: `Save failed: ${errorMsg}`,
-        statusMessage: 'Save failed.'
-      })); // Global error
-      await message(`Error saving transcript: ${errorMsg}`, {
-        title: 'Save Error',
-        type: 'error'
-      });
+      project.update(p => ({ ...p, isLoading: false, error: `Save failed: ${errorMsg}`, statusMessage: 'Save failed.' }));
+      await message(`Error saving transcript: ${errorMsg}`, { title: 'Save Error', type: 'error' });
       throw error;
     }
   }
@@ -395,40 +297,21 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
   }
 
   async function handleConvertToDocumentEvent() {
-    if (get(transcriptStore).transcriptDirty) {
-      await handleSaveTranscript();
-    }
+    if (get(transcriptStore).transcriptDirty) await handleSaveTranscript();
     showConfirmConversionModal = true;
   }
 
   async function confirmConvertToDocument() {
     try {
-      project.update((p) => ({
-        ...p,
-        statusMessage: 'Converting to document...'
-      }));
+      project.update(p => ({ ...p, statusMessage: 'Converting to document...' }));
       const newDocPath = await convertAndSaveTranscriptAsDoc();
-      project.update((p) => ({
-        ...p,
-        statusMessage: 'Converted to document successfully.'
-      }));
-      await message(`Transcript converted and saved as a new document.`, {
-        title: 'Conversion Successful'
-      });
-      dispatch('requestopentab', {
-        tabName: 'data',
-        loadNotePath: newDocPath
-      });
+      project.update(p => ({ ...p, statusMessage: 'Converted to document successfully.' }));
+      await message(`Transcript converted and saved as a new document.`, { title: 'Conversion Successful' });
+      dispatch('requestopentab', { tabName: 'data', loadNotePath: newDocPath });
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      await message(`Failed to convert: ${errorMsg}`, {
-        title: 'Conversion Error',
-        type: 'error'
-      });
-      project.update((p) => ({
-        ...p,
-        statusMessage: 'Conversion failed.'
-      }));
+      await message(`Failed to convert: ${errorMsg}`, { title: 'Conversion Error', type: 'error' });
+      project.update(p => ({ ...p, statusMessage: 'Conversion failed.' }));
     } finally {
       showConfirmConversionModal = false;
     }
@@ -455,90 +338,37 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     editableTranscriptRef?.forceReloadFromStore?.();
   }
   export function handleInsertSegmentRequest(event) {
-    // Detail can either be a simple index (from EditableTranscript shortcut)
-    // or a full object with timestamps (from RichTextPreview manual calculation flow)
     if (typeof event.detail === 'number') {
       const index = event.detail;
-      if (richTextPreviewRef && typeof richTextPreviewRef.handleInsertNewSegment === 'function') {
-        richTextPreviewRef.handleInsertNewSegment(index + 1); // Pass index + 1 to insert AFTER current
-      } else {
-        console.warn(
-          '[TranscriptionView] richTextPreviewRef.handleInsertNewSegment is not available.'
-        );
-      }
+      richTextPreviewRef?.handleInsertNewSegment?.(index + 1);
       return;
     }
-
     const { index, startTime, endTime, speaker } = event.detail || {};
-    if (
-      typeof index !== 'number' ||
-      typeof startTime !== 'number' ||
-      typeof endTime !== 'number' ||
-      endTime <= startTime
-    )
-      return;
-
+    if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return;
     const newSegment = {
-      start_time: startTime,
-      end_time: endTime,
-      speaker: speaker || 'Unknown',
-      text: JSON.stringify({
-        root: {
-          children: [
-            {
-              type: 'paragraph',
-              version: 1,
-              children: [],
-              direction: null,
-              format: '',
-              indent: 0
-            }
-          ],
-          type: 'root',
-          version: 1,
-          direction: null,
-          format: '',
-          indent: 0
-        }
-      })
+      start_time: startTime, end_time: endTime, speaker: speaker || 'Unknown',
+      text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } })
     };
     insertTranscriptSegment(index, newSegment);
   }
 
   export function activateTrimModeOnPlayer() {
-    if (mediaPlayerRef && typeof mediaPlayerRef.enterTrimMode === 'function') {
+    if (mediaPlayerRef?.enterTrimMode) {
       mediaPlayerRef.enterTrimMode();
-      // The `enterTrimMode` in MediaPlayer should ideally set its `isTrimming` prop.
-      // Since `isMediaPlayerTrimming` is bound to MediaPlayer's `isTrimming` prop,
-      // this should update `isMediaPlayerTrimming` here automatically.
-      // We directly set it here to be certain the UI within TranscriptionView updates.
       isMediaPlayerTrimming = true;
-    } else {
-      console.warn(
-        '[TranscriptionView] Could not activate trim mode: mediaPlayerRef or enterTrimMode method not found.'
-      );
     }
   }
 
-  let lastCenterScrollIndex = -1;
-  $: {
+  $effect(() => {
     const curIdx = $transcriptStore.player.currentSegmentIndex;
     const totalSegs = $transcriptStore.segments?.length || 0;
-
     if (curIdx !== lastCenterScrollIndex && curIdx >= 0 && curIdx < totalSegs) {
       const isPlaying = $transcriptStore.player.isPlaying;
-      // Only jump-scroll to center if we are NOT playing (manual seek while paused)
-      // or if the jump is significant (seeking while playing)
-      const isSignificantJump =
-        lastCenterScrollIndex !== -1 && Math.abs(curIdx - lastCenterScrollIndex) > 1;
-
+      const isSignificantJump = lastCenterScrollIndex !== -1 && Math.abs(curIdx - lastCenterScrollIndex) > 1;
       if (!isPlaying || isSignificantJump) {
         const segment = $transcriptStore.segments[curIdx];
         if (segment) {
-          const scrollTime =
-            lastNavigateClickRatio !== 0.5
-              ? $transcriptStore.player.currentTime || segment.start_time
-              : segment.start_time;
+          const scrollTime = lastNavigateClickRatio !== 0.5 ? $transcriptStore.player.currentTime || segment.start_time : segment.start_time;
           verticalWaveformRef?.scrollToTime(scrollTime, lastNavigateClickRatio);
           horizontalWaveformRef?.scrollToTime(scrollTime, lastNavigateClickRatio);
         }
@@ -547,42 +377,29 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
     } else if (curIdx === -1) {
       lastCenterScrollIndex = -1;
     }
-  }
+  });
 
-  $: if (mediaPlayerRef && mediaPlayerRef.videoElement) {
-    const video = mediaPlayerRef.videoElement;
-    if (isSegmentEditingActive) {
-      if (!wasPlayingBeforeEdit && !video.paused) {
-        wasPlayingBeforeEdit = true;
-        try {
-          video.pause();
-        } catch (e) {
-          console.warn('Error pausing on edit focus:', e);
+  $effect(() => {
+    if (mediaPlayerRef?.videoElement) {
+      const video = mediaPlayerRef.videoElement;
+      if (isSegmentEditingActive) {
+        if (!wasPlayingBeforeEdit && !video.paused) {
+          wasPlayingBeforeEdit = true;
+          try { video.pause(); } catch (e) {}
         }
-      }
-    } else {
-      if (wasPlayingBeforeEdit) {
-        if (video.paused) {
-          try {
-            video.play().catch(console.error);
-          } catch (e) {
-            console.warn('Error resuming on edit blur:', e);
-          }
+      } else {
+        if (wasPlayingBeforeEdit) {
+          if (video.paused) { try { video.play().catch(() => {}); } catch (e) {} }
+          wasPlayingBeforeEdit = false;
         }
-        wasPlayingBeforeEdit = false;
       }
     }
-  }
+  });
 
   function forwardLeftPanelEvents(event) {
-    if (event.type === 'requestopentab') {
-      dispatch('requestopentab', event.detail);
-    } else if (event.type === 'requestmediaselection') {
-      dispatch('requestmediaselection', event.detail);
-    }
+    dispatch(event.type, event.detail);
   }
 
-  // Handlers for Manual Transcription Settings
   function handleRequestManualSettings() {
     isManualSettingsModalOpen = true;
   }
@@ -599,55 +416,25 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
 
   function handleReplaceAllTranscriptText(event) {
     const { find, replace, isCaseSensitive, isRegex, isWholeWord } = event.detail;
-    replaceAllTranscriptText(find, replace, {
-      isCaseSensitive,
-      isRegex,
-      isWholeWord
-    });
+    replaceAllTranscriptText(find, replace, { isCaseSensitive, isRegex, isWholeWord });
   }
 
-  // Helper function to extract the stem directory path
   function getStemRelPath(relPath) {
     if (!relPath) return '';
     const parts = relPath.replace(/\\/g, '/').split('/');
-    if (parts.length >= 3) {
-      // e.g. "harvey_files/Videos/input_videos/transcripts/file.json"
-      // extracts the parent stem -> "harvey_files/Videos/input_videos"
-      return parts.slice(0, parts.length - 2).join('/');
-    }
-    return '';
+    return parts.length >= 3 ? parts.slice(0, parts.length - 2).join('/') : '';
   }
 
-  // Helper function to find media by associated transcript relative path
   function findMediaByTranscriptRelativePath(transcriptRelativePath, projectFiles) {
-    console.log(
-      '[TranscriptionView] findMediaByTranscriptRelativePath: Searching for transcriptRelativePath:',
-      transcriptRelativePath
-    );
-
     if (!projectFiles || !transcriptRelativePath) return null;
-
     const targetStemPath = getStemRelPath(transcriptRelativePath);
     if (!targetStemPath) return null;
-
     function recurse(nodes) {
       for (const node of nodes) {
         if (node.file_type === 'media' && node.relative_path) {
-          const mediaStemPath = getStemRelPath(node.relative_path);
-          if (mediaStemPath && mediaStemPath === targetStemPath) {
-            console.log(
-              '[TranscriptionView] findMediaByTranscriptRelativePath: Match found for targetStemPath:',
-              targetStemPath,
-              'in media node:',
-              node.name
-            );
-            return node;
-          }
+          if (getStemRelPath(node.relative_path) === targetStemPath) return node;
         }
-        if (node.children) {
-          const found = recurse(node.children);
-          if (found) return found;
-        }
+        if (node.children) { const found = recurse(node.children); if (found) return found; }
       }
       return null;
     }
@@ -655,84 +442,30 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
   }
 
   async function handleRequestLoadItem(event) {
-    console.log(
-      '[TranscriptionView] handleRequestLoadItem called for item:',
-      event.detail.name,
-      'file_type:',
-      event.detail.file_type
-    );
-
-    // Commit any pending edits in the editable transcript before checking for dirty state
     if (panelEditModeActive && editableTranscriptRef) {
       editableTranscriptRef.commitCurrentSegmentEdits();
       await tick();
     }
-
-    if (get(transcriptStore).transcriptDirty) {
-      await handleSaveTranscript(true);
-    }
-
-    // Proceed with loading immediately
+    if (get(transcriptStore).transcriptDirty) await handleSaveTranscript(true);
     await loadRequestedItem(event.detail);
   }
 
-  // New helper function to encapsulate the loading logic
   async function loadRequestedItem(item) {
-    // DO NOT exit edit mode here, preserve current mode across loads
     const store = get(transcriptStore);
-
     if (item.file_type === 'media') {
-      console.log('[TranscriptionView] Loading media via selectMedia.');
       selectMedia(item);
-    } else if (
-      item.file_type === 'audio_transcript' ||
-      item.file_type === 'video_transcript' ||
-      item.file_type === 'audio-transcript' ||
-      item.file_type === 'video-transcript'
-    ) {
-      // Deactivate dual mode if active when clicking a transcript item
-      if (store.isDualModeActive) {
-        console.log('[TranscriptionView] Transcript clicked in Dual Mode, deactivating Dual Mode.');
-        await deactivateDualMode();
-      }
-
-      const currentProjectFiles = get(project).files;
-      console.log(
-        '[TranscriptionView] Calling findMediaByTranscriptRelativePath with transcript relative path:',
-        item.relative_path
-      );
-      const associatedMedia = findMediaByTranscriptRelativePath(
-        item.relative_path,
-        currentProjectFiles
-      );
-
-      if (associatedMedia) {
-        console.log(
-          '[TranscriptionView] Found associated media for transcript, selecting:',
-          associatedMedia.name,
-          associatedMedia
-        );
-        selectMedia(associatedMedia, item.path);
-      } else {
-        console.warn('[TranscriptionView] No associated media found for transcript:', item.path);
-        selectMedia(null);
-      }
-
-      try {
-        await loadTranscriptFile(item.path);
-        console.log('[TranscriptionView] Transcript loaded successfully.');
-      } catch (error) {
+    } else if (item.file_type.includes('transcript')) {
+      if (store.isDualModeActive) await deactivateDualMode();
+      const associatedMedia = findMediaByTranscriptRelativePath(item.relative_path, get(project).files);
+      selectMedia(associatedMedia, item.path);
+      try { await loadTranscriptFile(item.path); } catch (error) {
         const errorMsg = getErrorMessage(error);
-        console.error('[TranscriptionView] Error loading transcript:', error);
-        message(`Error loading transcript: ${errorMsg}`, {
-          title: 'Load Error',
-          type: 'error'
-        });
-        return;
+        message(`Error loading transcript: ${errorMsg}`, { title: 'Load Error', type: 'error' });
       }
     }
   }
 </script>
+
 
 <svelte:window on:keydown={handleGlobalKeydown} />
 
@@ -793,7 +526,7 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
         >
           <EditableTranscript
             bind:this={editableTranscriptRef}
-            bind:panelEditMode={panelEditModeActive}
+            panelEditMode={panelEditModeActive}
             on:navigate={handlePanelNavigate}
             on:segmenteditfocus={handleSegmentEditFocus}
             on:toggleedit={handleToggleEditMode}
@@ -845,7 +578,7 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
       >
         <RichTextPreview
           bind:this={richTextPreviewRef}
-          bind:previewEditMode={panelEditModeActive}
+          previewEditMode={panelEditModeActive}
           on:segmentclick={handleSegmentClick}
           on:toggleedit={handleToggleEditMode}
           on:requestopentab={(e) => dispatch('requestopentab', e.detail)}
