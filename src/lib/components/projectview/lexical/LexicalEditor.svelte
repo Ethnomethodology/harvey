@@ -4148,8 +4148,13 @@
 
           // Determine if we should strictly avoid touching this table's widths
           // Documents should prefer their stored pixel widths once set.
-          const isDocument = documentPath?.includes('/Documents/');
-          const shouldBypass = hasPixelWidths && (isDocument || !layoutChanged);
+          const isDocument =
+            enableTableCellResize ||
+            documentPath?.toLowerCase().includes('/documents/') ||
+            documentPath?.toLowerCase().includes('\\documents\\');
+
+          // If it's a document and it already has widths, bypass overwriting them.
+          const shouldBypass = isDocument ? hasWidths : (hasPixelWidths && !layoutChanged);
 
           if (
             (!hasWidths ||
