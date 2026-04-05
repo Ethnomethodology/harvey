@@ -100,6 +100,7 @@
         MessageSquareText,
         Sheet,
         Image as ImageIcon,
+        ChevronRight,
     } from "@lucide/svelte";
     import DataTopBar from "$lib/components/projectview/data/DataTopBar.svelte";
     import TranscriptionTopBar from "$lib/components/projectview/transcription/TopBar.svelte";
@@ -124,6 +125,10 @@
     let tagsViewRef;
     let selectedTab = "data";
     let importMenuVisible = false;
+    let activeSubMenu = null; // 'documents' or 'tables'
+    let subMenuX = 0;
+    let subMenuY = 0;
+    let subMenuTimer = null;
     let importMenuX = 0;
     let importMenuY = 0;
     let closeImportMenuListener = null;
@@ -1755,7 +1760,13 @@
                 });
             closeImportMenuListener = (e) => {
                 const menu = document.getElementById("import-context-menu-div");
-                if (menu && !menu.contains(e.target)) closeImportMenu();
+                const submenu = document.getElementById("import-submenu-div");
+                const isOutsideMenu = menu && !menu.contains(e.target);
+                const isOutsideSubmenu = !submenu || !submenu.contains(e.target);
+
+                if (isOutsideMenu && isOutsideSubmenu) {
+                    closeImportMenu();
+                }
             };
             document.addEventListener("click", closeImportMenuListener, {
                 capture: true,
@@ -1874,6 +1885,8 @@
     function closeImportMenu() {
         if (importMenuVisible) {
             importMenuVisible = false;
+            activeSubMenu = null;
+            if (subMenuTimer) clearTimeout(subMenuTimer);
             if (closeImportMenuListener)
                 document.removeEventListener("click", closeImportMenuListener, {
                     capture: true,
@@ -1881,9 +1894,72 @@
             closeImportMenuListener = null;
         }
     }
+
     function handleImportMenuAction(event, actionType) {
+        if (actionType === "documents" || actionType === "tables") {
+            // These use submenus on hover; clicking can also toggle them
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (activeSubMenu === actionType) {
+                activeSubMenu = null;
+            } else {
+                activeSubMenu = actionType;
+                subMenuX = rect.right + 2;
+                subMenuY = rect.top - 4;
+            }
+            return;
+        }
         closeImportMenu();
         triggerMediaImport(actionType);
+    }
+
+    function handleMenuMouseEnter(event, type) {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+        if (type === "documents" || type === "tables") {
+            const rect = event.currentTarget.getBoundingClientRect();
+            subMenuTimer = setTimeout(() => {
+                activeSubMenu = type;
+                subMenuX = rect.right + 2;
+                subMenuY = rect.top - 4;
+            }, 100);
+        } else {
+            subMenuTimer = setTimeout(() => {
+                activeSubMenu = null;
+            }, 100);
+        }
+    }
+
+    function handleSubMenuMouseEnter() {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+    }
+
+    function handleSubMenuMouseLeave() {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+        subMenuTimer = setTimeout(() => {
+            activeSubMenu = null;
+        }, 200);
+    }
+
+    async function handleSubMenuAction(action, category) {
+        closeImportMenu();
+        if (category === "documents") {
+            if (action === "create") {
+                const currentProject = get(project);
+                if (currentProject && currentProject.xmlPath) {
+                    if (await ensureTab("data")) {
+                        await tick();
+                        createNewDocument(currentProject.xmlPath);
+                    }
+                }
+            } else if (action === "import") {
+                triggerMediaImport("document");
+            }
+        } else if (category === "tables") {
+            if (action === "create") {
+                showCreateTableModal = true;
+            } else if (action === "import") {
+                triggerMediaImport("table");
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -2467,35 +2543,75 @@
                 <Music class="w-4 h-4" /><span>Audio</span>
             </button>
             <button
-                on:click={(event) => handleImportMenuAction(event, "document")}
-                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                on:click={(event) => handleImportMenuAction(event, "documents")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "documents")}
+                on:mouseleave={handleSubMenuMouseLeave}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 group"
             >
-                <FileText class="w-4 h-4" /><span>Document</span>
+                <FileText class="w-4 h-4" />
+                <span class="flex-grow">Documents</span>
+                <ChevronRight class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200" />
             </button>
             <button
                 on:click={(event) => handleImportMenuAction(event, "image")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "image")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <ImageIcon class="w-4 h-4" /><span>Image</span>
             </button>
             <button
-                on:click={(event) => handleImportMenuAction(event, "table")}
-                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                on:click={(event) => handleImportMenuAction(event, "tables")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "tables")}
+                on:mouseleave={handleSubMenuMouseLeave}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 group"
             >
-                <Sheet class="w-4 h-4" /><span>Table</span>
+                <Sheet class="w-4 h-4" />
+                <span class="flex-grow">Tables</span>
+                <ChevronRight class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200" />
             </button>
             <button
                 on:click={(event) =>
                     handleImportMenuAction(event, "transcript")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "transcript")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <MessageSquareText class="w-4 h-4" /><span>Transcript</span>
             </button>
             <button
                 on:click={(event) => handleImportMenuAction(event, "video")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "video")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <Film class="w-4 h-4" /><span>Video</span>
+            </button>
+        </div>
+    {/if}
+
+    {#if importMenuVisible && activeSubMenu}
+        <div
+            id="import-submenu-div"
+            class="fixed z-[60] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-sm min-w-[120px]"
+            style="left: {subMenuX}px; top: {subMenuY}px;"
+            on:mouseenter={handleSubMenuMouseEnter}
+            on:mouseleave={handleSubMenuMouseLeave}
+            on:click|stopPropagation
+            role="menu"
+            tabindex="-1"
+            on:keydown={(e) => {
+                if (e.key === "Escape") closeImportMenu();
+            }}
+        >
+            <button
+                on:click={() => handleSubMenuAction("create", activeSubMenu)}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+            >
+                <span>Create New</span>
+            </button>
+            <button
+                on:click={() => handleSubMenuAction("import", activeSubMenu)}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+            >
+                <span>Import</span>
             </button>
         </div>
     {/if}
