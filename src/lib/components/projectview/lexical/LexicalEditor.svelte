@@ -3353,7 +3353,10 @@
       let cellNodeKeyToResize = null;
       try {
         editor.read(() => {
-          const cellNode = _getNearestNodeFromDOMNode(element);
+          let cellNode = _getNearestNodeFromDOMNode(element);
+          if (cellNode && !_isTableCellNode(cellNode)) {
+             cellNode = _findMatchingParent(cellNode, _isTableCellNode) || cellNode;
+          }
           if (_isTableCellNode(cellNode)) {
             cellNodeKeyToResize = cellNode.getKey();
           }
