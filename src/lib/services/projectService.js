@@ -55,7 +55,7 @@ import {
 
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
 import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
-import { $createExtendedTextNode as _createExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+import { ExtendedTextNode, $createExtendedTextNode as _createExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
