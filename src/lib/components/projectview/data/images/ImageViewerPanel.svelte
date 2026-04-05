@@ -1939,7 +1939,7 @@
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 shadow overflow-hidden">
   <div
-    class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800"
+    class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950"
   >
     <div id="image-annotation-toolbar-container" class="flex items-center">
       <!-- Highlights Group -->

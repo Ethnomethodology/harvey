@@ -16,7 +16,10 @@ import {
   RootNode,
   TextNode,
   LineBreakNode,
-  ElementNode
+  ElementNode,
+  IS_BOLD,
+  IS_ITALIC,
+  IS_UNDERLINE
 } from 'lexical';
 import {
   $createTableNode as _createTableNode,
@@ -31,12 +34,15 @@ import {
 } from '@lexical/table';
 import {
   $createHeadingNode as _createHeadingNode,
+  $createQuoteNode as _createQuoteNode,
   HeadingNode,
   QuoteNode,
   $isHeadingNode as _isHeadingNode
 } from '@lexical/rich-text';
 import {
   $isListNode as _isListNode,
+  $createListNode as _createListNode,
+  $createListItemNode as _createListItemNode,
   ListNode,
   ListItemNode,
   $isListItemNode as _isListItemNode
@@ -49,6 +55,7 @@ import {
 
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
 import { SHARED_NODES } from '$lib/nodes/LexicalConfig.js';
+import { ExtendedTextNode, $createExtendedTextNode as _createExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 import { dirname, basename, sep, join } from '@tauri-apps/api/path';
 
@@ -1003,30 +1010,190 @@ export async function importDocumentFile() {
     let lexicalJsonString = '';
     const conversionEditor = createConversionEditor('import-doc');
     try {
+      console.debug(`[importDocumentFile] htmlContent snippet: ${htmlContent?.substring(0, 300)}...`);
       const domParser = new DOMParser();
       const dom = domParser.parseFromString(htmlContent, 'text/html');
-
-      // Inline CSS styles so Lexical can see colors and other formatting
-      inlineCssRules(dom);
+      const targetElement = dom.body;
 
       await conversionEditor.update(() => {
-        const nodes = _generateNodesFromDOM(conversionEditor, dom);
-        _getRoot().clear();
-        _getRoot().append(...nodes);
-      });
-      const editorState = conversionEditor.getEditorState();
-      if (editorState.isEmpty()) {
-        conversionEditor.update(() => {
-          _getRoot().clear();
+        const root = _getRoot();
+        let nodes = _generateNodesFromDOM(conversionEditor, targetElement);
+        
+        console.log(`[importDocumentFile] Initial Lexical generation returned ${nodes.length} nodes:`, nodes.map(n => n.getType()));
+
+        // Manual Fallback: if Lexical returned zero nodes, walk the DOM ourselves for common tags
+        if (nodes.length === 0 && targetElement.childNodes.length > 0) {
+          console.warn('[importDocumentFile] Initial generation empty, using manual high-fidelity conversion.');
+          
+          const iterateDOM = (domNode, currentFormat = 0) => {
+            const nodes = [];
+            for (const child of domNode.childNodes) {
+              if (child.nodeType === 3) { // Text
+                if (child.textContent.trim().length > 0 || child.textContent === ' ') {
+                  const t = _createTextNode(child.textContent);
+                  if (currentFormat > 0) t.setFormat(currentFormat);
+                  nodes.push(t);
+                }
+              } else if (child.nodeType === 1) { // Element
+                const tag = child.nodeName.toLowerCase();
+                if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
+                  const h = _createHeadingNode(tag);
+                  h.append(...iterateDOM(child, currentFormat));
+                  nodes.push(h);
+                } else if (tag === 'p') {
+                  const p = _createParagraphNode();
+                  p.append(...iterateDOM(child, currentFormat));
+                  nodes.push(p);
+                } else if (tag === 'blockquote') {
+                  const q = _createQuoteNode();
+                  const children = iterateDOM(child, currentFormat);
+                  
+                  // Check for GitHub Alerts [!IMPORTANT], [!NOTE], etc.
+                  let alertLabel = null;
+                  let alertColor = '#3b82f6'; // Default Blue
+                  let targetTextNode = null;
+                  
+                  // Helper to find the first significant text node (skip whitespace/newlines)
+                  const findFirstSignificantTextNode = (nodes) => {
+                    for (const node of nodes) {
+                      const type = node.getType();
+                      if (type === 'text') {
+                        if (node.getTextContent().trim().length > 0) return node;
+                      } else if (type === 'paragraph' || type === 'quote' || type === 'listitem') {
+                        const found = findFirstSignificantTextNode(node.getChildren());
+                        if (found) return found;
+                      }
+                    }
+                    return null;
+                  };
+
+                  targetTextNode = findFirstSignificantTextNode(children);
+                  
+                  if (targetTextNode) {
+                    const firstText = targetTextNode.getTextContent();
+                    // Allow leading spaces before the [!TAG]
+                    const match = firstText.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+                    if (match) {
+                      const type = match[1].toUpperCase();
+                      alertLabel = type;
+                      if (type === 'IMPORTANT' || type === 'WARNING') alertColor = '#ef4444'; // Red
+                      else if (type === 'CAUTION') alertColor = '#f97316'; // Orange
+                      else if (type === 'TIP') alertColor = '#22c55e'; // Green
+                      
+                      // Strip prefix from text (preserving original case for the rest)
+                      targetTextNode.setTextContent(firstText.replace(match[0], ''));
+                    }
+                  }
+                  
+                  if (alertLabel) {
+                    const labelPara = _createParagraphNode();
+                    const labelNode = _createExtendedTextNode(alertLabel);
+                    labelNode.setFormat(IS_BOLD);
+                    labelNode.setStyle(`color: ${alertColor};`);
+                    labelPara.append(labelNode);
+                    q.append(labelPara);
+                  }
+                  
+                  q.append(...children);
+                  nodes.push(q);
+                } else if (tag === 'strong' || tag === 'b') {
+                  nodes.push(...iterateDOM(child, currentFormat | IS_BOLD));
+                } else if (tag === 'em' || tag === 'i') {
+                  nodes.push(...iterateDOM(child, currentFormat | IS_ITALIC));
+                } else if (tag === 'u') {
+                  nodes.push(...iterateDOM(child, currentFormat | IS_UNDERLINE));
+                } else if (tag === 'ul' || tag === 'ol') {
+                  const list = _createListNode(tag === 'ul' ? 'bullet' : 'number');
+                  for (const liItem of child.childNodes) {
+                    if (liItem.nodeName.toLowerCase() === 'li') {
+                      const li = _createListItemNode();
+                      li.append(...iterateDOM(liItem, currentFormat));
+                      list.append(li);
+                    }
+                  }
+                  nodes.push(list);
+                } else if (tag === 'br') {
+                   nodes.push(_createLineBreakNode());
+                } else {
+                  // Fallback for unknown tags: recurse into children
+                  nodes.push(...iterateDOM(child, currentFormat));
+                }
+              }
+            }
+            return nodes;
+          };
+
+          const nodesGenerated = iterateDOM(targetElement);
+          nodes = nodesGenerated;
+          console.log(`[importDocumentFile] Manual high-fidelity conversion produced ${nodes.length} structural nodes.`);
+        }
+
+        // Final Panic Failsafe: if results are still zero but text exists, split by lines
+        if (nodes.length === 0 && targetElement.textContent?.trim().length > 0) {
+          console.warn('[importDocumentFile] Secondary generation empty, using raw multi-line fallback.');
+          const lines = targetElement.textContent.split(/\r?\n/);
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.length > 0) {
+              const p = _createParagraphNode();
+              p.append(_createTextNode(trimmed));
+              nodes.push(p);
+            }
+          }
+        }
+
+        // Final structural check: RootNode only accepts block elements.
+        // Group any top-level inline nodes (text, linebreak, link, extended-text) into paragraphs.
+        const blockNodes = [];
+        let pendingInline = [];
+        const flushInline = () => {
+          if (pendingInline.length > 0) {
+            const p = _createParagraphNode();
+            p.append(...pendingInline);
+            blockNodes.push(p);
+            pendingInline = [];
+          }
+        };
+
+        for (const node of nodes) {
+          const type = node.getType();
+          if (
+            type === 'text' ||
+            type === 'linebreak' ||
+            type === 'link' ||
+            type === 'extended-text'
+          ) {
+            pendingInline.push(node);
+          } else {
+            flushInline();
+            blockNodes.push(node);
+          }
+        }
+        flushInline();
+
+        root.clear();
+        if (blockNodes.length > 0) {
+          root.append(...blockNodes);
+        }
+
+        // Determine if there is actual content: non-empty text, or any node that isn't a paragraph
+        const textContent = root.getTextContent().trim();
+        const children = root.getChildren();
+        const hasActualContent = textContent.length > 0 || children.some(node => node.getType() !== 'paragraph');
+
+        if (!hasActualContent) {
+          console.warn('[importDocumentFile] No actual content detected, adding placeholder.');
+          root.clear();
           const para = _createParagraphNode();
           para.append(
-            _createTextNode(`[Content from ${sourceFilename} could not be fully parsed] `)
+            _createTextNode(`[Content from ${sourceFilename} was empty or could not be fully parsed]`)
           );
-          _getRoot().append(para);
-        });
-      }
+          root.append(para);
+        }
+      });
       lexicalJsonString = JSON.stringify(conversionEditor.getEditorState().toJSON(), null, 2);
     } catch (lexicalError) {
+      console.error('[importDocumentFile] Lexical conversion error:', lexicalError);
       const errorEditor = createConversionEditor('import-error');
       errorEditor.update(() => {
         _getRoot().clear();

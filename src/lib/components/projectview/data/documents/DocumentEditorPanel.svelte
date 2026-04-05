@@ -278,33 +278,11 @@
 </div>
 
 <style lang="postcss">
-  .btn-primary {
-    @apply py-1.5 px-4 bg-blue-500 text-white border-none cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400;
-  }
-  .btn-primary:hover:not(:disabled) {
-    @apply bg-blue-600;
-  }
-  .btn-secondary {
-    @apply py-1.5 px-4 bg-gray-200 text-gray-800 border border-gray-300 cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .btn-secondary:hover:not(:disabled) {
-    @apply bg-gray-300 border-gray-400;
-  }
-  .btn-secondary:disabled {
-    @apply bg-gray-100 text-gray-400 border-gray-200;
-  }
-  .btn-primary.text-xs,
-  .btn-secondary.text-xs {
-    @apply py-1 px-2;
-  }
 
   :global(.lexical-wrapper) {
     flex-grow: 1;
     overflow-y: auto;
     @apply p-3 m-0;
-  }
-  :global(html.dark .lexical-wrapper) {
-    background-color: theme('colors.gray.900');
   }
   :global(.lexical-wrapper > .lexical-editor-root > *) {
     @apply mt-0 mb-0;

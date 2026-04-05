@@ -71,11 +71,13 @@ def run_diarization(audio_path, num_speakers, token, device_pref=None, threads_p
             "pyannote/speaker-diarization-3.1"
         ).to(torch.device(device))
 
-        if num_speakers > 0:
-            diarization = pipeline(audio_path, num_speakers=num_speakers)
-        else:
-            # If num_speakers is 0, let the model determine the number automatically
-            diarization = pipeline(audio_path)
+        # Optimize inference by disabling gradient tracking and using autocast where applicable
+        with torch.inference_mode():
+            if num_speakers > 0:
+                diarization = pipeline(audio_path, num_speakers=num_speakers)
+            else:
+                # If num_speakers is 0, let the model determine the number automatically
+                diarization = pipeline(audio_path)
 
         # Output the RTTM content to stdout
         diarization.speaker_diarization.write_rttm(sys.stdout)

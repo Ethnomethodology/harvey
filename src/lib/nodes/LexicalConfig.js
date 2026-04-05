@@ -42,7 +42,6 @@ export const SHARED_NODES = [
     replace: TextNode,
     with: upgradeToExtendedTextNode
   },
-  RootNode,
   ParagraphNode,
   LineBreakNode,
   HeadingNode,

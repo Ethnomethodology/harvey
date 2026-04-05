@@ -139,7 +139,7 @@
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->
-<div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-gray-900">
+<div class="h-full flex flex-col flex-grow min-w-0 bg-white dark:bg-gray-950">
   {#if mediaPath}
     <div
       class="border-b border-gray-200 dark:border-gray-700 flex flex-col {!isVideoHidden
@@ -177,7 +177,7 @@
         {:else}
           <!-- Fallback for other non-PDF, non-JSON document types -->
           <div
-            class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-600"
+            class="h-full bg-white dark:bg-gray-950 flex items-center justify-center text-gray-500 dark:text-gray-600"
           >
             <span
               >Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span
@@ -186,7 +186,7 @@
         {/if}
       {:else}
         <div
-          class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-600"
+          class="h-full bg-white dark:bg-gray-950 flex items-center justify-center text-gray-500 dark:text-gray-600"
         >
           <span>No document path provided to DocumentView.</span>
         </div>

@@ -2982,7 +2982,7 @@
   class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 shadow overflow-hidden"
 >
   <div
-    class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-20"
+    class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 h-9 px-2 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-20 overflow-x-auto"
   >
     <button
       class="mini-toolbar-button"
@@ -3401,7 +3401,7 @@
   .toolbar button.mini-toolbar-button,
   .toolbar input.mini-toolbar-input,
   .toolbar select.mini-toolbar-select {
-    @apply p-1.5 rounded inline-flex items-center justify-center
+    @apply p-1 rounded inline-flex items-center justify-center
              focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
              dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
              text-xs disabled:opacity-50 disabled:cursor-not-allowed;
@@ -3411,6 +3411,7 @@
     margin-right: 2px;
     line-height: 1.2;
     min-height: 24px;
+    height: 24px;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),

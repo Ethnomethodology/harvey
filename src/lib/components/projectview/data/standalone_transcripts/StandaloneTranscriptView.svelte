@@ -249,7 +249,7 @@
 
 <!-- Main container for the Imported Transcript View -->
 <div
-  class="h-full flex flex-col w-full bg-white dark:bg-gray-900 overflow-hidden imported-transcript-view"
+  class="h-full flex flex-col w-full bg-white dark:bg-gray-950 overflow-hidden imported-transcript-view"
 >
   {#if mediaPath}
     <div
@@ -309,7 +309,7 @@
             : 'h-1/2 w-full'} overflow-hidden flex flex-col"
         >
           <div
-            class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8"
+            class="bg-white dark:bg-gray-950 px-2 py-1 text-xs font-semibold text-gray-400 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8"
           >
             <span class="truncate">{itemPath.split(/[\\/]/).pop()}</span>
           </div>
@@ -334,7 +334,7 @@
             : 'h-1/2 w-full'} overflow-hidden flex flex-col"
         >
           <div
-            class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8"
+            class="bg-white dark:bg-gray-950 px-2 py-1 text-xs font-semibold text-gray-400 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8"
           >
             <div class="flex items-center min-w-0 flex-grow">
               <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
@@ -415,7 +415,7 @@
           </div>
         {:else}
           <div
-            class="h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-500"
+            class="h-full bg-white dark:bg-gray-950 flex items-center justify-center text-gray-500"
           >
             <span>No transcript path provided to StandaloneTranscriptView.</span>
           </div>

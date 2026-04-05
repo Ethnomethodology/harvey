@@ -23,7 +23,7 @@
 </script>
 
 <div
-  class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-950 py-2 space-y-2 border-l border-gray-300 dark:border-gray-700"
+  class="flex flex-col items-center w-8 h-full bg-gray-50 dark:bg-gray-950 py-2 space-y-2 border-l border-gray-300 dark:border-gray-700"
 >
   <button
     on:click={() => handleTabClick('metadata')}

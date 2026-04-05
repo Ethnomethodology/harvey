@@ -130,6 +130,14 @@
   }
 
   let dropdownStyle = '';
+  let searchBoxStyle = '';
+
+  function updateSearchBoxPosition(ref) {
+    if (!ref) return;
+    const rect = ref.getBoundingClientRect();
+    searchBoxStyle = `position: fixed; top: ${rect.bottom + 4}px; right: ${window.innerWidth - rect.right}px; z-index: 10000;`;
+  }
+
   
   function updateDropdownPosition(ref) {
     if (!ref) return;
@@ -454,6 +462,11 @@
         clickedInsideDropdown = true;
         break;
       }
+    }
+
+    // Check if click was inside a portaled dropdown menu
+    if (event.target && event.target.closest && event.target.closest('.lexical-dropdown-menu')) {
+      clickedInsideDropdown = true;
     }
 
     if (!clickedInsideDropdown) {
@@ -3189,14 +3202,8 @@
       const y = event.clientY;
       const wrapperRect = editorWrapper.getBoundingClientRect();
 
-      // Check if we are in the gutter (first 60px of the wrapper)
-      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 60;
-
-      // If we are in the gutter, scan slightly to the right to find the row at this Y level
-      const scanX = isWithinGutterX ? wrapperRect.left + 80 : x;
-
       // Use elementsFromPoint to find the row
-      const elements = document.elementsFromPoint(scanX, y);
+      const elements = document.elementsFromPoint(x, y);
       const rowElement = elements.find(
         (el) => el.classList?.contains('editor-table-row') || el.closest?.('.editor-table-row')
       );
@@ -3233,23 +3240,22 @@
             hoveredRowKey = rowKey;
             const rect = actualRow.getBoundingClientRect();
 
-            // Position button in the gutter (left: 20px relative to wrapper)
+            // Position button directly over the left border of the table row
             playButtonPosition = {
               top: rect.top - wrapperRect.top + editorWrapper.scrollTop + rect.height / 2,
-              left: 20
+              left: rect.left - wrapperRect.left + editorWrapper.scrollLeft - 12
             };
             showPlayButton = true;
           }
         }
       } else {
         // If NOT over a row, we hide if we are also NOT over the play button itself
-        // and NOT in the gutter (to prevent flickering)
         const currentElements = document.elementsFromPoint(x, y);
         const isOverPlayButton = currentElements.some((el) =>
           el.classList?.contains('play-segment-hover-btn')
         );
 
-        if (!isOverPlayButton && !isWithinGutterX) {
+        if (!isOverPlayButton) {
           if (showPlayButton) {
             showPlayButton = false;
             hoveredRowKey = null;
@@ -3340,7 +3346,10 @@
       let cellNodeKeyToResize = null;
       try {
         editor.read(() => {
-          const cellNode = _getNearestNodeFromDOMNode(element);
+          let cellNode = _getNearestNodeFromDOMNode(element);
+          if (cellNode && !_isTableCellNode(cellNode)) {
+             cellNode = _findMatchingParent(cellNode, _isTableCellNode) || cellNode;
+          }
           if (_isTableCellNode(cellNode)) {
             cellNodeKeyToResize = cellNode.getKey();
           }
@@ -3451,17 +3460,6 @@
 
               const localMinWidth = 20;
 
-              // Handle string/percentage widths
-              if (typeof currentWidthVal === 'string') {
-                if (currentWidthVal.endsWith('%')) {
-                  const pct = parseFloat(currentWidthVal);
-                  const tableWidth = tableElement.getBoundingClientRect().width / zoom;
-                  currentWidthVal = (tableWidth * pct) / 100;
-                } else {
-                  currentWidthVal = parseFloat(currentWidthVal);
-                }
-              }
-
               // Ensure ALL columns have valid widths from DOM if missing to avoid abrupt layout shifts
               const colCount = tableMap.columns;
               while (currentWidths.length < colCount) {
@@ -3469,13 +3467,14 @@
               }
 
               for (let i = 0; i < colCount; i++) {
+                let w = currentWidths[i];
                 if (
-                  currentWidths[i] === undefined ||
-                  currentWidths[i] === null ||
-                  isNaN(currentWidths[i]) ||
-                  (typeof currentWidths[i] === 'string' && currentWidths[i].endsWith('%'))
+                  w === undefined ||
+                  w === null ||
+                  (typeof w === 'number' && isNaN(w)) ||
+                  (typeof w === 'string' && w.endsWith('%'))
                 ) {
-                  // Find any cell in this column to get its width
+                  // Find any cell in this column to get its width from the DOM
                   const cellInfo = tableMap.grid.find((row) => row[i] && row[i].node);
                   if (cellInfo) {
                     const rowWithCell = tableMap.grid.find((r) => r[i]);
@@ -3489,8 +3488,9 @@
                   } else {
                     currentWidths[i] = localMinWidth;
                   }
-                } else if (typeof currentWidths[i] === 'string') {
-                  currentWidths[i] = parseFloat(currentWidths[i]);
+                } else if (typeof w === 'string') {
+                  // E.g., '100px' or '100'
+                  currentWidths[i] = parseFloat(w) || localMinWidth;
                 }
               }
 
@@ -4135,8 +4135,13 @@
 
           // Determine if we should strictly avoid touching this table's widths
           // Documents should prefer their stored pixel widths once set.
-          const isDocument = documentPath?.includes('/Documents/');
-          const shouldBypass = hasPixelWidths && (isDocument || !layoutChanged);
+          const isDocument =
+            enableTableCellResize ||
+            documentPath?.toLowerCase().includes('/documents/') ||
+            documentPath?.toLowerCase().includes('\\documents\\');
+
+          // If it's a document and it already has widths, bypass overwriting them.
+          const shouldBypass = isDocument ? hasWidths : (hasPixelWidths && !layoutChanged);
 
           if (
             (!hasWidths ||
@@ -4327,7 +4332,7 @@
 >
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div
-      class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10"
+      class="toolbar relative flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 h-9 px-2 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10 overflow-x-auto"
     >
       <slot name="toolbar_prepend"></slot>
 
@@ -4377,7 +4382,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each blockTypeOptions as option (option.value)}
                 <div
@@ -4415,7 +4420,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64 lexical-dropdown-menu"
             >
               {#each fontOptions as option (option.value)}
                 <div
@@ -4464,7 +4469,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64"
+              class="w-24 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-y-auto max-h-64 lexical-dropdown-menu"
             >
               {#each fontSizeOptions as size (size)}
                 <div
@@ -4526,7 +4531,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden flex flex-col lexical-dropdown-menu"
             >
               <div
                 class="px-3 py-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm"
@@ -4611,7 +4616,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each insertOptions as option (option.label)}
                 <div
@@ -4652,7 +4657,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden"
+              class="w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg overflow-hidden lexical-dropdown-menu"
             >
               {#each alignmentOptions as option (option.value)}
                 <div
@@ -4721,7 +4726,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg lexical-dropdown-menu"
             >
               {#each colorOptions as option (option.value)}
                 <div
@@ -4768,7 +4773,7 @@
             <div
               use:portal
               style={dropdownStyle}
-              class="w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg"
+              class="w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg lexical-dropdown-menu"
             >
               {#each highlightOptions as option (option.value)}
                 <div
@@ -4808,9 +4813,10 @@
           <button
             class="mini-toolbar-button"
             class:active={showSearchBox}
-            on:click={() => {
+            on:click={(e) => {
               showSearchBox = !showSearchBox;
               if (showSearchBox) {
+                updateSearchBoxPosition(e.currentTarget);
                 tick().then(() => {
                   const input = searchUiContainerElement?.querySelector('input');
                   if (input) input.focus();
@@ -4826,7 +4832,9 @@
 
           {#if showSearchBox}
             <div
-              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+              use:portal
+              style={searchBoxStyle}
+              class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded lexical-dropdown-menu"
               bind:this={searchUiContainerElement}
             >
               <div class="relative flex-grow flex items-center">
@@ -4891,7 +4899,7 @@
                   </button>
                   {#if showSearchOptionsDropdown}
                     <div
-                      class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px]"
+                      class="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-700 shadow-lg rounded overflow-hidden min-w-[120px] lexical-dropdown-menu"
                     >
                       <button
                         class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 whitespace-nowrap"
@@ -4912,7 +4920,6 @@
 
   <div
     class="lexical-wrapper flex-grow min-h-0 relative overflow-visible"
-    style={enableSegmentPlayback ? 'padding-left: 2.5rem !important;' : ''}
     bind:this={editorWrapper}
   >
     <div
@@ -5147,7 +5154,7 @@
 <style lang="postcss">
   .toolbar button.mini-toolbar-button,
   .toolbar select.mini-toolbar-select {
-    @apply p-1.5 rounded inline-flex items-center justify-center
+    @apply p-1 rounded inline-flex items-center justify-center
              focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
              dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
              text-xs disabled:opacity-50 disabled:cursor-not-allowed;
@@ -5157,6 +5164,7 @@
     margin-right: 2px;
     line-height: 1.2;
     min-height: 24px;
+    height: 24px;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),
@@ -5252,10 +5260,29 @@
     color: #888;
   }
 
+  .lexical-wrapper {
+    background-color: rgb(229, 231, 235); /* gray-200 shell */
+  }
+
+  :global(html.dark) .lexical-wrapper {
+    background-color: theme('colors.gray.900'); /* Appropriate dark shell */
+  }
+
   .lexical-content {
     min-width: 150px; /* Prevent it from being too tiny when empty */
     line-height: 1.5;
     white-space: pre-wrap;
+    background-color: white; /* Page background */
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* shadow-sm */
+    border: 1px solid rgb(209, 213, 219); /* border-gray-300 */
+    border-radius: 0.125rem; /* rounded-sm */
+    padding: 1.5rem; /* Space inside the "page" */
+  }
+
+  :global(html.dark) .lexical-content {
+    background-color: theme('colors.gray.950'); /* Dark page background */
+    border-color: theme('colors.gray.800'); /* Dark page border */
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   }
 
   .editor-table {
@@ -5424,116 +5451,116 @@
   }
 
   /* STYLES FOR LAYOUT 2 (Segment Block) */
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table) {
     table-layout: auto;
     border: none;
   }
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table tr) {
     display: flex;
     flex-wrap: wrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th),
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table th),
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table td) {
     box-sizing: border-box;
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table th:nth-child(odd)),
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table td:nth-child(odd)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table th:nth-child(even)),
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table td:nth-child(even)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table th:nth-child(n + 3)),
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table td:nth-child(n + 3)) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table th:nth-child(n + 3)),
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table td:nth-child(n + 3)) {
     margin-top: -1px;
   }
 
   /* STYLES FOR LAYOUT 3 (Timestamped Paragraph) */
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table) {
     table-layout: auto;
     border: none;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table tr) {
     display: flex;
     flex-wrap: wrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table th:nth-child(1)),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table td:nth-child(1)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(n + 2)),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(n + 2)) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table th:nth-child(n + 2)),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table td:nth-child(n + 2)) {
     box-sizing: border-box;
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table th:nth-child(2)),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table td:nth-child(2)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table th:nth-child(3)),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table td:nth-child(3)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 100%;
     margin-top: -1px;
   }
 
   /* STYLES FOR LAYOUT 4 (Speaker & Text) */
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table) {
     table-layout: auto;
     border: none;
   }
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table tr) {
     display: flex;
     flex-wrap: nowrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(-n + 2)),
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(-n + 2)) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table th:nth-child(-n + 2)),
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table td:nth-child(-n + 2)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(n + 3)),
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(n + 3)) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table th:nth-child(n + 3)),
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table td:nth-child(n + 3)) {
     box-sizing: border-box;
     padding: 8px;
     border: 1px solid #ccc;
   }
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table th:nth-child(3)),
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table td:nth-child(3)) {
     flex: 1 0 25%;
   }
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 75%;
     margin-left: -1px;
   }
 
   /* STYLES FOR LAYOUT 5 (Plain Text) */
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table) {
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table) {
     table-layout: auto;
     border: none;
   }
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr) {
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table tr) {
     display: flex;
     flex-wrap: nowrap;
     border: none;
   }
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(-n + 3)),
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(-n + 3)) {
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table th:nth-child(-n + 3)),
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table td:nth-child(-n + 3)) {
     display: none;
   }
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table th:nth-child(4)),
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table td:nth-child(4)) {
     flex: 1 0 100%;
     box-sizing: border-box;
     padding: 8px;
@@ -5541,10 +5568,10 @@
   }
 
   /* COMMON RULE TO COLLAPSE ROWS VERTICALLY */
-  .lexical-editor-root.layout-Layout2 :global(.lexical-content table tr + tr),
-  .lexical-editor-root.layout-Layout3 :global(.lexical-content table tr + tr),
-  .lexical-editor-root.layout-Layout4 :global(.lexical-content table tr + tr),
-  .lexical-editor-root.layout-Layout5 :global(.lexical-content table tr + tr) {
+  .lexical-editor-root.layout-Layout2.resizing-disabled :global(.lexical-content table tr + tr),
+  .lexical-editor-root.layout-Layout3.resizing-disabled :global(.lexical-content table tr + tr),
+  .lexical-editor-root.layout-Layout4.resizing-disabled :global(.lexical-content table tr + tr),
+  .lexical-editor-root.layout-Layout5.resizing-disabled :global(.lexical-content table tr + tr) {
     margin-top: -1px;
   }
 </style>

@@ -1477,7 +1477,7 @@
 
 <div
   id="media-player-root"
-  class="p-1 flex flex-col bg-gray-50 dark:bg-gray-900 h-full relative"
+  class="p-1 flex flex-col bg-white dark:bg-gray-950 h-full relative"
   class:fullscreen-mode={isFullscreen}
   on:mouseenter={() => {
     isHoveringPlayer = true;
@@ -1575,7 +1575,7 @@
 
   <!-- Custom Controls Bar -->
   <div
-    class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-800 rounded-b-md border border-gray-300 dark:border-gray-700 shadow-md transition-opacity duration-300"
+    class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-white dark:bg-gray-950 rounded-b-md border border-gray-300 dark:border-gray-700 shadow-md transition-opacity duration-300"
     class:floating-controls={isFullscreen}
     style="position: relative; z-index: 30; opacity: {isFullscreen
       ? userActive

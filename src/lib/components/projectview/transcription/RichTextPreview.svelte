@@ -456,27 +456,85 @@
     }
   }
 
-  // --- Virtualization Calculations ---
+  // --- Dynamic Virtualization Calculations ---
   let visibleStartIndex = 0;
   let visibleEndIndex = 0;
   let paddingTop = 0;
   let paddingBottom = 0;
   let visibleSegments = []; // This will store fully processed segments for rendering
 
+  let segmentHeights = [];
+
+  function measureHeight(node, index) {
+    let resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const height = entry.borderBoxSize ? entry.borderBoxSize[0].blockSize : entry.contentRect.height;
+        if (height > 0 && segmentHeights[index] !== height) {
+          segmentHeights[index] = height;
+          // Reactivity trigger: assigning to itself forces Svelte to re-evaluate dependent $ blocks
+          segmentHeights = segmentHeights;
+        }
+      }
+    });
+    resizeObserver.observe(node);
+
+    return {
+      update(newIndex) {
+        index = newIndex;
+      },
+      destroy() {
+        resizeObserver.disconnect();
+      }
+    };
+  }
+
+  function getSegmentHeight(i) {
+    return segmentHeights[i] || ESTIMATED_SEGMENT_HEIGHT;
+  }
+
+  function getCumulativeTop(index) {
+    let top = 0;
+    for (let i = 0; i < index; i++) {
+      top += getSegmentHeight(i);
+    }
+    return top;
+  }
+
   $: if (allSegmentsData) {
     if (previewScrollContainerRef && allSegmentsData.length > 0) {
       const totalItems = allSegmentsData.length;
-      visibleStartIndex = Math.max(
-        0,
-        Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT
-      );
-      visibleEndIndex = Math.min(
-        totalItems - 1,
-        Math.ceil((scrollTop + containerHeight) / ESTIMATED_SEGMENT_HEIGHT) + OVERSCAN_COUNT
-      );
 
-      paddingTop = visibleStartIndex * ESTIMATED_SEGMENT_HEIGHT;
-      paddingBottom = (totalItems - 1 - visibleEndIndex) * ESTIMATED_SEGMENT_HEIGHT;
+      // Dynamic scanning to find visibleStartIndex
+      let currentTop = 0;
+      let startIdx = 0;
+      while (startIdx < totalItems) {
+        const h = getSegmentHeight(startIdx);
+        if (currentTop + h >= scrollTop) break;
+        currentTop += h;
+        startIdx++;
+      }
+
+      // Find visibleEndIndex
+      let endIdx = startIdx;
+      let currentBottom = currentTop;
+      while (endIdx < totalItems) {
+        currentBottom += getSegmentHeight(endIdx);
+        if (currentBottom >= scrollTop + containerHeight) break;
+        endIdx++;
+      }
+
+      visibleStartIndex = Math.max(0, startIdx - OVERSCAN_COUNT);
+      visibleEndIndex = Math.min(totalItems - 1, endIdx + OVERSCAN_COUNT);
+
+      paddingTop = 0;
+      for (let i = 0; i < visibleStartIndex; i++) {
+        paddingTop += getSegmentHeight(i);
+      }
+
+      paddingBottom = 0;
+      for (let i = visibleEndIndex + 1; i < totalItems; i++) {
+        paddingBottom += getSegmentHeight(i);
+      }
 
       visibleSegments = allSegmentsData
         .slice(visibleStartIndex, visibleEndIndex + 1)
@@ -575,10 +633,9 @@
       const currentDomScrollTop = container.scrollTop;
       const maxScrollTop = container.scrollHeight - currentContainerHeight;
 
-      const itemTop =
-        ($transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex) *
-        ESTIMATED_SEGMENT_HEIGHT;
-      const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
+      const itemIndex = $transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex;
+      const itemTop = getCumulativeTop(itemIndex);
+      const itemBottom = itemTop + getSegmentHeight(itemIndex);
 
       const shouldScroll = true;
 
@@ -601,11 +658,10 @@
         const isJump =
           karaokeScrollIndex !== -1 && Math.abs(activeSegmentIndex - karaokeScrollIndex) > 1;
 
-        let actualItemTop =
-          ($transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex) *
-          ESTIMATED_SEGMENT_HEIGHT;
-        let actualItemBottom = actualItemTop + ESTIMATED_SEGMENT_HEIGHT;
-        let actualItemHeight = ESTIMATED_SEGMENT_HEIGHT;
+        const actualItemIndex = $transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex;
+        let actualItemTop = getCumulativeTop(actualItemIndex);
+        let actualItemHeight = getSegmentHeight(actualItemIndex);
+        let actualItemBottom = actualItemTop + actualItemHeight;
 
         if (segmentElement) {
           actualItemTop = segmentElement.offsetTop;
@@ -882,13 +938,14 @@
     const res = searchResults[index];
 
     // Scroll to segment
-    const itemTop =
-      ($transcriptStore.isDualModeActive
+    const itemIndex = $transcriptStore.isDualModeActive
         ? res.segmentIndex * 2 + (res.isPrimary ? 0 : 1)
-        : res.segmentIndex) * ESTIMATED_SEGMENT_HEIGHT;
+        : res.segmentIndex;
+    const itemTop = getCumulativeTop(itemIndex);
+    const itemHeight = getSegmentHeight(itemIndex);
     const targetScrollTop = Math.max(
       0,
-      itemTop - containerHeight / 2 + ESTIMATED_SEGMENT_HEIGHT / 2
+      itemTop - containerHeight / 2 + itemHeight / 2
     );
     manualSmoothScroll(targetScrollTop);
 
@@ -1574,8 +1631,9 @@
           </button>
         </div>
       {/if}
-      {#each visibleSegments as seg (`${seg.segmentIndex}-${seg.isPrimary}`)}
+      {#each visibleSegments as seg, idx (`${seg.segmentIndex}-${seg.isPrimary}`)}
         <div
+          use:measureHeight={$transcriptStore.isDualModeActive ? seg.segmentIndex * 2 + (seg.isPrimary ? 0 : 1) : seg.segmentIndex}
           id={`segment-${seg.segmentIndex}-${seg.isPrimary ? 'p' : 's'}`}
           class:segment-block={true}
           class:secondary-segment={$transcriptStore.isDualModeActive && !seg.isPrimary}

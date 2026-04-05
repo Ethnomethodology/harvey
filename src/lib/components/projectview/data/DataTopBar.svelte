@@ -92,20 +92,20 @@
   const isStandaloneTranscript = $derived(!!$project.currentStandaloneTranscriptPath);
   const isLexicalDocument = $derived(
     isStandaloneTranscript ||
-    ($project.selectedDocumentPath &&
-      $project.selectedDocumentPath.toLowerCase().endsWith('.json'))
+      ($project.selectedDocumentPath &&
+        $project.selectedDocumentPath.toLowerCase().endsWith('.json'))
   );
   const isImage = $derived(
     $project.selectedDocumentPath &&
-    ($project.selectedDocumentType === 'images' ||
-      $project.selectedDocumentType === 'image' ||
-      /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test($project.selectedDocumentPath))
+      ($project.selectedDocumentType === 'images' ||
+        $project.selectedDocumentType === 'image' ||
+        /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test($project.selectedDocumentPath))
   );
   const isTable = $derived(
     $project.selectedDocumentPath &&
-    ($project.selectedDocumentType === 'tables' ||
-      $project.selectedDocumentType === 'table' ||
-      /\.(csv|xlsx)$/i.test($project.selectedDocumentPath))
+      ($project.selectedDocumentType === 'tables' ||
+        $project.selectedDocumentType === 'table' ||
+        /\.(csv|xlsx)$/i.test($project.selectedDocumentPath))
   );
   const isGroup = $derived(!!$project.selectedGroupId);
   let pathForExportModal = $state('');
@@ -136,7 +136,6 @@
       }));
     }
   }
-
 
   function handleDocumentTranslateConfirm(event) {
     const { documentPath, model, targetLanguage, sourceLanguage } = event.detail;
@@ -223,14 +222,16 @@
   const isMediaNoteTranscriptDirty = $derived($project.isMediaNoteTranscriptDirty);
   const isPdfAnnotationsDirty = $derived($project.isPdfAnnotationsDirty);
   const activeDocumentEditorRef = $derived($project.activeDocumentEditorRef);
-  const activeStandaloneTranscriptEditorRef = $derived($project.activeStandaloneTranscriptEditorRef);
+  const activeStandaloneTranscriptEditorRef = $derived(
+    $project.activeStandaloneTranscriptEditorRef
+  );
   const activeMediaNoteEditorRef = $derived($project.activeMediaNoteEditorRef);
 
   const isAnythingDirty = $derived(
     isDocumentDirty ||
-    isStandaloneTranscriptDirty ||
-    isMediaNoteTranscriptDirty ||
-    isPdfAnnotationsDirty
+      isStandaloneTranscriptDirty ||
+      isMediaNoteTranscriptDirty ||
+      isPdfAnnotationsDirty
   );
   const showDirtyIndicator = $derived(isAnythingDirty);
   let isExportModalOpen = $state(false);
@@ -238,7 +239,6 @@
   let currentActivePath = $state();
 
   let displayTitle = $state('');
-
 
   // New reactive block for displayTitle
   $effect(() => {
@@ -643,37 +643,18 @@
 </script>
 
 <div
-  class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
+  class="flex items-center h-10 flex-shrink-0 bg-gray-50 dark:bg-gray-950 relative z-30"
   on:requestTranscriptionTabWithMediaAndDialog
 >
   <!-- Drag Handle Background -->
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
-  <!-- Section 1: Left Bar equivalent (w-12) — Import button -->
-  <div class="w-12 flex-shrink-0 flex items-center justify-center z-10">
-    <button
-      type="button"
-      class="p-1.5 rounded-full border-0 bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      on:click={(e) => dispatch('requestImport', e)}
-      title="Import Audio or Video"
-      aria-label="Import Audio or Video"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-        stroke="currentColor"
-        class="w-5 h-5"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-    </button>
-  </div>
+  <!-- Traffic light spacer (macOS titleBarStyle Overlay) -->
+  <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
 
   <!-- Section 2: Left Panel equivalent (w-64) — Project name + file name -->
   <div
-    class="w-64 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out"
+    class="w-56 flex-shrink-0 flex items-center overflow-hidden z-10 px-2 transition-all duration-300 ease-in-out"
   >
     <span
       class="font-semibold text-sm text-gray-700 dark:text-gray-200 truncate"
@@ -892,18 +873,18 @@
       {#if isStandaloneTranscript || ($activeMediaFile && $displayedTranscripts.length > 1)}
         <button
           on:click={() => handleSplitToggle('horizontal')}
-          class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive
-            ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-            : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+          class="p-1 rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isHorizontalSplitActive
+            ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400'
+            : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}"
           title="Split Transcript (Horizontal)"
         >
           <SquareSplitHorizontal class="w-4 h-4" />
         </button>
         <button
           on:click={() => handleSplitToggle('vertical')}
-          class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive
-            ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-            : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+          class="p-1 rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {isVerticalSplitActive
+            ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400'
+            : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}"
           title="Split Transcript (Vertical)"
         >
           <SquareSplitVertical class="w-4 h-4" />
@@ -912,9 +893,9 @@
       {#if mediaEditorStore.isMediaEditorOpen || isStandaloneTranscript || $activeMediaFile}
         <button
           id="layout-settings-btn-data"
-          class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
-            ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
-            : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
+          class="p-1 rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
+            ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400 focus:ring-blue-500'
+            : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-indigo-500'}"
           title="Change Transcript View Layout"
         >
           <LayoutDashboard class="w-4 h-4" />
@@ -951,7 +932,7 @@
                 <div
                   class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800"
                 >
-                  {#each layout.columnStyles as style (style.class)}
+                  {#each layout.columnStyles as style, i (i)}
                     <div
                       class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center"
                     >
@@ -970,9 +951,9 @@
       <button
         id="read-edit-toggle-data"
         on:click={() => (mediaEditorStore.isLexicalEditMode = !mediaEditorStore.isLexicalEditMode)}
-        class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {mediaEditorStore.isLexicalEditMode
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+        class="px-2 py-1 rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {mediaEditorStore.isLexicalEditMode
+          ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400'
+          : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}"
         title={mediaEditorStore.isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
       >
         {#if mediaEditorStore.isLexicalEditMode}
@@ -994,7 +975,7 @@
   <div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
     <button
       on:click={() => cycleThemePreference()}
-      class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+      class="p-1 rounded-full border bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
       title={themeTitle}
       aria-label={themeTitle}
     >

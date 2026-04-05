@@ -1321,7 +1321,10 @@ export function setLoadedImageAnnotations(annotationsArray) {
       : [],
     isImageAnnotationsDirty: false,
     isDocumentLoading: false,
-    isLoading: false
+    isLoading: false,
+    statusMessage: p.selectedDocumentPath
+      ? `Loaded: ${p.selectedDocumentPath.split(/[\\/]/).pop()}`
+      : ''
   }));
 }
 
