@@ -5253,10 +5253,29 @@
     color: #888;
   }
 
+  .lexical-wrapper {
+    background-color: rgb(229, 231, 235); /* gray-200 shell */
+  }
+
+  :global(html.dark) .lexical-wrapper {
+    background-color: theme('colors.gray.900'); /* Appropriate dark shell */
+  }
+
   .lexical-content {
     min-width: 150px; /* Prevent it from being too tiny when empty */
     line-height: 1.5;
     white-space: pre-wrap;
+    background-color: white; /* Page background */
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* shadow-sm */
+    border: 1px solid rgb(209, 213, 219); /* border-gray-300 */
+    border-radius: 0.125rem; /* rounded-sm */
+    padding: 1.5rem; /* Space inside the "page" */
+  }
+
+  :global(html.dark) .lexical-content {
+    background-color: theme('colors.gray.950'); /* Dark page background */
+    border-color: theme('colors.gray.800'); /* Dark page border */
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   }
 
   .editor-table {
