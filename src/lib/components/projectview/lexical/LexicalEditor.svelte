@@ -3202,14 +3202,8 @@
       const y = event.clientY;
       const wrapperRect = editorWrapper.getBoundingClientRect();
 
-      // Check if we are in the gutter (first 60px of the wrapper)
-      const isWithinGutterX = x >= wrapperRect.left && x <= wrapperRect.left + 40;
-
-      // If we are in the gutter, scan slightly to the right to find the row at this Y level
-      const scanX = isWithinGutterX ? wrapperRect.left + 50 : x;
-
       // Use elementsFromPoint to find the row
-      const elements = document.elementsFromPoint(scanX, y);
+      const elements = document.elementsFromPoint(x, y);
       const rowElement = elements.find(
         (el) => el.classList?.contains('editor-table-row') || el.closest?.('.editor-table-row')
       );
@@ -3246,23 +3240,22 @@
             hoveredRowKey = rowKey;
             const rect = actualRow.getBoundingClientRect();
 
-            // Position button in the gutter (left: 20px relative to wrapper)
+            // Position button directly over the left border of the table row
             playButtonPosition = {
               top: rect.top - wrapperRect.top + editorWrapper.scrollTop + rect.height / 2,
-              left: 12 // Position inside lexical-content's default 24px padding
+              left: rect.left - wrapperRect.left + editorWrapper.scrollLeft - 12
             };
             showPlayButton = true;
           }
         }
       } else {
         // If NOT over a row, we hide if we are also NOT over the play button itself
-        // and NOT in the gutter (to prevent flickering)
         const currentElements = document.elementsFromPoint(x, y);
         const isOverPlayButton = currentElements.some((el) =>
           el.classList?.contains('play-segment-hover-btn')
         );
 
-        if (!isOverPlayButton && !isWithinGutterX) {
+        if (!isOverPlayButton) {
           if (showPlayButton) {
             showPlayButton = false;
             hoveredRowKey = null;
