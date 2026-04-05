@@ -2376,7 +2376,7 @@
         </div>
 
         <div
-            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0"
+            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0 border-t border-gray-200 dark:border-gray-800"
         >
             <div class="flex flex-col flex-grow min-h-0">
                 {#if selectedTab === "transcription"}

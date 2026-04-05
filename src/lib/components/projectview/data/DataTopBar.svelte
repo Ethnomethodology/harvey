@@ -643,7 +643,7 @@
 </script>
 
 <div
-  class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 relative z-30"
+  class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 relative z-30"
   on:requestTranscriptionTabWithMediaAndDialog
 >
   <!-- Drag Handle Background -->
