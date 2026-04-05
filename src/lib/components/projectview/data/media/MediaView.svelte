@@ -22,7 +22,7 @@
 </script>
 
 <!-- Main container for the Media View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-900">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-950">
   {#key itemPath}
     {#if itemPath}
       <MediaEditorPanel
