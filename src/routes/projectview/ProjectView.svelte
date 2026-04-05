@@ -2218,7 +2218,7 @@
     <!-- Main Content Area -->
     <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-gray-50 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 border-r border-gray-300 dark:border-gray-700"
         >
             <!-- Import button zone — h-9 matches the 'Data' panel header height exactly -->
             <div class="h-9 flex-shrink-0 flex items-center justify-center">

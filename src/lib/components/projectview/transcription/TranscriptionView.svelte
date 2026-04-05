@@ -25,7 +25,7 @@
     replaceTranscriptText,
     replaceAllTranscriptText
   } from '$lib/services/projectService.js';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
 
   import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -141,7 +141,7 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
   let currentEditSegmentStart = 0;
   let currentEditSegmentEnd = 0;
 
-  $: panelEditModeActive = $isLexicalEditMode;
+  $: panelEditModeActive = mediaEditorStore.isLexicalEditMode;
 
   let wasPlayingBeforeEdit = false;
 
@@ -305,10 +305,10 @@ import { getErrorMessage } from '$lib/utils/errorUtils.js';
 
     if (panelEditModeActive) {
       // Explicitly exiting edit mode
-      isLexicalEditMode.set(false);
+      mediaEditorStore.isLexicalEditMode = false;
     } else {
       // Explicitly entering edit mode
-      isLexicalEditMode.set(true);
+      mediaEditorStore.isLexicalEditMode = true;
       await tick();
       editableTranscriptRef?.focusEditor?.();
     }

@@ -36,7 +36,7 @@
   import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
   import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js';
   import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
-  import { isLexicalEditMode } from '$lib/stores/mediaEditorStore.js';
+  import { mediaEditorStore } from '$lib/stores/mediaEditorStore.svelte.js';
   import { Pencil, PencilOff } from '@lucide/svelte';
 
   // --- Service Imports ---
@@ -420,7 +420,7 @@
 </script>
 
 <div
-  class="flex items-center h-10 flex-shrink-0 bg-white dark:bg-gray-950 relative z-30"
+  class="flex items-center h-10 flex-shrink-0 bg-gray-50 dark:bg-gray-950 relative z-30"
 >
   <!-- Drag Handle Background -->
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
@@ -593,9 +593,9 @@
       <!-- Dual Mode Toggle Button -->
       <button
         on:click={handleDualModeToggle}
-        class="p-1.5 rounded-sm border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
+        class="p-1 rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors {$transcriptStore.isDualModeActive
+          ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400'
+          : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}"
         title="Compare Transcripts"
       >
         <Rows2 size={16} strokeWidth={2} />
@@ -604,9 +604,9 @@
       <!-- Layout Settings Button & Dropdown -->
       <button
         id="layout-settings-btn"
-        class="p-1.5 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 focus:ring-blue-500'
-          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:ring-indigo-500'}"
+        class="p-1 rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors {isLayoutDropdownOpen
+          ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400 focus:ring-blue-500'
+          : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-indigo-500'}"
         title="Change Transcript View Layout"
       >
         <LayoutDashboard class="w-4 h-4" />
@@ -679,13 +679,13 @@
       <!-- Read/Edit Mode Toggle -->
       <button
         id="read-edit-toggle-transcription"
-        on:click={() => isLexicalEditMode.set(!$isLexicalEditMode)}
-        class="px-2.5 py-1.5 rounded-full border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {$isLexicalEditMode
-          ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
-          : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10'}"
-        title={$isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
+        on:click={() => (mediaEditorStore.isLexicalEditMode = !mediaEditorStore.isLexicalEditMode)}
+        class="px-2 py-1 rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center space-x-1.5 {mediaEditorStore.isLexicalEditMode
+          ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800/50 dark:text-blue-400'
+          : 'bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}"
+        title={mediaEditorStore.isLexicalEditMode ? 'Switch to Read Mode' : 'Switch to Edit Mode'}
       >
-        {#if $isLexicalEditMode}
+        {#if mediaEditorStore.isLexicalEditMode}
           <Pencil class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
           <span class="hidden xl:inline text-xs font-medium text-blue-600 dark:text-blue-400"
             >Edit Mode</span
@@ -704,7 +704,7 @@
   <div class="w-8 flex-shrink-0 flex items-center justify-center z-10">
     <button
       on:click={cycleThemePreference}
-      class="p-1 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+      class="p-1 rounded-full border bg-white border-gray-200 text-gray-700 shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
       title={themeTitle}
       aria-label={themeTitle}
     >
