@@ -932,7 +932,7 @@
                 <div
                   class="{layout.previewClasses} min-h-[22px] opacity-80 rounded shadow-sm overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800"
                 >
-                  {#each layout.columnStyles as style (style.class)}
+                  {#each layout.columnStyles as style, i (i)}
                     <div
                       class="{style.class} !p-0.5 !text-[8px] leading-tight flex items-center justify-center"
                     >
