@@ -247,50 +247,62 @@ export class ExtendedTextNode extends TextNode {
           priority: 1
         };
       },
-      b: (node) => ({
-        conversion: (domNode) => ({
-          forChild: (lexicalNode) => {
-            if (_isTextNode(lexicalNode)) {
-              lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+      b: (node) => {
+        console.log('[ExtendedTextNode] importDOM: b tag encountered.');
+        return {
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+              }
+              return lexicalNode;
             }
-            return lexicalNode;
-          }
-        }),
-        priority: 1
-      }),
-      strong: (node) => ({
-        conversion: (domNode) => ({
-          forChild: (lexicalNode) => {
-            if (_isTextNode(lexicalNode)) {
-              lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+          }),
+          priority: 3
+        };
+      },
+      strong: (node) => {
+        console.log('[ExtendedTextNode] importDOM: strong tag encountered.');
+        return {
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
+              }
+              return lexicalNode;
             }
-            return lexicalNode;
-          }
-        }),
-        priority: 1
-      }),
-      i: (node) => ({
-        conversion: (domNode) => ({
-          forChild: (lexicalNode) => {
-            if (_isTextNode(lexicalNode)) {
-              lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+          }),
+          priority: 3
+        };
+      },
+      i: (node) => {
+        console.log('[ExtendedTextNode] importDOM: i tag encountered.');
+        return {
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+              }
+              return lexicalNode;
             }
-            return lexicalNode;
-          }
-        }),
-        priority: 1
-      }),
-      em: (node) => ({
-        conversion: (domNode) => ({
-          forChild: (lexicalNode) => {
-            if (_isTextNode(lexicalNode)) {
-              lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+          }),
+          priority: 3
+        };
+      },
+      em: (node) => {
+        console.log('[ExtendedTextNode] importDOM: em tag encountered.');
+        return {
+          conversion: (domNode) => ({
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
+              }
+              return lexicalNode;
             }
-            return lexicalNode;
-          }
-        }),
-        priority: 1
-      }),
+          }),
+          priority: 3
+        };
+      },
       u: (node) => ({
         conversion: (domNode) => ({
           forChild: (lexicalNode) => {
