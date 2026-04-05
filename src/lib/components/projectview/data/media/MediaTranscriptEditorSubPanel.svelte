@@ -371,7 +371,7 @@
   };
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-950 overflow-hidden">
   {#if isTranscriptLoading}
     <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4">
       Loading transcript...

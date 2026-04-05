@@ -327,7 +327,7 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-900">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-950">
   <div
     class="border-b border-gray-200 dark:border-gray-700 flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
@@ -367,7 +367,7 @@
   </div>
 
   <div
-    class="min-h-0 overflow-hidden bg-white dark:bg-gray-900 {!isDataPlayerVideoHidden
+    class="min-h-0 overflow-hidden bg-white dark:bg-gray-950 {!isDataPlayerVideoHidden
       ? 'h-1/2'
       : ''} flex flex-col"
     class:flex-grow={isDataPlayerVideoHidden}
@@ -400,7 +400,7 @@
         </div>
         {#if (currentTrimAudioBuffer || currentTrimAudioPeaks) && dataTrimEndTime > 0}
           <div
-            class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-800 overflow-hidden"
+            class="waveform-container w-full h-[75px] bg-white dark:bg-gray-950 overflow-hidden"
           >
             <InteractiveWaveform
               startZoomedOut={true}
@@ -423,7 +423,7 @@
           </div>
         {:else}
           <div
-            class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-500"
+            class="w-full h-[100px] flex items-center justify-center bg-white dark:bg-gray-950 rounded text-xs text-gray-500"
           >
             <div class="flex items-center gap-2">
               <div
@@ -473,7 +473,7 @@
               : 'h-1/2 w-full'} overflow-hidden flex flex-col"
           >
             <div
-              class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8"
+              class="bg-white dark:bg-gray-950 px-2 py-1 text-xs font-semibold text-gray-400 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex items-center h-8"
             >
               <span class="truncate"
                 >{$projectStore.activeTranscriptPathInDataTab.split(/[\\/]/).pop()}</span
@@ -500,7 +500,7 @@
               : 'h-1/2 w-full'} overflow-hidden flex flex-col"
           >
             <div
-              class="bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8"
+              class="bg-white dark:bg-gray-950 px-2 py-1 text-xs font-semibold text-gray-400 dark:text-gray-400 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center h-8"
             >
               <div class="flex items-center min-w-0 flex-grow">
                 <span class="truncate">{splitPartnerPath.split(/[\\/]/).pop()}</span>
@@ -628,7 +628,7 @@
   }
 
   :global(html:not(.dark)) .inline-trim-ui-wrapper {
-    background-color: var(--color-bg-app-light, #f9fafb);
+    background-color: var(--color-bg-app-light, #ffffff);
     border-top: 1px solid var(--color-border-strong-light, #e5e7eb);
   }
 

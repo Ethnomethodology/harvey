@@ -4327,7 +4327,7 @@
 >
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div
-      class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10"
+      class="toolbar relative flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 h-10 px-2 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10 overflow-x-auto"
     >
       <slot name="toolbar_prepend"></slot>
 
@@ -5147,7 +5147,7 @@
 <style lang="postcss">
   .toolbar button.mini-toolbar-button,
   .toolbar select.mini-toolbar-select {
-    @apply p-1.5 rounded inline-flex items-center justify-center
+    @apply p-1 rounded inline-flex items-center justify-center
              focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
              dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
              text-xs disabled:opacity-50 disabled:cursor-not-allowed;
@@ -5156,7 +5156,8 @@
     background-color: transparent; /* Default for light mode, will be overridden by dark mode or specific hover */
     margin-right: 2px;
     line-height: 1.2;
-    min-height: 24px;
+    min-height: 28px;
+    height: 28px;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),
