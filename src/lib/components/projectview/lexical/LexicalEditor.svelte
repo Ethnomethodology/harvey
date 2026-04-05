@@ -130,6 +130,14 @@
   }
 
   let dropdownStyle = '';
+  let searchBoxStyle = '';
+
+  function updateSearchBoxPosition(ref) {
+    if (!ref) return;
+    const rect = ref.getBoundingClientRect();
+    searchBoxStyle = `position: fixed; top: ${rect.bottom + 4}px; right: ${window.innerWidth - rect.right}px; z-index: 10000;`;
+  }
+
   
   function updateDropdownPosition(ref) {
     if (!ref) return;
@@ -4813,9 +4821,10 @@
           <button
             class="mini-toolbar-button"
             class:active={showSearchBox}
-            on:click={() => {
+            on:click={(e) => {
               showSearchBox = !showSearchBox;
               if (showSearchBox) {
+                updateSearchBoxPosition(e.currentTarget);
                 tick().then(() => {
                   const input = searchUiContainerElement?.querySelector('input');
                   if (input) input.focus();
@@ -4831,7 +4840,9 @@
 
           {#if showSearchBox}
             <div
-              class="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded"
+              use:portal
+              style={searchBoxStyle}
+              class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 shadow-lg p-2 flex items-center gap-2 min-w-[320px] rounded lexical-dropdown-menu"
               bind:this={searchUiContainerElement}
             >
               <div class="relative flex-grow flex items-center">
