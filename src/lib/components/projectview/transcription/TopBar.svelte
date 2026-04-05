@@ -448,7 +448,7 @@
           id="media-selection-btn"
           size="xs"
           color="alternative"
-          class="w-[216px] justify-between px-3 !py-1.5 focus:ring-0"
+          class="w-[150px] justify-between px-3 !py-1.5 focus:ring-0"
           disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
           title="Select Media"
         >
