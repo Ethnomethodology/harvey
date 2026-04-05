@@ -4327,7 +4327,7 @@
 >
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div
-      class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-10"
+      class="toolbar relative flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10"
     >
       <slot name="toolbar_prepend"></slot>
 

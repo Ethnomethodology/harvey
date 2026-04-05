@@ -2982,7 +2982,7 @@
   class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 shadow overflow-hidden"
 >
   <div
-    class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-gray-50 dark:bg-gray-800 shadow-md z-20"
+    class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 p-1 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-20"
   >
     <button
       class="mini-toolbar-button"
