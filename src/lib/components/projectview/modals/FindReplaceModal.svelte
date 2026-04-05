@@ -199,6 +199,7 @@
                 placeholder="Search text..."
                 autocomplete="off"
                 autocorrect="off"
+                spellcheck="false"
               >
                 <svelte:fragment slot="left">
                   <Search class="w-4 h-4 text-gray-400" />
@@ -281,6 +282,8 @@
               }
             }}
             autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
           />
           <input type="hidden" bind:this={replaceInputElement} />
           <Helper class="text-[10px] italic"
