@@ -2699,7 +2699,7 @@
               : 'string',
         validator: softValidator,
         headerContextMenu: getColumnContextMenu,
-        headerTooltip: colSchema.description || null,
+        headerTooltip: colSchema.description ? `${header}: ${colSchema.description}` : header,
         frozen: isPrimary
       };
 
