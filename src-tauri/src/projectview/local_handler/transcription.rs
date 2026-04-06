@@ -6,9 +6,12 @@ use crate::projectview::transcription_commands::{
     create_lexical_paragraph_json_value, create_lexical_table_from_segments,
     map_speaker_ids_to_names, prepare_output_paths, save_transcript_json,
 };
+use crate::transcription::{
+    faster_whisper::FasterWhisperEngine, whisper_cpp::WhisperCppEngine, TranscriptionEngine,
+    TranscriptionOptions,
+};
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
 use crate::welcome::python_env::{get_env_command, get_python_command};
-use crate::transcription::{TranscriptionEngine, TranscriptionOptions, faster_whisper::FasterWhisperEngine, whisper_cpp::WhisperCppEngine};
 use serde_json;
 
 use log::{debug, error, info, warn};
@@ -197,12 +200,22 @@ pub async fn run_transcription<R: Runtime>(
 
     // --- NEW: Use the Engine Architecture ---
     let config = read_config().unwrap_or_default();
-    let engine_type = config.selected_transcription_engine.clone().unwrap_or_else(|| "faster-whisper".to_string());
-    
+    let engine_type = config
+        .selected_transcription_engine
+        .clone()
+        .unwrap_or_else(|| "faster-whisper".to_string());
+
     let options = TranscriptionOptions {
-        language_code: if language == "auto" { None } else { Some(language.clone()) },
+        language_code: if language == "auto" {
+            None
+        } else {
+            Some(language.clone())
+        },
         model_path: whisper_model_path_str.clone(),
-        output_dir: expected_whisper_output_path.parent().unwrap_or(Path::new("")).to_path_buf(),
+        output_dir: expected_whisper_output_path
+            .parent()
+            .unwrap_or(Path::new(""))
+            .to_path_buf(),
         translate: false, // Default for now
         initial_prompt: None,
         hotwords: None,
@@ -211,15 +224,35 @@ pub async fn run_transcription<R: Runtime>(
     let mut whisper_segments_plain = match engine_type.as_str() {
         "whisper-cpp" => {
             let engine = WhisperCppEngine::new(app_handle.clone());
-            engine.transcribe(&wav_media_path, &options, &internal_job_id, cancel_flag.clone()).await?
+            engine
+                .transcribe(
+                    &wav_media_path,
+                    &options,
+                    &internal_job_id,
+                    cancel_flag.clone(),
+                )
+                .await?
         }
         _ => {
             let engine = FasterWhisperEngine::new(app_handle.clone());
-            engine.transcribe(&wav_media_path, &options, &internal_job_id, cancel_flag.clone()).await?
+            engine
+                .transcribe(
+                    &wav_media_path,
+                    &options,
+                    &internal_job_id,
+                    cancel_flag.clone(),
+                )
+                .await?
         }
     };
 
-    let _ = emit_progress(&app_handle, &internal_job_id, 45.0, "Transcription finished.").await;
+    let _ = emit_progress(
+        &app_handle,
+        &internal_job_id,
+        45.0,
+        "Transcription finished.",
+    )
+    .await;
 
     if cancel_flag.load(Ordering::Relaxed) {
         warn!(
@@ -1020,12 +1053,21 @@ fn merge_diarization_results(
     }
 
     let mut current_segment_words = Vec::new();
-    let mut current_speaker = all_words[0].speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+    let mut current_speaker = all_words[0]
+        .speaker
+        .clone()
+        .unwrap_or_else(|| "Unknown".to_string());
 
     for word in all_words {
-        let word_speaker = word.speaker.clone().unwrap_or_else(|| "Unknown".to_string());
-        let last_word_end = current_segment_words.last().map(|w: &crate::projectview::shared_types::Word| w.end).unwrap_or(word.start);
-        
+        let word_speaker = word
+            .speaker
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
+        let last_word_end = current_segment_words
+            .last()
+            .map(|w: &crate::projectview::shared_types::Word| w.end)
+            .unwrap_or(word.start);
+
         // Conditions for a new segment:
         // - Speaker changed
         // - Large silence gap (> 1.5s)
@@ -1034,7 +1076,10 @@ fn merge_diarization_results(
 
         if !current_segment_words.is_empty() && (speaker_changed || silence_gap) {
             // Finalize current segment
-            new_segments.push(create_segment_from_words(current_segment_words, current_speaker));
+            new_segments.push(create_segment_from_words(
+                current_segment_words,
+                current_speaker,
+            ));
             current_segment_words = Vec::new();
             current_speaker = word_speaker;
         }
@@ -1043,17 +1088,27 @@ fn merge_diarization_results(
 
     // Add the final segment
     if !current_segment_words.is_empty() {
-        new_segments.push(create_segment_from_words(current_segment_words, current_speaker));
+        new_segments.push(create_segment_from_words(
+            current_segment_words,
+            current_speaker,
+        ));
     }
 
     *whisper_segments = new_segments;
-    info!("[Merge] Re-clustered into {} segments.", whisper_segments.len());
+    info!(
+        "[Merge] Re-clustered into {} segments.",
+        whisper_segments.len()
+    );
 }
 
-fn create_segment_from_words(words: Vec<crate::projectview::shared_types::Word>, speaker: String) -> TranscriptSegment {
+fn create_segment_from_words(
+    words: Vec<crate::projectview::shared_types::Word>,
+    speaker: String,
+) -> TranscriptSegment {
     let start_time = words.first().map(|w| w.start).unwrap_or(0.0);
     let end_time = words.last().map(|w| w.end).unwrap_or(0.0);
-    let text = words.iter()
+    let text = words
+        .iter()
         .map(|w| w.text.clone())
         .collect::<Vec<String>>()
         .join(" ");

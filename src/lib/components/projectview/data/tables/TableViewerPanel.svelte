@@ -109,6 +109,49 @@
   let tableHasValidationErrors = $state(false);
   let invalidCells = $state(new Map()); // Stores cell keys "rowIndex-colField" -> errorMessage
 
+  let resizingColField = $state(null);
+  let initialMouseX = $state(0);
+  let initialColWidth = $state(0);
+
+  function handleManualResizeStart(e, field) {
+    if (!tabulatorInstance) return;
+    const col = tabulatorInstance.getColumn(field);
+    if (!col) return;
+
+    resizingColField = field;
+    initialMouseX = e.clientX;
+    initialColWidth = col.getWidth();
+
+    window.addEventListener('mousemove', handleManualResizeMove);
+    window.addEventListener('mouseup', handleManualResizeEnd);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  function handleManualResizeMove(e) {
+    if (!resizingColField || !tabulatorInstance) return;
+
+    const deltaX = e.clientX - initialMouseX;
+    const newWidth = Math.max(100, initialColWidth + deltaX);
+
+    const col = tabulatorInstance.getColumn(resizingColField);
+    if (col) {
+      col.setWidth(newWidth);
+    }
+  }
+
+  function handleManualResizeEnd() {
+    window.removeEventListener('mousemove', handleManualResizeMove);
+    window.removeEventListener('mouseup', handleManualResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+
+    if (resizingColField) {
+      saveCurrentTableLayout();
+      resizingColField = null;
+    }
+  }
+
   let showTableModifyToolbar = $state(false);
   let tableModifyToolbarPosition = $state({ top: 0, left: 0 });
   let clickedRow = $state(null);
@@ -2605,9 +2648,20 @@
       const colDef = {
         title: (() => {
           const container = document.createElement('div');
+          container.style.width = '100%';
+          container.style.height = '100%';
+          container.style.display = 'flex';
+          container.style.alignItems = 'center';
+
           mount(TableHeaderIcon, {
             target: container,
-            props: { colSchema, header }
+            props: {
+              colSchema,
+              header,
+              onResizeStart: (offsetEvent) => {
+                handleManualResizeStart(offsetEvent, header);
+              }
+            }
           });
           return container;
         })(),
@@ -3885,7 +3939,7 @@
         data: JSON.parse(JSON.stringify(tableData)), // Decouple from Svelte 5 proxies
         reactiveData: false,
         index: 'harvey_internal_id',
-        layout: 'fitData',
+        layout: 'fitColumns',
         columns: generatedColumns,
         nestedFieldSeparator: false,
         height: '100%',
@@ -3927,7 +3981,7 @@
 
         movableColumns: true,
 
-        resizableColumnFit: false,
+        resizableColumnFit: true,
         rowFormatter: (row) => {
           const rowIndex = row.getData().harvey_internal_id;
           const rowColor = tableStyles.rowStyles[rowIndex];
@@ -4004,7 +4058,7 @@
             return currentActiveViewType !== 'pivot' && mediaEditorStore.isLexicalEditMode;
           },
           editorParams: { verticalNavigation: 'editor', shiftEnterSubmit: false },
-          resizable: 'header',
+          resizable: true,
           width: 200,
           minWidth: 100
         },
@@ -5397,5 +5451,31 @@
   }
   :global(html.dark .tabulator-menu .tabulator-menu-separator) {
     border-top: 1px solid #374151 !important; /* gray-700 */
+  }
+
+  /* Ensure manual resize handle reaches the true column border */
+  :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content) {
+    padding: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder) {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-grow: 1 !important;
   }
 </style>

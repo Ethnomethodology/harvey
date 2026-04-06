@@ -1406,7 +1406,8 @@ pub fn map_speaker_ids_to_names(segments: &mut Vec<TranscriptSegment>, user_name
         user_names
     );
 
-    let mut speaker_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut speaker_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     let mut current_name_index = 0;
 
     for segment in segments.iter_mut() {
@@ -1424,7 +1425,10 @@ pub fn map_speaker_ids_to_names(segments: &mut Vec<TranscriptSegment>, user_name
                 name
             } else {
                 // If we run out of user names, default to the original speaker ID
-                warn!("[Name Map] Not enough user names provided. Keeping original ID '{}'.", speaker_id);
+                warn!(
+                    "[Name Map] Not enough user names provided. Keeping original ID '{}'.",
+                    speaker_id
+                );
                 speaker_id.clone()
             }
         });
@@ -1437,7 +1441,10 @@ pub fn map_speaker_ids_to_names(segments: &mut Vec<TranscriptSegment>, user_name
             segment.speaker = mapped_name.clone();
         }
     }
-    info!("[Name Map] Finished speaker name mapping process. Mapped {} speakers.", speaker_map.len());
+    info!(
+        "[Name Map] Finished speaker name mapping process. Mapped {} speakers.",
+        speaker_map.len()
+    );
 }
 
 // --- Main Transcription Command ---
@@ -2718,7 +2725,11 @@ fn merge_diarization_results_cmd(
                     current_chunk_start_idx = i;
                 }
             }
-            chunks.push((current_chunk_start_idx, all_words.len() - 1, current_speaker.clone()));
+            chunks.push((
+                current_chunk_start_idx,
+                all_words.len() - 1,
+                current_speaker.clone(),
+            ));
 
             // Iterate over chunks and smooth short interruptions
             for i in 1..chunks.len().saturating_sub(1) {
@@ -2728,7 +2739,8 @@ fn merge_diarization_results_cmd(
 
                 // If the speaker before and after the current chunk are the same
                 if prev_chunk.2 == next_chunk.2 && current_chunk.2 != prev_chunk.2 {
-                    let chunk_duration = all_words[current_chunk.1].end - all_words[current_chunk.0].start;
+                    let chunk_duration =
+                        all_words[current_chunk.1].end - all_words[current_chunk.0].start;
                     let chunk_word_count = current_chunk.1 - current_chunk.0 + 1;
 
                     // Conditions for a "short interruption" (e.g. <= 3 words or <= 1.5 seconds)
@@ -2756,12 +2768,21 @@ fn merge_diarization_results_cmd(
     // 3. Re-cluster words into segments
     let mut new_segments = Vec::new();
     let mut current_segment_words = Vec::new();
-    let mut current_speaker = all_words[0].speaker.clone().unwrap_or_else(|| "Unknown".to_string());
+    let mut current_speaker = all_words[0]
+        .speaker
+        .clone()
+        .unwrap_or_else(|| "Unknown".to_string());
 
     for word in all_words {
-        let word_speaker = word.speaker.clone().unwrap_or_else(|| "Unknown".to_string());
-        let last_word_end = current_segment_words.last().map(|w: &Word| w.end).unwrap_or(word.start);
-        
+        let word_speaker = word
+            .speaker
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
+        let last_word_end = current_segment_words
+            .last()
+            .map(|w: &Word| w.end)
+            .unwrap_or(word.start);
+
         // Conditions for a new segment:
         // - Speaker changed
         // - Large silence gap (> 1.5s)
@@ -2770,7 +2791,10 @@ fn merge_diarization_results_cmd(
 
         if !current_segment_words.is_empty() && (speaker_changed || silence_gap) {
             // Finalize current segment
-            new_segments.push(create_segment_from_words_cmd(current_segment_words, current_speaker));
+            new_segments.push(create_segment_from_words_cmd(
+                current_segment_words,
+                current_speaker,
+            ));
             current_segment_words = Vec::new();
             current_speaker = word_speaker;
         }
@@ -2779,18 +2803,26 @@ fn merge_diarization_results_cmd(
 
     // Add the final segment
     if !current_segment_words.is_empty() {
-        new_segments.push(create_segment_from_words_cmd(current_segment_words, current_speaker));
+        new_segments.push(create_segment_from_words_cmd(
+            current_segment_words,
+            current_speaker,
+        ));
     }
 
     let before_count = whisper_segments.len();
     *whisper_segments = new_segments;
-    info!("[Merge CMD] Re-clustered {} segments into {} high-precision segments.", before_count, whisper_segments.len());
+    info!(
+        "[Merge CMD] Re-clustered {} segments into {} high-precision segments.",
+        before_count,
+        whisper_segments.len()
+    );
 }
 
 fn create_segment_from_words_cmd(words: Vec<Word>, speaker: String) -> TranscriptSegment {
     let start_time = words.first().map(|w| w.start).unwrap_or(0.0);
     let end_time = words.last().map(|w| w.end).unwrap_or(0.0);
-    let text = words.iter()
+    let text = words
+        .iter()
         .map(|w| w.text.clone())
         .collect::<Vec<String>>()
         .join(" ");

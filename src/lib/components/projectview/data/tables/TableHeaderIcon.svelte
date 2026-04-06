@@ -20,8 +20,7 @@
   } from '@lucide/svelte';
   import ProgressIcon from './icons/ProgressIcon.svelte';
 
-  export let colSchema = {};
-  export let header = '';
+  let { colSchema = {}, header = '', onResizeStart = null } = $props();
 
   function getIcon(schema) {
     const type = schema.type || 'Text';
@@ -62,12 +61,45 @@
     return Type;
   }
 
-  $: Icon = getIcon(colSchema);
+  let Icon = $derived(getIcon(colSchema));
+
+  function handleMouseDown(e) {
+    if (onResizeStart) {
+      e.preventDefault();
+      e.stopPropagation();
+      onResizeStart(e);
+    }
+  }
 </script>
 
-<div class="flex items-center justify-center">
-  <span class="inline-flex items-center mr-1.5 text-gray-400">
-    <svelte:component this={Icon} size={14} strokeWidth={2} />
-  </span>
-  <span>{header}</span>
+<div class="header-container flex items-center justify-center relative w-full h-full min-h-[36px]">
+  <div class="flex items-center justify-center flex-1 px-2">
+    <span class="inline-flex items-center mr-1.5 text-gray-400">
+      <Icon size={14} strokeWidth={2} />
+    </span>
+    <span class="truncate font-semibold text-gray-700 dark:text-gray-200">{header}</span>
+  </div>
+
+  {#if onResizeStart}
+    <!-- Manual Resize Handle -->
+    <div
+      class="manual-resize-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize hover:bg-blue-400/30 transition-colors z-[100]"
+      onmousedown={handleMouseDown}
+      role="button"
+      tabindex="-1"
+      aria-label="Resize Column"
+    ></div>
+  {/if}
 </div>
+
+<style>
+  .header-container {
+    user-select: none;
+  }
+  .manual-resize-handle {
+    border-right: 1px solid transparent;
+  }
+  .header-container:hover .manual-resize-handle {
+    border-right-color: rgba(59, 130, 246, 0.2);
+  }
+</style>

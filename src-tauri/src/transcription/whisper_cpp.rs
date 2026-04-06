@@ -111,7 +111,7 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             audio_path_str,
             "-l".into(),
             lang_arg.to_string(),
-            "-oj".into(), // Output JSON
+            "-oj".into(),   // Output JSON
             "-owts".into(), // Output Word Timestamps
             "-of".into(),
             output_base_path_str,

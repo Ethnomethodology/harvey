@@ -1,11 +1,11 @@
 // src-tauri/src/lib.rs
 use dashmap::DashMap;
-use tauri_plugin_log::{Target, TargetKind};
 use log; // Added log import
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::Emitter;
-use tauri::Manager; // Added Manager import // For app.emit()
+use tauri::Manager;
+use tauri_plugin_log::{Target, TargetKind}; // Added Manager import // For app.emit()
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
 use crate::projectview::db_handler::init_db as init_projectview_db;
@@ -38,10 +38,13 @@ pub struct LiveTranscriptionState(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Err(e) = crate::welcome::config::ensure_config_dir_exists() {
-        // If config dir creation fails, we still want to try to log it, 
-        // but we can't use the LogDir yet potentially. 
+        // If config dir creation fails, we still want to try to log it,
+        // but we can't use the LogDir yet potentially.
         // The plugin will handle it or we'll see it in stdout.
-        eprintln!("Fatal Error: Failed to ensure config directory exists: {}", e);
+        eprintln!(
+            "Fatal Error: Failed to ensure config directory exists: {}",
+            e
+        );
     }
 
     // Initialize ProjectView Database

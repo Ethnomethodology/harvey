@@ -3931,10 +3931,12 @@ pub async fn reveal_in_file_explorer(
     #[cfg(target_os = "macos")]
     {
         if path.is_dir() {
-            app.opener().open_path(path.to_string_lossy().as_ref(), Option::<String>::None).map_err(|e| {
-                error!("reveal_in_file_explorer: Error opening directory: {}", e);
-                CommandError::from(format!("Failed to open directory: {}", e))
-            })?;
+            app.opener()
+                .open_path(path.to_string_lossy().as_ref(), Option::<String>::None)
+                .map_err(|e| {
+                    error!("reveal_in_file_explorer: Error opening directory: {}", e);
+                    CommandError::from(format!("Failed to open directory: {}", e))
+                })?;
         } else {
             app.opener().reveal_item_in_dir(&path).map_err(|e| {
                 error!("reveal_in_file_explorer: Error revealing item: {}", e);

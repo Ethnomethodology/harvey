@@ -20,6 +20,7 @@ use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use log; // Use log crate
 use reqwest;
+use rusqlite::Connection;
 use serde::Deserialize;
 use std::{
     collections::HashSet,
@@ -35,8 +36,7 @@ use tauri::{command, AppHandle, Emitter, Manager, Runtime, State};
 #[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::ShellExt;
-use uuid::Uuid; // Added for UUID generation
-use rusqlite::Connection; // Added for DB operations
+use uuid::Uuid; // Added for UUID generation // Added for DB operations
 
 use crate::welcome::python_env;
 use walkdir::WalkDir;
@@ -1623,11 +1623,12 @@ pub async fn suggest_project_name(parent_dir: String) -> Result<String, CommandE
 
     // 1. Get all project names from the database
     let db_path = db_handler::get_db_path()?;
-    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    let conn =
+        Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
     let mut stmt = conn
         .prepare("SELECT name FROM projects")
         .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
-    
+
     // Using a HashSet for efficient name lookup
     let existing_names: HashSet<String> = stmt
         .query_map([], |row| row.get(0))

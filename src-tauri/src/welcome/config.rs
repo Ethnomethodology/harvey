@@ -362,9 +362,9 @@ pub fn read_config() -> Result<Config, CommandError> {
     }
 
     // Load projects
-    if let Ok(mut stmt) =
-        conn.prepare("SELECT name, xml_path, created_at, last_opened_ts, id FROM projects WHERE is_recent = 1")
-    {
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT name, xml_path, created_at, last_opened_ts, id FROM projects WHERE is_recent = 1",
+    ) {
         if let Ok(projects_iter) = stmt.query_map([], |row| {
             let name: String = row.get(0)?;
             let path: String = row.get(1)?;
@@ -528,17 +528,25 @@ pub fn write_config(config: &Config) -> Result<(), CommandError> {
             }
 
             if !matched_by_id {
-                let exists_by_path: bool =
-                    stmt_check_path.exists(params![project.path]).unwrap_or(false);
+                let exists_by_path: bool = stmt_check_path
+                    .exists(params![project.path])
+                    .unwrap_or(false);
                 if exists_by_path {
-                    println!("write_config: Updating existing project by path: {}", project.path);
-                    let _ = stmt_update_by_path.execute(params![ts_str, project.name, project.path]);
+                    println!(
+                        "write_config: Updating existing project by path: {}",
+                        project.path
+                    );
+                    let _ =
+                        stmt_update_by_path.execute(params![ts_str, project.name, project.path]);
                 } else {
                     let final_uuid = project
                         .id
                         .clone()
                         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                    println!("write_config: Creating new project record with ID: {}", final_uuid);
+                    println!(
+                        "write_config: Creating new project record with ID: {}",
+                        final_uuid
+                    );
                     let _ = stmt_insert.execute(params![
                         final_uuid,
                         project.name,

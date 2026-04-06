@@ -553,7 +553,10 @@ pub fn init_db() -> Result<(), CommandError> {
             "ALTER TABLE projects ADD COLUMN is_recent INTEGER DEFAULT 1",
             [],
         )?;
-        conn.execute("UPDATE projects SET is_recent = 1 WHERE is_recent IS NULL", [])?;
+        conn.execute(
+            "UPDATE projects SET is_recent = 1 WHERE is_recent IS NULL",
+            [],
+        )?;
     }
 
     // Global Settings table
