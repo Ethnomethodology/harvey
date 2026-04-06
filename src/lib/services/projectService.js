@@ -3974,7 +3974,7 @@ export async function clearProjectDataStore() {
 }
 
 export async function renameTableHeader(tablePath, oldHeader, newHeader) {
-  if (!tablePath || !oldHeader || !newHeader) {
+  if (!tablePath || oldHeader === null || oldHeader === undefined || !newHeader) {
     throw new Error('Missing required parameters for renaming table header.');
   }
 

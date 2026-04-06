@@ -1135,7 +1135,7 @@
   let newFieldTargetColumn = $state(null);
 
   function openFieldEditor(column) {
-    const field = column.getField();
+    const field = column.getField() || '';
     editingFieldData = {
       name: field,
       schema: tableSchema[field] || { type: 'Text', subType: 'Small Text' }
