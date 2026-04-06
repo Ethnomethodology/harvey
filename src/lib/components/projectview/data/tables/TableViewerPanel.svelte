@@ -5571,16 +5571,23 @@
   :global(.harvey-pseudo-row) {
     background-color: transparent !important;
     transition: background-color 0.15s ease-in-out;
+    position: relative;
+    z-index: 50 !important; /* Stand above any internal Tabulator selection layers */
   }
   :global(.harvey-pseudo-row:hover) {
     background-color: transparent !important;
   }
 
-  :global(.harvey-pseudo-row .tabulator-cell) {
-    padding: 0 !important;
+  /* Forcefully suppress any Tabulator selection or range indicators within the pseudo-row */
+  :global(.harvey-pseudo-row .tabulator-cell),
+  :global(.harvey-pseudo-row.tabulator-selected),
+  :global(.harvey-pseudo-row.tabulator-focus),
+  :global(.harvey-pseudo-row [class*="tabulator-range"]),
+  :global(.harvey-pseudo-row [class*="selection"]) {
+    border-left: none !important;
     border-right: none !important;
-    width: 100% !important;
-    display: block !important;
+    outline: none !important;
+    box-shadow: none !important;
     background: transparent !important;
   }
 </style>
