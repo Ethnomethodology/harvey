@@ -3191,7 +3191,7 @@
       dataColumnDefs.push({
         title: `
           <div class="flex items-center justify-center w-full h-[52px] group cursor-pointer" title="Add New Field">
-            <div class="flex items-center justify-center w-[28px] h-[28px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
+            <div class="flex items-center justify-center w-[32px] h-[32px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             </div>
           </div>
@@ -3971,7 +3971,7 @@
                   </div>
                 </div>
                 <div class="flex-1 h-full px-4 flex items-center">
-                  <div class="w-full border border-dashed border-blue-400/30 dark:border-blue-600/30 rounded-md py-0.5 flex items-center justify-center text-blue-500 font-medium bg-blue-50/20 dark:bg-blue-900/5 group-hover:bg-blue-100/30 dark:group-hover:bg-blue-900/10 transition-all text-xs">
+                  <div class="w-full border border-blue-400/30 dark:border-blue-600/30 rounded-md py-0.5 flex items-center justify-center text-blue-500 font-medium bg-blue-50/20 dark:bg-blue-900/5 group-hover:bg-blue-100/30 dark:group-hover:bg-blue-900/10 transition-all text-xs">
                     Add New Entry
                   </div>
                 </div>
@@ -5462,18 +5462,14 @@
   }
   /* Hide cells under the Add Field column and style as one long rectangle */
   :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
-    border-top: none !important;
-    border-bottom: none !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.3) !important;
-    border-right: 1px dashed rgba(59, 130, 246, 0.3) !important;
+    border: none !important;
     background-color: rgba(59, 130, 246, 0.05) !important;
     cursor: pointer !important;
     color: transparent !important;
   }
   :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
     background-color: rgba(59, 130, 246, 0.1) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.5) !important;
-    border-right: 1px dashed rgba(59, 130, 246, 0.5) !important;
+    border: none !important;
   }
   :global(.tabulator-row:hover .harvey-pseudo-col) {
     background-color: rgba(59, 130, 246, 0.1) !important;
