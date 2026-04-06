@@ -245,13 +245,17 @@
     // Fallback for cases where rangeSelected doesn't fire
     setTimeout(() => {
       const ranges = tabulatorInstance.getRanges();
-      if (ranges && ranges.length > 0 && !showTableModifyToolbar) {
+      const isHeaderClick = e.target.closest('.tabulator-header') || e.target.closest('.tabulator-col');
+
+      if (ranges && ranges.length > 0 && !showTableModifyToolbar && !isHeaderClick) {
         const range = ranges[0];
         const rows = range.getRows();
         const cols = range.getColumns();
+        const totalRows = tabulatorInstance.getRows().length;
 
         // Only show on drag end if it's a multi-cell selection (more than 1x1)
-        if (rows && cols && (rows.length > 1 || cols.length > 1)) {
+        // AND it's not a full-column selection (encompassing all real rows)
+        if (rows && cols && (rows.length > 1 || cols.length > 1) && rows.length < totalRows - 1) {
           selectedRows = rows;
           clickedRow = null;
 
@@ -4030,7 +4034,10 @@
         editTriggerEvent: 'dblclick',
         rangeSelected: (range) => {
           const rows = range.getRows();
-          if (rows && rows.length > 1) {
+          const totalRows = tabulatorInstance.getRows().length;
+          
+          // Only show for specific ranges, not whole-column selections
+          if (rows && rows.length > 1 && rows.length < totalRows - 1) {
             selectedRows = rows;
             clickedRow = null;
             lastRangeSelectedTime = Date.now();
