@@ -17,7 +17,7 @@ Visit the [Harvey Website](https://ethnomethodology.github.io/harvey/).
 
 Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run **100% locally** on your computer. You download the AI models once via the in-app Setup Wizard and can use them forever offline. Your data never leaves your device.
 
-> It's an application built *by researchers, for researchers*.
+> It's an application built *by researchers, for researchers*, using **Vibe Coding** to assess the viability of AI-assisted programming in research software development.
 
 ## Key Features
 
