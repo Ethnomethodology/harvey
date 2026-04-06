@@ -80,10 +80,10 @@
     <span class="truncate font-semibold text-gray-700 dark:text-gray-200">{header}</span>
   </div>
 
-  {#if onResizeStart}
+  {#if onResizeStart && header !== '+'}
     <!-- Manual Resize Handle -->
     <div
-      class="manual-resize-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize hover:bg-blue-400/30 transition-colors z-[100]"
+      class="manual-resize-handle absolute right-0 top-0 bottom-0 w-[6px] cursor-ew-resize hover:bg-blue-400/30 transition-colors z-[500]"
       onmousedown={handleMouseDown}
       role="button"
       tabindex="-1"

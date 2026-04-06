@@ -113,6 +113,8 @@
   let initialMouseX = $state(0);
   let initialColWidth = $state(0);
 
+  let currentActiveViewType = $state('table'); // 'table', 'pivot'
+
   function handleManualResizeStart(e, field) {
     if (!tabulatorInstance) return;
     const col = tabulatorInstance.getColumn(field);
@@ -135,7 +137,7 @@
     const newWidth = Math.max(100, initialColWidth + deltaX);
 
     const col = tabulatorInstance.getColumn(resizingColField);
-    if (col) {
+    if (col && resizingColField !== 'harvey_pseudo_add_col') {
       col.setWidth(newWidth);
     }
   }
@@ -157,6 +159,19 @@
   let clickedRow = $state(null);
   let selectedRows = $state([]); // Rows from a multi-cell/multi-row selection
   let activeHighlightIdForToolbar = $state(null);
+
+  // Clear all previous scroll/sync logic, no longer needed with pseudo-elements
+  let tableHeaderHeight = $state(52);
+  let tableInnerWidth = $state(0);
+  let tableInnerHeight = $state(0);
+
+  function updateTableDimensions() {
+    if (!tableContainer) return;
+    const headers = tableContainer.querySelector('.tabulator-headers');
+    if (headers) {
+      tableHeaderHeight = headers.offsetHeight;
+    }
+  }
   let lastRangeSelectedTime = 0; // Timestamp to prevent immediate closing of toolbar
   let mainPanelContainer = null;
 
@@ -429,8 +444,8 @@
     await saveTableHighlights();
   }
 
-  let isColorDropdownOpen = false;
-  let colorDropdownRef;
+  let isColorDropdownOpen = $state(false);
+  let colorDropdownRef = $state();
 
   function handleOutsideClick(event) {
     if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
@@ -892,7 +907,6 @@
     if (tableReady && mediaEditorStore.isLexicalEditMode !== undefined) {
       // Redraw/Re-run floating layout/buttons when edit mode toggles
       if (tabulatorInstance) {
-        addFloatingAddRowButton();
       }
     }
   });
@@ -950,10 +964,9 @@
     if (!tabulatorInstance) return;
     const updatedData = tabulatorInstance.getData();
 
-    // DO NOT update tableData = updatedData; here.
-    // Updating reactive tableData causes Tabulator to re-init/re-render, which steals focus.
-
-    const dataToSave = JSON.parse(JSON.stringify(updatedData));
+    // Filter out the pseudo-row before saving data to the backend
+    const filteredData = updatedData.filter(row => row.harvey_internal_id !== 'harvey_pseudo_add_row');
+    const dataToSave = JSON.parse(JSON.stringify(filteredData));
     dataToSave.forEach((row) => {
       delete row.harvey_internal_id;
       // Convert Multiselect arrays back to CSV strings for persistence
@@ -968,7 +981,7 @@
 
     const columns = tabulatorInstance.getColumns();
     const orderedHeaders = columns
-      .filter((column) => column.getField()) // Ensure we only get data fields
+      .filter((column) => column.getField() && column.getField() !== 'harvey_pseudo_add_col') // Ensure we only get data fields
       .map((column) => column.getField());
 
     await saveTableData(tablePath, dataToSave, orderedHeaders);
@@ -1544,7 +1557,7 @@
     const newSnapshotColumns = {};
     columns.forEach((column, index) => {
       const definition = column.getDefinition();
-      if (definition.field) {
+      if (definition.field && definition.field !== 'harvey_pseudo_add_col') {
         newSnapshotColumns[definition.field] = {
           order: index,
           visible: column.isVisible(),
@@ -3164,6 +3177,8 @@
       dataColumnDefs.sort((a, b) => {
         if (a.frozen) return -1;
         if (b.frozen) return 1;
+        if (a.field === 'harvey_pseudo_add_col') return 1;
+        if (b.field === 'harvey_pseudo_add_col') return -1;
         return (
           (savedLayoutObj.columns[a.field]?.order ?? Infinity) -
           (savedLayoutObj.columns[b.field]?.order ?? Infinity)
@@ -3171,32 +3186,35 @@
       });
     }
 
-    // Add the "Add Field" column at the end
-    if (mediaEditorStore.isLexicalEditMode) {
+    // Append the pseudo-add-field column at the very end
+    if (mediaEditorStore.isLexicalEditMode && !isViewingDocument) {
       dataColumnDefs.push({
-        title: (() => {
-          const button = document.createElement('button');
-          button.className =
-            'flex items-center justify-center w-full h-full text-blue-500 hover:text-blue-600 transition-colors';
-          button.title = 'Add New Field';
-          mount(TableIcon, {
-            target: button,
-            props: { icon: Plus, size: 16 }
-          });
-          return button;
-        })(),
-        headerClick: (e, column) => {
-          insertColumn(column, 'after'); // Generic button at end
-        },
-        width: 40,
-        minWidth: 40,
-        headerSort: false,
+        title: `
+          <div class="flex items-center justify-center w-full h-[52px] group cursor-pointer" title="Add New Field">
+            <div class="flex items-center justify-center w-[32px] h-[32px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </div>
+          </div>
+        `,
+        field: 'harvey_pseudo_add_col',
+        width: 55,
+        minWidth: 55,
+        maxWidth: 55,
         resizable: false,
-        frozen: false,
-        cssClass: 'add-column-header',
-        formatter: (cell) => {
-          // Important: returning empty/standard to avoid custom row highlights applying here
-          return '';
+        editable: false,
+        headerSort: false,
+        tooltip: false,
+        cssClass: 'harvey-pseudo-col px-0!',
+        cellClick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        },
+        headerClick: (e) => {
+          e.preventDefault();
+          const cols = tabulatorInstance.getColumns();
+          // Insert relative to the last real data column
+          const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
+          insertColumn(lastRealCol, 'after');
         }
       });
     }
@@ -3218,7 +3236,6 @@
   }
 
   let currentActiveView = $state(null);
-  let currentActiveViewType = $state(null);
   let baseTableColumns = $state([]); // Store base columns when applying a view
   let pivotDerivedSchema = $state({});
   let generatedPivotResult = $state({
@@ -3585,9 +3602,6 @@
       });
       pivotDerivedSchema = newPivotSchema;
     }
-
-    // Re-evaluate add entry row (removes it for pivot)
-    addFloatingAddRowButton();
   }
 
   async function returnToBaseTable() {
@@ -3797,7 +3811,6 @@
     tableData = [];
 
     if (tabulatorInstance) {
-      tableContainer.querySelectorAll('.tabulator-add-entry-row').forEach((b) => b.remove());
       tabulatorInstance.destroy();
       tabulatorInstance = null;
     }
@@ -3931,14 +3944,66 @@
       const generatedColumns = await generateColumns(
         tableData,
         tableHeaders,
-        savedLayout,
-        tableSchema
+            savedLayout,
+            tableSchema
       );
 
       tabulatorInstance = new Tabulator(tableContainer, {
-        data: JSON.parse(JSON.stringify(tableData)), // Decouple from Svelte 5 proxies
+        data: [...JSON.parse(JSON.stringify(tableData)), { harvey_internal_id: 'harvey_pseudo_add_row' }],
         reactiveData: false,
         index: 'harvey_internal_id',
+        clipboard: 'copy',
+        rowFormatter: (row) => {
+          const data = row.getData();
+          const rowElement = row.getElement();
+
+          // 1. Handle Pseudo-Add-Entry Row
+          if (data.harvey_internal_id === 'harvey_pseudo_add_row') {
+            rowElement.classList.add('harvey-pseudo-row');
+            rowElement.innerHTML = `
+              <div class="w-full flex items-center group cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all border-t border-gray-200 dark:border-gray-700" style="height: 36px;">
+                <div class="w-[55px] min-w-[55px] h-full flex items-center justify-center bg-blue-50/30 dark:bg-blue-900/20 border-r border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-center w-[24px] h-[24px] rounded-md bg-blue-50/50 dark:bg-blue-900/40 border border-dashed border-blue-400/30 dark:border-blue-500/30 text-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </div>
+                </div>
+                <div class="flex-1 h-full px-4 flex items-center">
+                  <div class="w-full border border-dashed border-blue-400/30 dark:border-blue-600/30 rounded-md py-0.5 flex items-center justify-center text-blue-500 font-medium bg-blue-50/20 dark:bg-blue-900/5 group-hover:bg-blue-100/30 dark:group-hover:bg-blue-900/10 transition-all text-xs">
+                    Add New Entry
+                  </div>
+                </div>
+              </div>
+            `;
+            rowElement.onclick = (e) => {
+              e.preventDefault();
+              const rows = tabulatorInstance.getRows();
+              const lastRealRow = rows.filter(r => r.getData().harvey_internal_id !== 'harvey_pseudo_add_row').pop();
+              insertRow(lastRealRow, 'after');
+            };
+            return; // Don't apply regular row styles to the pseudo-row
+          }
+
+          // 2. Handle Regular Row Styling (Highlights)
+          const rowIndex = data.harvey_internal_id;
+          const rowColor = tableStyles.rowStyles[rowIndex];
+          rowElement.style.backgroundColor = rowColor || '';
+          if (rowColor) {
+            rowElement.classList.add('highlighted-row');
+          } else {
+            rowElement.classList.remove('highlighted-row');
+          }
+        },
+        renderComplete: () => {
+          setTimeout(updateTableDimensions, 100);
+        },
+        tableBuilt: () => {
+          setTimeout(updateTableDimensions, 100);
+        },
+        langs: {
+          "default": {
+            "columns": generatedColumns
+          }
+        },
         layout: 'fitColumns',
         columns: generatedColumns,
         nestedFieldSeparator: false,
@@ -3980,19 +4045,7 @@
         },
 
         movableColumns: true,
-
         resizableColumnFit: true,
-        rowFormatter: (row) => {
-          const rowIndex = row.getData().harvey_internal_id;
-          const rowColor = tableStyles.rowStyles[rowIndex];
-          const rowElement = row.getElement();
-          rowElement.style.backgroundColor = rowColor || '';
-          if (rowColor) {
-            rowElement.classList.add('highlighted-row');
-          } else {
-            rowElement.classList.remove('highlighted-row');
-          }
-        },
         rowContextMenu: (e, row) => {
           const isEditMode = mediaEditorStore.isLexicalEditMode;
 
@@ -4116,7 +4169,6 @@
         tableReady = true;
         detectDuplicates();
         checkValidationErrors();
-        addFloatingAddRowButton();
 
         if (
           activeSubItemType === 'doc' &&
@@ -4296,106 +4348,6 @@
     tabulatorInstance.addRange(currentCell, currentCell);
   }
 
-  let enforcePositionHandler = null;
-
-  function addFloatingAddRowButton() {
-    if (!tabulatorInstance || !tableContainer) return;
-
-    // Unbind previous handler to prevent duplicates
-    if (enforcePositionHandler) {
-      tabulatorInstance.off('renderComplete', enforcePositionHandler);
-      tabulatorInstance.off('scrollVertical', enforcePositionHandler);
-      tabulatorInstance.off('columnResized', enforcePositionHandler);
-      enforcePositionHandler = null;
-    }
-
-    // Remove all existing add row buttons
-    const existingBtns = tableContainer.querySelectorAll('.tabulator-add-entry-row');
-    existingBtns.forEach((btn) => btn.remove());
-
-    if (currentActiveViewType === 'pivot' || !mediaEditorStore.isLexicalEditMode) return;
-
-    const tableHolder = tableContainer.querySelector('.tabulator-table');
-    if (!tableHolder) return;
-
-    // Create a custom row element that acts as the "Add Entry" footer
-    // We append it to the internal Tabulator DOM but manage its display via Tabulator hooks
-    // so it natively tracks with the virtual DOM bounds.
-
-    let addRowBtn = document.createElement('div');
-    addRowBtn.className =
-      'tabulator-row tabulator-add-entry-row cursor-pointer group flex items-center';
-    addRowBtn.style.minHeight = '38px';
-    addRowBtn.style.borderBottom = '1px solid var(--ui-select-border)';
-    addRowBtn.title = 'Add New Entry';
-
-    // Replicate frozen column for number
-    const numberColEl = document.createElement('div');
-    numberColEl.className =
-      'tabulator-cell flex items-center justify-center bg-blue-50/50 dark:bg-blue-900/10 border-r border-gray-200 dark:border-gray-700 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/30';
-    numberColEl.style.width = '50px';
-    numberColEl.style.minWidth = '50px';
-    numberColEl.style.height = '100%';
-    numberColEl.style.position = 'sticky';
-    numberColEl.style.left = '0';
-    numberColEl.style.zIndex = '4';
-
-    mount(TableIcon, {
-      target: numberColEl,
-      props: { icon: Plus, size: 16, customClass: 'text-blue-500' }
-    });
-
-    // The dashed body part
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'flex-1 flex items-center h-full';
-
-    const innerDash = document.createElement('div');
-    innerDash.className =
-      'flex-1 mx-2 my-[4px] min-h-[28px] border-2 border-dashed border-blue-400 dark:border-blue-600 rounded-lg flex items-center justify-center text-blue-500 font-medium transition-all bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/30';
-    innerDash.innerHTML = `<span>Add New Entry</span>`;
-
-    bodyEl.appendChild(innerDash);
-
-    addRowBtn.appendChild(numberColEl);
-    addRowBtn.appendChild(bodyEl);
-
-    addRowBtn.onclick = () => {
-      if (!tabulatorInstance) return;
-      const rows = tabulatorInstance.getRows();
-      const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
-      insertRow(lastRow, 'after');
-
-      setTimeout(() => {
-        const scrollHolder = tableContainer.querySelector('.tabulator-tableholder');
-        if (scrollHolder) scrollHolder.scrollTop = scrollHolder.scrollHeight;
-      }, 50);
-    };
-
-    // Attach event handlers to force it to always stick to the bottom of the virtual table DOM
-    enforcePositionHandler = () => {
-      const holder = tableContainer.querySelector('.tabulator-table');
-      if (holder) {
-        // If it's not the last child, make it the last child
-        if (addRowBtn.parentNode !== holder || holder.lastChild !== addRowBtn) {
-          holder.appendChild(addRowBtn);
-        }
-
-        // Match width to table header inner width to span fully
-        const header = tableContainer.querySelector('.tabulator-header .tabulator-headers');
-        if (header) {
-          addRowBtn.style.width = header.style.width || `${header.offsetWidth}px`;
-        }
-      }
-    };
-
-    enforcePositionHandler();
-
-    // Bind to multiple events to ensure it stays pinned
-    tabulatorInstance.on('renderComplete', enforcePositionHandler);
-    tabulatorInstance.on('scrollVertical', enforcePositionHandler);
-    tabulatorInstance.on('columnResized', enforcePositionHandler);
-  }
-
   function goToNextMatch() {
     if (cellMatches.length === 0) return;
     const nextIndex = (currentMatchIndex + 1) % cellMatches.length;
@@ -4514,6 +4466,13 @@
     if (svelteUndoStack.length > 50) svelteUndoStack.shift(); // Keep last 50 actions
     svelteRedoStack = []; // Clear redo stack on new action
   }
+
+  $effect(() => {
+    if (mediaEditorStore.isLexicalEditMode !== undefined && tabulatorInstance && tableReady) {
+      // Small timeout to ensure DOM is settled after a state change or initial build
+      setTimeout(updateTableDimensions, 100);
+    }
+  });
 
   async function applyHistoryAction(action, isUndo) {
     if (!tabulatorInstance) return;
@@ -4927,14 +4886,15 @@
               <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
                 {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
               </DropdownItem>
-            </Dropdown>
+          </Dropdown>
           </div>
         </div>
       {/if}
     </div>
   {/if}
 
-  <div class="flex-grow overflow-auto min-h-0 relative">
+  <div class="flex-grow overflow-auto min-h-0 relative flex flex-col bg-white dark:bg-gray-900">
+    <!-- Popovers (URL, Project Link, Email) -->
     {#if showUrlPopover}
       <div
         class="url-popover-container fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1"
@@ -5032,6 +4992,7 @@
       </div>
     {/if}
 
+    <!-- Loading / Error States -->
     {#if isLoading}
       <div
         class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 z-10"
@@ -5046,151 +5007,158 @@
       </div>
     {/if}
 
-    {#if isViewingDocument}
-      <div
-        class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20 flex flex-col"
-      >
-        {#key currentActiveDocumentPath}
-          <div class="flex-grow min-h-0">
-            <LexicalEditor
-              initialJson={currentActiveDocumentJson}
-              editable={mediaEditorStore.isLexicalEditMode}
-              allowReadModeHighlights={true}
-              placeholder="Start typing your document..."
-              enableTableCellMenu={true}
-              enableTableCellResize={true}
-              enableSearch={true}
-              documentPath={currentActiveDocumentPath}
-              initialHighlights={currentActiveDocumentHighlights}
-              documentHighlights={$project.currentDocumentHighlights}
-              on:change={handleLexicalDocumentChange}
-              on:highlightschange={handleLexicalHighlightsChange}
-              toolbarConfig={{
-                undo: true,
-                redo: true,
-                blockType: false,
-                bold: true,
-                italic: true,
-                underline: true,
-                strikethrough: true,
-                align: false,
-                insertMenu: false,
-                link: false,
-                outdent: false,
-                indent: false,
-                textColor: true,
-                highlight: true,
-                clearFormatting: false,
-                search: true,
-                fontFamily: false
-              }}
+    <!-- Main Content Selection (Document, Pivot, or Table) -->
+    <div class="relative flex-grow min-h-0 flex flex-col">
+      {#if isViewingDocument}
+        <div
+          class="w-full h-full bg-white dark:bg-gray-800 overflow-hidden relative z-20 flex flex-col"
+        >
+          {#key currentActiveDocumentPath}
+            <div class="flex-grow min-h-0">
+              <LexicalEditor
+                initialJson={currentActiveDocumentJson}
+                editable={mediaEditorStore.isLexicalEditMode}
+                allowReadModeHighlights={true}
+                placeholder="Start typing your document..."
+                enableTableCellMenu={true}
+                enableTableCellResize={true}
+                enableSearch={true}
+                documentPath={currentActiveDocumentPath}
+                initialHighlights={currentActiveDocumentHighlights}
+                documentHighlights={$project.currentDocumentHighlights}
+                on:change={handleLexicalDocumentChange}
+                on:highlightschange={handleLexicalHighlightsChange}
+                toolbarConfig={{
+                  undo: true,
+                  redo: true,
+                  blockType: false,
+                  bold: true,
+                  italic: true,
+                  underline: true,
+                  strikethrough: true,
+                  align: false,
+                  insertMenu: false,
+                  link: false,
+                  outdent: false,
+                  indent: false,
+                  textColor: true,
+                  highlight: true,
+                  clearFormatting: false,
+                  search: true,
+                  fontFamily: false
+                }}
+              >
+                <svelte:fragment slot="toolbar_prepend">
+                  <button
+                    on:click={returnToBaseTable}
+                    class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm"
+                    title="Return to Base Table"
+                  >
+                    <Undo2 size={14} />
+                    <span>Return to Base Table</span>
+                  </button>
+                  <div class="separator mx-0.5 mr-2"></div>
+                </svelte:fragment>
+              </LexicalEditor>
+            </div>
+          {/key}
+        </div>
+      {:else if currentActiveViewType === 'pivot'}
+        <div
+          class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20"
+        >
+          <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
+            <thead
+              class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm"
             >
-              <svelte:fragment slot="toolbar_prepend">
-                <button
-                  on:click={returnToBaseTable}
-                  class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 font-medium px-2.5 py-1 transition duration-150 ease-in-out text-xs mr-2 shadow-sm"
-                  title="Return to Base Table"
-                >
-                  <Undo2 size={14} />
-                  <span>Return to Base Table</span>
-                </button>
-                <div class="separator mx-0.5 mr-2"></div>
-              </svelte:fragment>
-            </LexicalEditor>
-          </div>
-        {/key}
-      </div>
-    {:else if currentActiveViewType === 'pivot'}
-      <div
-        class="w-full h-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-auto relative z-20"
-      >
-        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 border-collapse">
-          <thead
-            class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10 shadow-sm"
-          >
-            {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
-              {#each generatedPivotResult.colHeaders as headerRow, levelIndex (levelIndex)}
-                <tr>
-                  {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
-                    {#each generatedPivotResult.rowFields as rowField (rowField)}
+              {#if generatedPivotResult && generatedPivotResult.colHeaders.length > 0}
+                {#each generatedPivotResult.colHeaders as headerRow, levelIndex (levelIndex)}
+                  <tr>
+                    {#if levelIndex === generatedPivotResult.colHeaders.length - 1}
+                      {#each generatedPivotResult.rowFields as rowField (rowField)}
+                        <th
+                          scope="col"
+                          class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom"
+                        >
+                          {rowField}
+                        </th>
+                      {/each}
+                    {:else if generatedPivotResult.rowFieldsCount > 0}
+                      <th
+                        colspan={generatedPivotResult.rowFieldsCount}
+                        class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
+                      ></th>
+                    {/if}
+
+                    {#each headerRow as h (h.val)}
                       <th
                         scope="col"
-                        class="px-6 py-3 whitespace-nowrap font-bold border border-gray-200 dark:border-gray-600 bg-gray-200 dark:bg-gray-600 align-bottom"
+                        colspan={h.colspan}
+                        class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex ===
+                        generatedPivotResult.colHeaders.length - 1
+                          ? 'bg-gray-100 dark:bg-gray-700'
+                          : 'bg-gray-200 dark:bg-gray-600'}"
                       >
-                        {rowField}
+                        {h.val}
                       </th>
                     {/each}
-                  {:else if generatedPivotResult.rowFieldsCount > 0}
-                    <th
-                      colspan={generatedPivotResult.rowFieldsCount}
-                      class="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
-                    ></th>
-                  {/if}
+                  </tr>
+                {/each}
+              {/if}
+            </thead>
+            <tbody>
+              {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
+                {#each generatedPivotResult.rows as row, i (i)}
+                  <tr
+                    class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    {#each row.headers as header (header.val)}
+                      {#if header.rowspan > 0}
+                        <td
+                          rowspan={header.rowspan}
+                          class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top"
+                        >
+                          {header.val}
+                        </td>
+                      {/if}
+                    {/each}
 
-                  {#each headerRow as h (h.val)}
-                    <th
-                      scope="col"
-                      colspan={h.colspan}
-                      class="px-6 py-3 whitespace-nowrap text-center border border-gray-200 dark:border-gray-600 {levelIndex ===
-                      generatedPivotResult.colHeaders.length - 1
-                        ? 'bg-gray-100 dark:bg-gray-700'
-                        : 'bg-gray-200 dark:bg-gray-600'}"
-                    >
-                      {h.val}
-                    </th>
-                  {/each}
-                </tr>
-              {/each}
-            {/if}
-          </thead>
-          <tbody>
-            {#if generatedPivotResult && generatedPivotResult.rows.length > 0}
-              {#each generatedPivotResult.rows as row, i (i)}
-                <tr
-                  class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-                >
-                  {#each row.headers as header (header.val)}
-                    {#if header.rowspan > 0}
+                    {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex (colIndex)}
                       <td
-                        rowspan={header.rowspan}
-                        class="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 align-top"
+                        class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700"
                       >
-                        {header.val}
+                        {row.data[`val_${colIndex}`] !== undefined
+                          ? row.data[`val_${colIndex}`]
+                          : ''}
                       </td>
-                    {/if}
-                  {/each}
-
-                  {#each Array(generatedPivotResult.colLeavesCount) as _, colIndex (colIndex)}
-                    <td
-                      class="px-6 py-4 whitespace-nowrap text-right border border-gray-200 dark:border-gray-700"
-                    >
-                      {row.data[`val_${colIndex}`] !== undefined ? row.data[`val_${colIndex}`] : ''}
-                    </td>
-                  {/each}
+                    {/each}
+                  </tr>
+                {/each}
+              {:else}
+                <tr>
+                  <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
+                    No data available.
+                  </td>
                 </tr>
-              {/each}
-            {:else}
-              <tr>
-                <td colspan="100%" class="px-6 py-8 text-center text-gray-500">
-                  No data available.
-                </td>
-              </tr>
+              {/if}
+            </tbody>
+          </table>
+        </div>
+      {:else}
+        <!-- Standard Tabulator Table with Standalone Buttons -->
+        <div id="table-view-container" class="relative flex-grow min-h-0 flex flex-col">
+          <div
+            bind:this={tableContainer}
+            on:click={handleTableContainerClick}
+            on:mouseup={handleTableMouseUp}
+            class="w-full h-full"
+          >
+            {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
+              <div class="p-4 text-center text-gray-500 dark:text-gray-400">
+                Table is empty or data could not be loaded.
+              </div>
             {/if}
-          </tbody>
-        </table>
-      </div>
-    {/if}
-
-    <div
-      bind:this={tableContainer}
-      on:click={handleTableContainerClick}
-      on:mouseup={handleTableMouseUp}
-      class="w-full h-full"
-      style="display: {currentActiveViewType === 'pivot' || isViewingDocument ? 'none' : 'block'};"
-    >
-      {#if !isLoading && !error && tableData.length === 0 && tablePath && !isViewingDocument}
-        <div class="p-4 text-center text-gray-500 dark:text-gray-400">
-          Table is empty or data could not be loaded.
+          </div>
         </div>
       {/if}
     </div>
@@ -5477,5 +5445,53 @@
     align-items: center !important;
     justify-content: center !important;
     flex-grow: 1 !important;
+  }
+
+  /* Virtual Pseudo-Column/Row Styling */
+  :global(.harvey-pseudo-col) {
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    border-left: 1px dashed rgba(59, 130, 246, 0.4) !important;
+    transition: background-color 0.15s ease-in-out;
+  }
+  :global(html.dark .harvey-pseudo-col) {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    border-left: 1px dashed rgba(59, 130, 246, 0.6) !important;
+  }
+  /* Hide cells under the Add Field column and style as one long rectangle */
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: 1px dashed rgba(59, 130, 246, 0.3) !important;
+    border-right: 1px dashed rgba(59, 130, 246, 0.3) !important;
+    background-color: rgba(59, 130, 246, 0.05) !important;
+    pointer-events: none !important;
+    color: transparent !important;
+  }
+  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    border-left: 1px dashed rgba(59, 130, 246, 0.5) !important;
+    border-right: 1px dashed rgba(59, 130, 246, 0.5) !important;
+  }
+  :global(.tabulator-row:hover .harvey-pseudo-col) {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+  }
+  :global(html.dark .tabulator-row:hover .harvey-pseudo-col) {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+  }
+
+  :global(.harvey-pseudo-row) {
+    background-color: transparent !important;
+    transition: background-color 0.15s ease-in-out;
+  }
+  :global(.harvey-pseudo-row:hover) {
+    background-color: transparent !important;
+  }
+
+  :global(.harvey-pseudo-row .tabulator-cell) {
+    padding: 0 !important;
+    border-right: none !important;
+    width: 100% !important;
+    display: block !important;
+    background: transparent !important;
   }
 </style>
