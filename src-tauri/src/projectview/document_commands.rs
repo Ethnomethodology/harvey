@@ -340,9 +340,9 @@ pub async fn delete_temporary_file(path: String) -> Result<(), CommandError> {
         )));
     }
 
-    let is_in_tmp_dir = file_path.parent().map_or(false, |p| {
-        p.file_name().map_or(false, |n| n == TEMP_SUBDIR_DOCS)
-    });
+    let is_in_tmp_dir = file_path
+        .parent()
+        .is_some_and(|p| p.file_name().is_some_and(|n| n == TEMP_SUBDIR_DOCS));
     let is_in_harvey_files = file_path
         .components()
         .any(|comp| comp.as_os_str() == HARVEY_FILES_DIR);
@@ -363,12 +363,12 @@ pub async fn delete_temporary_file(path: String) -> Result<(), CommandError> {
     if let Some(parent_dir) = file_path.parent() {
         if parent_dir
             .file_name()
-            .map_or(false, |n| n == TEMP_SUBDIR_DOCS)
+            .is_some_and(|n| n == TEMP_SUBDIR_DOCS)
         {
-            if let Ok(mut entries) = fs::read_dir(&parent_dir) {
+            if let Ok(mut entries) = fs::read_dir(parent_dir) {
                 if entries.next().is_none() {
                     // Directory is empty, remove it
-                    if let Err(e) = fs::remove_dir(&parent_dir) {
+                    if let Err(e) = fs::remove_dir(parent_dir) {
                         warn!(
                             "[delete_temporary_file] Failed to remove tmp directory {}: {}",
                             parent_dir.display(),

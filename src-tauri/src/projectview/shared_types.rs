@@ -62,7 +62,7 @@ pub struct FileMetadata {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct StandardAssetMetadata {
     pub metadata: FileMetadata,
     #[serde(default)]
@@ -646,19 +646,10 @@ pub struct FileLevelMetadata {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DocumentHighlightData {
     pub metadata: FileMetadata, // Changed type here
     pub highlights: Vec<HighlightMetadata>,
-}
-
-impl Default for DocumentHighlightData {
-    fn default() -> Self {
-        DocumentHighlightData {
-            metadata: FileMetadata::default(), // Use FileMetadata's default
-            highlights: Vec::new(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -765,11 +756,3 @@ pub struct FileGroupAssociationFromDb {
 }
 
 // Default implementation for StandardAssetMetadata
-impl Default for StandardAssetMetadata {
-    fn default() -> Self {
-        StandardAssetMetadata {
-            metadata: FileMetadata::default(),
-            highlights: Vec::new(),
-        }
-    }
-}

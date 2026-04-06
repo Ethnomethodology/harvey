@@ -149,7 +149,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_doc_type = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
     let doc_type_column_exists = stmt_check_doc_type
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "document_type"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "document_type"));
 
     if !doc_type_column_exists {
         info!("[DB] Adding document_type column to pdf_annotations table.");
@@ -165,7 +165,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_project_id = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
     let project_id_column_exists = stmt_check_project_id
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "project_id"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "project_id"));
 
     if !project_id_column_exists {
         info!("[DB] Adding project_id column to pdf_annotations table.");
@@ -226,7 +226,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_file_type = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let file_type_column_exists = stmt_check_file_type
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "file_type"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "file_type"));
     if !file_type_column_exists {
         info!("[DB] Adding file_type column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
@@ -236,7 +236,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_thumbnail = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let thumbnail_column_exists = stmt_check_thumbnail
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "thumbnail"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "thumbnail"));
     if !thumbnail_column_exists {
         info!("[DB] Adding thumbnail column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN thumbnail BLOB", [])?;
@@ -282,7 +282,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_asset_project_id = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let asset_project_id_exists = stmt_check_asset_project_id
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "project_id"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "project_id"));
 
     if !asset_project_id_exists {
         info!("[DB] Adding project_id column to asset_metadata table (for older schema).");
@@ -294,7 +294,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_orig_import_path = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let orig_import_path_exists = stmt_check_orig_import_path
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "original_import_path"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "original_import_path"));
 
     if !orig_import_path_exists {
         info!("[DB] Adding original_import_path column to asset_metadata table.");
@@ -308,7 +308,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_speaker_json = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let speaker_json_exists = stmt_check_speaker_json
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "speaker_names_json"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "speaker_names_json"));
 
     if !speaker_json_exists {
         info!("[DB] Adding speaker_names_json column to asset_metadata table.");
@@ -322,7 +322,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_waveform_data = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let waveform_data_exists = stmt_check_waveform_data
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "waveform_data"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "waveform_data"));
 
     if !waveform_data_exists {
         info!("[DB] Adding waveform_data column to asset_metadata table.");
@@ -336,7 +336,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let lang_code_exists = stmt_check_lang_code
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "language_code"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "language_code"));
 
     if !lang_code_exists {
         info!("[DB] Adding language_code column to asset_metadata table.");
@@ -350,7 +350,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_properties = conn.prepare("PRAGMA table_info(asset_metadata)")?;
     let properties_exists = stmt_check_properties
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "properties"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "properties"));
 
     if !properties_exists {
         info!("[DB] Adding properties column to asset_metadata table.");
@@ -425,7 +425,7 @@ pub fn init_db() -> Result<(), CommandError> {
         conn.prepare("PRAGMA table_info(table_layout_preferences)")?;
     let layout_project_id_exists = stmt_check_layout_project_id
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "project_id"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "project_id"));
 
     if !layout_project_id_exists {
         info!(
@@ -527,7 +527,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_last_opened = conn.prepare("PRAGMA table_info(projects)")?;
     let last_opened_col_exists = stmt_check_last_opened
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "last_opened_ts"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "last_opened_ts"));
 
     if !last_opened_col_exists {
         info!("[DB] Adding last_opened_ts column to projects table.");
@@ -545,7 +545,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_is_recent = conn.prepare("PRAGMA table_info(projects)")?;
     let is_recent_col_exists = stmt_check_is_recent
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "is_recent"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "is_recent"));
 
     if !is_recent_col_exists {
         info!("[DB] Adding is_recent column to projects table.");
@@ -633,9 +633,7 @@ pub fn init_db() -> Result<(), CommandError> {
                 Ok((name, type_))
             })?
             .any(|res| {
-                res.map_or(false, |(name, type_)| {
-                    name == "id" && type_.to_uppercase() == "INTEGER"
-                })
+                res.is_ok_and(|(name, type_)| name == "id" && type_.to_uppercase() == "INTEGER")
             });
 
         if is_integer_id {
@@ -733,7 +731,7 @@ pub fn init_db() -> Result<(), CommandError> {
                 let table: String = row.get(2)?;
                 Ok(table)
             })?
-            .any(|res| res.map_or(false, |table| table == "tag_groups_legacy"));
+            .any(|res| res.is_ok_and(|table| table == "tag_groups_legacy"));
 
         if references_legacy_table {
             info!("[DB] CRITICAL: 'tags' table references 'tag_groups_legacy'. Attempting recovery migration.");
@@ -843,7 +841,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
     let lang_code_exists = stmt_check_lang_code
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "language_code"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "language_code"));
 
     if !lang_code_exists {
         info!("[DB] Adding language_code column to media_transcript_data table.");
@@ -857,7 +855,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_prompt = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
     let prompt_exists = stmt_check_prompt
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "initial_prompt"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "initial_prompt"));
 
     if !prompt_exists {
         info!("[DB] Adding initial_prompt column to media_transcript_data table.");
@@ -870,7 +868,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_hotwords = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
     let hotwords_exists = stmt_check_hotwords
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.map_or(false, |name| name == "hotwords"));
+        .any(|name_res| name_res.is_ok_and(|name| name == "hotwords"));
 
     if !hotwords_exists {
         info!("[DB] Adding hotwords column to media_transcript_data table.");
@@ -920,7 +918,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_tag_desc = conn.prepare("PRAGMA table_info(tags)")?;
     let tag_desc_col_exists = stmt_check_tag_desc
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "description"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "description"));
 
     if !tag_desc_col_exists {
         info!("[DB] Adding description column to tags table.");
@@ -931,7 +929,7 @@ pub fn init_db() -> Result<(), CommandError> {
     let mut stmt_check_tag_group_id = conn.prepare("PRAGMA table_info(tags)")?;
     let tag_group_id_col_exists = stmt_check_tag_group_id
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "tag_group_id"));
+        .any(|col_name_result| col_name_result.is_ok_and(|name| name == "tag_group_id"));
 
     if !tag_group_id_col_exists {
         info!("[DB] Adding tag_group_id column to tags table.");
@@ -2975,7 +2973,7 @@ pub fn get_highlights_by_tag(
                             annotation_obj
                                 .get("body")
                                 .and_then(|b| b.as_array())
-                                .and_then(|b| b.get(0))
+                                .and_then(|b| b.first())
                                 .and_then(|first_body| first_body.get("value"))
                                 .and_then(|v| v.as_str())
                         })

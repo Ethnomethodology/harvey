@@ -482,7 +482,7 @@ pub async fn install_faster_whisper_dependencies_command<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<(), CommandError> {
     log::info!("CMD: install_faster_whisper_dependencies_command");
-    python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None)
+    python_env::install_faster_whisper_dependencies(&app, app.shell(), "installation-log", None)
         .await
 }
 
@@ -491,7 +491,7 @@ pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<(), CommandError> {
     log::info!("CMD: install_whisper_cpp_dependencies_command");
-    python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "installation-log", None).await
+    python_env::install_whisper_cpp_dependencies(&app, app.shell(), "installation-log", None).await
 }
 
 // --- Transcription Model Download Command (Faster-Whisper) ---
@@ -544,7 +544,7 @@ pub async fn download_faster_whisper_model_command(
         window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Faster-Whisper dependencies are missing. Installing them now..." })).unwrap();
         python_env::install_faster_whisper_dependencies(
             &app,
-            &app.shell(),
+            app.shell(),
             "transcription-download-log",
             Some(&model_name),
         )
@@ -562,7 +562,7 @@ pub async fn download_faster_whisper_model_command(
     let (mut rx, _child) = app
         .shell()
         .command(python_path.to_str().unwrap())
-        .args(&[
+        .args([
             script_path.to_str().unwrap(),
             &model_name,
             &target_dir_str,
@@ -738,7 +738,7 @@ pub async fn download_translation_model_command(
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
             python_env::install_pip_packages(
                 &app,
-                &app.shell(),
+                app.shell(),
                 vec!["ctranslate2~=4.5.0"],
                 "translation-download-log",
                 Some(&model_name),
@@ -758,7 +758,7 @@ pub async fn download_translation_model_command(
     let (mut rx, _child) = app
         .shell()
         .command(python_path.to_str().unwrap())
-        .args(&[
+        .args([
             script_path.to_str().unwrap(),
             &model_name,
             &target_dir_str,
@@ -1089,7 +1089,7 @@ pub async fn is_cuda_available_command<R: tauri::Runtime>(
 ) -> bool {
     use tauri_plugin_shell::ShellExt;
     let shell = _app_handle.shell();
-    let strategy = super::python_env::get_pytorch_install_strategy(&shell).await;
+    let strategy = super::python_env::get_pytorch_install_strategy(shell).await;
     strategy == super::python_env::PyTorchInstallStrategy::Gpu
 }
 
@@ -1400,7 +1400,7 @@ pub async fn rename_project(
             {
                 use std::os::unix::fs::MetadataExt;
                 log::info!("rename_project: Comparing inodes (Unix)...");
-                let meta1 = fs::metadata(&old_project_dir)?;
+                let meta1 = fs::metadata(old_project_dir)?;
                 let meta2 = fs::metadata(&new_project_dir)?;
                 Ok(meta1.dev() == meta2.dev() && meta1.ino() == meta2.ino())
             }
@@ -1461,7 +1461,7 @@ pub async fn rename_project(
             old_project_dir,
             new_project_dir
         );
-        fs::rename(&old_project_dir, &new_project_dir).map_err(|e| {
+        fs::rename(old_project_dir, &new_project_dir).map_err(|e| {
             log::error!("rename_project: *** FOLDER RENAME FAILED: {} ***", e);
             CommandError::from(format!("Failed to rename project folder: {}", e))
         })?;
@@ -2436,7 +2436,7 @@ pub async fn download_model_command(
 
             python_env::install_whisper_cpp_dependencies(
                 &app,
-                &app.shell(),
+                app.shell(),
                 "transcription-download-log",
                 Some(&model_name),
             )
@@ -2751,13 +2751,13 @@ pub async fn check_python_libraries_installed<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<bool, CommandError> {
     let shell = app.shell();
-    python_env::check_python_libraries_installed(&app, &shell).await
+    python_env::check_python_libraries_installed(&app, shell).await
 }
 
 #[command]
 pub async fn install_python_libraries<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
     let shell = app.shell();
-    python_env::install_python_libraries(&app, &shell).await
+    python_env::install_python_libraries(&app, shell).await
 }
 
 #[command]
@@ -2785,12 +2785,10 @@ pub async fn fetch_available_models_command(
     // Try internal python first, fall back to system if not exists (likely during wizard)
     let cmd_binary = if python_path.exists() {
         python_path.to_str().unwrap().to_string()
+    } else if cfg!(windows) {
+        "python".to_string()
     } else {
-        if cfg!(windows) {
-            "python".to_string()
-        } else {
-            "python3".to_string()
-        }
+        "python3".to_string()
     };
 
     log::info!("Using python binary: {}", cmd_binary);
@@ -2798,7 +2796,7 @@ pub async fn fetch_available_models_command(
     let output = app
         .shell()
         .command(cmd_binary)
-        .args(&[script_path.to_str().unwrap()])
+        .args([script_path.to_str().unwrap()])
         .output()
         .await
         .map_err(|e| CommandError::from(format!("Failed to execute python script: {}", e)))?;

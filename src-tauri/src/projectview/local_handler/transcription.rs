@@ -165,7 +165,7 @@ pub async fn run_transcription<R: Runtime>(
             internal_job_id
         );
         if wav_media_path.to_string_lossy() != media_path
-            && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+            && wav_media_path.extension().is_some_and(|ext| ext == "wav")
         {
             let _ = fs::remove_file(&wav_media_path);
             info!(
@@ -268,7 +268,7 @@ pub async fn run_transcription<R: Runtime>(
             );
         }
         if wav_media_path.to_string_lossy() != media_path
-            && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+            && wav_media_path.extension().is_some_and(|ext| ext == "wav")
         {
             let _ = fs::remove_file(&wav_media_path);
             info!(
@@ -359,7 +359,7 @@ pub async fn run_transcription<R: Runtime>(
                         );
                     }
                     if wav_media_path.to_string_lossy() != media_path
-                        && wav_media_path.extension().map_or(false, |ext| ext == "wav")
+                        && wav_media_path.extension().is_some_and(|ext| ext == "wav")
                     {
                         let _ = fs::remove_file(&wav_media_path);
                         info!(
@@ -787,7 +787,7 @@ async fn run_python_diarization<R: Runtime>(
         job_id,
         script_path.display()
     );
-    let mut command = get_python_command(&app_handle)?;
+    let mut command = get_python_command(app_handle)?;
 
     if let Ok(hf_home) = crate::welcome::diarization::get_diarization_hub_path(app_handle) {
         command = command.env("HF_HOME", hf_home.to_string_lossy().to_string());
@@ -930,7 +930,7 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
             continue;
         }
 
-        if parts.first().map_or(false, |&t| t != "SPEAKER") {
+        if parts.first().is_some_and(|&t| t != "SPEAKER") {
             debug!(
                 "[RTTM Parse] Skipping non-SPEAKER line {}: '{}'",
                 line_number, line

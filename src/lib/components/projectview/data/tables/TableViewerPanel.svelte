@@ -3218,6 +3218,18 @@
           // Insert relative to the last real data column
           const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
           insertColumn(lastRealCol, 'after');
+        },
+        cellMouseEnter: (e, cell) => {
+          tabulatorInstance.element.classList.add('harvey-add-field-hovering');
+        },
+        cellMouseLeave: (e, cell) => {
+          tabulatorInstance.element.classList.remove('harvey-add-field-hovering');
+        },
+        headerMouseEnter: (e, col) => {
+          tabulatorInstance.element.classList.add('harvey-add-field-hovering');
+        },
+        headerMouseLeave: (e, col) => {
+          tabulatorInstance.element.classList.remove('harvey-add-field-hovering');
         }
       });
     }
@@ -5215,6 +5227,7 @@
     font-weight: bold;
     color: #555;
     border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd; /* Move horizontal border from row to cell */
     padding: 0 !important;
     text-align: center; /* Center the number */
   }
@@ -5231,19 +5244,14 @@
     background-color: #1f2937;
     color: #9ca3af;
     border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
   }
   :global(html.dark .tabulator-row:hover .tabulator-row-number-column) {
     background-color: #374151 !important;
   }
 
-  :global(.add-column-header) {
-    border-left: 1px dashed #3b82f6 !important;
-    background-color: rgba(59, 130, 246, 0.05) !important;
-  }
-  :global(html.dark .add-column-header) {
-    border-left: 1px dashed #3b82f6 !important;
-    background-color: rgba(59, 130, 246, 0.1) !important;
-  }
+  /* Legacy add-column-header styles removed as they are consolidated into harvey-pseudo-col */
+
 
   .toolbar button.mini-toolbar-button {
     @apply p-1 rounded inline-flex items-center justify-center
@@ -5307,8 +5315,18 @@
     overflow: hidden;
     word-break: break-word;
     border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd; /* Moved from row to cell */
     min-height: 38px; /* Ensures blank inserted rows exactly match text-filled rows (padding + line height) */
   }
+  /* Suppress row borders at the row level to control them at the cell level */
+  :global(.tabulator-row) {
+    border-bottom: none !important;
+  }
+  :global(html.dark .tabulator-cell) {
+    border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
+  }
+
 
   /* Fix Tabulator Star Formatter SVG stacking */
   :global(.tabulator-cell svg) {
@@ -5340,19 +5358,8 @@
     color: #111827 !important;
   }
 
-  /* Ensure the Add Field column doesn't inherit row highlight backgrounds */
-  :global(.tabulator-row .tabulator-cell.add-column-header) {
-    background-color: white !important;
-  }
-  :global(html.dark .tabulator-row .tabulator-cell.add-column-header) {
-    background-color: #030712 !important; /* gray-950 */
-  }
-  :global(.tabulator-row:hover .tabulator-cell.add-column-header) {
-    background-color: #f9fafb !important; /* gray-50 */
-  }
-  :global(html.dark .tabulator-row:hover .tabulator-cell.add-column-header) {
-    background-color: #111827 !important; /* gray-900 */
-  }
+  /* Redundant add-column-header cell styles removed */
+
 
   :global(.search-match-highlight) {
     background-color: #ffdd77;
@@ -5452,31 +5459,49 @@
 
   /* Virtual Pseudo-Column/Row Styling */
   :global(.harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.05) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.4) !important;
+    /* Use an opaque background to mask row borders for a "merged" look */
+    background-color: #f8fbff !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
     transition: background-color 0.15s ease-in-out;
   }
   :global(html.dark .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.6) !important;
+    background-color: #0d1222 !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
   }
-  /* Hide cells under the Add Field column and style as one long rectangle */
+  /* Hide cells under the Add Field column and style as one continuous vertical bar */
   :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
-    border: none !important;
-    background-color: rgba(59, 130, 246, 0.05) !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    background-color: #f8fbff !important; 
     cursor: pointer !important;
     color: transparent !important;
+    position: relative;
+    z-index: 10;
   }
   :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
-    border: none !important;
+    background-color: #0d1222 !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-top: none !important;
+    border-bottom: none !important;
   }
-  :global(.tabulator-row:hover .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
+  :global(.harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #f0f7ff !important;
   }
-  :global(html.dark .tabulator-row:hover .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.15) !important;
+  :global(html.dark .harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #111a33 !important;
   }
+  :global(.harvey-add-field-hovering .harvey-pseudo-col) {
+    background-color: #f0f7ff !important;
+  }
+  :global(html.dark .harvey-add-field-hovering .harvey-pseudo-col) {
+    background-color: #111a33 !important;
+  }
+
 
   :global(.harvey-pseudo-row) {
     background-color: transparent !important;

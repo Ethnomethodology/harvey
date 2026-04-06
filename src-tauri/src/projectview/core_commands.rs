@@ -89,7 +89,7 @@ pub async fn create_new_group(
         Ok(path) => path,
         Err(e) => {
             error!("[CMD] create_new_group - Failed to get DB path: {}", e);
-            return Err(format!("Failed to get database path: {}", e.to_string()));
+            return Err(format!("Failed to get database path: {}", e));
         }
     };
 
@@ -97,7 +97,7 @@ pub async fn create_new_group(
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] create_new_group - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e.to_string()));
+            return Err(format!("Failed to open database: {}", e));
         }
     };
 
@@ -353,7 +353,7 @@ pub async fn update_group_details(
         &conn,
         &project_id,
         &group_id,
-        &name.trim(),
+        name.trim(),
         description_ref,
     ) {
         Ok(rows_affected) => {
@@ -426,7 +426,7 @@ pub async fn get_groups_for_file_asset(
                 "[CMD] get_groups_for_file_asset - Failed to get DB path: {}",
                 e
             );
-            return Err(format!("Failed to get database path: {}", e.to_string()));
+            return Err(format!("Failed to get database path: {}", e));
         }
     };
 
@@ -434,7 +434,7 @@ pub async fn get_groups_for_file_asset(
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] get_groups_for_file_asset - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e.to_string()));
+            return Err(format!("Failed to open database: {}", e));
         }
     };
 
@@ -491,7 +491,7 @@ pub async fn remove_file_from_group(
                 "[CMD] remove_file_from_group - Failed to get DB path: {}",
                 e
             );
-            return Err(format!("Failed to get database path: {}", e.to_string()));
+            return Err(format!("Failed to get database path: {}", e));
         }
     };
 
@@ -499,7 +499,7 @@ pub async fn remove_file_from_group(
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] remove_file_from_group - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e.to_string()));
+            return Err(format!("Failed to open database: {}", e));
         }
     };
 
@@ -668,7 +668,7 @@ pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, St
         Ok(path) => path,
         Err(e) => {
             error!("[CMD] get_project_groups - Failed to get DB path: {}", e);
-            return Err(format!("Failed to get database path: {}", e.to_string()));
+            return Err(format!("Failed to get database path: {}", e));
         }
     };
 
@@ -676,7 +676,7 @@ pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, St
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] get_project_groups - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e.to_string()));
+            return Err(format!("Failed to open database: {}", e));
         }
     };
 
@@ -735,7 +735,7 @@ pub async fn add_file_to_existing_group(
                 "[CMD] add_file_to_existing_group - Failed to get DB path: {}",
                 e
             );
-            return Err(format!("Failed to get database path: {}", e.to_string()));
+            return Err(format!("Failed to get database path: {}", e));
         }
     };
 
@@ -746,7 +746,7 @@ pub async fn add_file_to_existing_group(
                 "[CMD] add_file_to_existing_group - Failed to open DB: {}",
                 e
             );
-            return Err(format!("Failed to open database: {}", e.to_string()));
+            return Err(format!("Failed to open database: {}", e));
         }
     };
 
@@ -1107,7 +1107,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     for entry in entries.filter_map(Result::ok) {
                         let path = entry.path();
                         if path.is_file() && path.extension().unwrap_or_default() == "json" {
-                            if let Ok(rel_path_buf) = path.strip_prefix(&project_base_dir) {
+                            if let Ok(rel_path_buf) = path.strip_prefix(project_base_dir) {
                                 let rel_path_str =
                                     rel_path_buf.to_string_lossy().replace("\\", "/");
                                 if !media_entry
@@ -1337,7 +1337,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                 name: doc_file_name,
                 path: doc_file_canonical,
                 relative_path: doc_entry.relative_path.clone().replace("\\", "/"),
-                file_type: file_type,
+                file_type,
                 is_directory: false,
                 parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, DOCS_DIR)
                     .replace("\\", "/"),
@@ -1536,7 +1536,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                             &project_id_sync,
                             &t_file_meta,
                             &t_rel_path,
-                            &t_file_type,
+                            t_file_type,
                             None,
                         );
                     }
@@ -2405,11 +2405,11 @@ pub async fn delete_project_item(
                     .and_then(|p| p.parent())
                     .map(|p| p.to_string_lossy().replace("\\", "/"))
                     .unwrap_or_default();
-                if !stem_dir_rel_path.is_empty() {
-                    if project_data.remove_media_by_stem_dir(&stem_dir_rel_path) {
-                        info!("[Backend Delete] Cleaned up XML media entry for non-existent stem dir '{}'.", stem_dir_rel_path);
-                        xml_changed = true;
-                    }
+                if !stem_dir_rel_path.is_empty()
+                    && project_data.remove_media_by_stem_dir(&stem_dir_rel_path)
+                {
+                    info!("[Backend Delete] Cleaned up XML media entry for non-existent stem dir '{}'.", stem_dir_rel_path);
+                    xml_changed = true;
                 }
             }
             "audio_transcript" | "video_transcript" => {
@@ -2591,7 +2591,7 @@ pub async fn delete_project_item(
                     let mut rel = None;
                     if let Ok(xml_content) = fs::read_to_string(&xml_path_buf) {
                         if let Ok(project_data) = serde_json::from_str::<ProjectXml>(&xml_content) {
-                            if let Some(entry) = project_data.find_media(&media_stem) {
+                            if let Some(entry) = project_data.find_media(media_stem) {
                                 // Extract the folder from relative_path, e.g. "harvey_files/Audios/Stem/media/file.wav" -> "harvey_files/Audios/Stem"
                                 let rel_path = Path::new(&entry.relative_path);
                                 if let Some(parent) = rel_path.parent().and_then(|p| p.parent()) {
@@ -2631,7 +2631,7 @@ pub async fn delete_project_item(
                 if let Ok(project_data) = serde_json::from_str::<ProjectXml>(
                     &fs::read_to_string(&xml_path_buf).unwrap_or_default(),
                 ) {
-                    if let Some(media_entry) = project_data.find_media(&media_stem) {
+                    if let Some(media_entry) = project_data.find_media(media_stem) {
                         for transcript in &media_entry.transcripts {
                             if let Err(e) = delete_annotations_from_db(
                                 &project_id_for_db,
@@ -2688,7 +2688,7 @@ pub async fn delete_project_item(
                     warn!("[Backend Delete] Media stem directory {} not found. Assuming already deleted. Cleaning up XML.", media_stem_dir_path.display());
                     let mut project_data: ProjectXml =
                         serde_json::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-                    if project_data.remove_media(&media_stem) {
+                    if project_data.remove_media(media_stem) {
                         save_project_xml(&xml_path_buf, &project_data)?;
                         info!("[Backend Delete] XML media entry removed during cleanup.");
                     }
@@ -3600,14 +3600,14 @@ pub async fn rename_project_item(
 
             // Check if no effective change
             if *old_transcript_file_abs_path == new_transcript_file_path_in_old_folder
-                && old_transcript_folder_abs_path == &new_transcript_folder_abs_path
+                && old_transcript_folder_abs_path == new_transcript_folder_abs_path
             {
                 info!("[Backend Rename] Imported transcript name and folder name are effectively unchanged. No action needed.");
                 return Ok(item_path);
             }
 
             // Check for conflicts
-            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path
+            if old_transcript_folder_abs_path != new_transcript_folder_abs_path
                 && new_transcript_folder_abs_path.exists()
             {
                 return Err(CommandError::from(format!("A folder named '{}' already exists for imported transcripts. Cannot rename folder.", new_transcript_stem_str)));
@@ -3658,7 +3658,7 @@ pub async fn rename_project_item(
                 new_transcript_file_path_in_old_folder.clone();
 
             // 2. Rename the folder (if stem changes)
-            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path {
+            if old_transcript_folder_abs_path != new_transcript_folder_abs_path {
                 info!(
                     "[Backend Rename] Renaming imported transcript folder {} -> {}",
                     old_transcript_folder_abs_path.display(),
@@ -3697,11 +3697,11 @@ pub async fn rename_project_item(
                 old_transcript_relative_path,      // old key
                 &new_relative_path_for_xml_and_db, // new key
                 &final_new_transcript_file_abs_path.to_string_lossy(), // new full file_path field value
-                &new_transcript_filename_with_ext_str,                 // new file_name field value
+                new_transcript_filename_with_ext_str,                  // new file_name field value
             ) {
                 warn!("[Backend Rename] Failed to rename/update asset metadata in DB for project_id {}, imported transcript {} -> {}: {}. File system changes were successful. Attempting to revert FS changes.", project_id_for_db, old_transcript_relative_path, new_relative_path_for_xml_and_db, e);
                 // Attempt to revert FS operations (best effort)
-                if old_transcript_folder_abs_path != &new_transcript_folder_abs_path
+                if old_transcript_folder_abs_path != new_transcript_folder_abs_path
                     && new_transcript_folder_abs_path.exists()
                 {
                     // if folder was renamed

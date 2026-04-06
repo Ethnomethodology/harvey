@@ -117,15 +117,14 @@ pub async fn check_config_status<R: Runtime>(
     // --- Conditional Heavy Checks (Only if currently false) ---
     // If they are false, we try to verify them once. If they are true, we trust the lightweight checks above.
 
-    if !python_libs_installed {
-        if check_python_libraries_installed(app_handle.clone())
+    if !python_libs_installed
+        && check_python_libraries_installed(app_handle.clone())
             .await
             .unwrap_or(false)
-        {
-            python_libs_installed = true;
-            config.verification_status.python_libraries_verified = true;
-            config_changed = true;
-        }
+    {
+        python_libs_installed = true;
+        config.verification_status.python_libraries_verified = true;
+        config_changed = true;
     }
 
     if python_libs_installed {
@@ -170,15 +169,15 @@ pub async fn check_config_status<R: Runtime>(
         }
     }
 
-    if !diarization_model_downloaded && python_libs_installed {
-        if check_diarization_model_access(app_handle.clone())
+    if !diarization_model_downloaded
+        && python_libs_installed
+        && check_diarization_model_access(app_handle.clone())
             .await
             .unwrap_or(false)
-        {
-            diarization_model_downloaded = true;
-            config.verification_status.diarization_model_verified = true;
-            config_changed = true;
-        }
+    {
+        diarization_model_downloaded = true;
+        config.verification_status.diarization_model_verified = true;
+        config_changed = true;
     }
 
     // --- Finalize ---

@@ -938,26 +938,24 @@ fn load_xlsx_data(
         } else {
             vec![]
         }
-    } else {
-        if let Some(first_row) = all_rows.first() {
-            let num_columns = first_row.len();
-            (0..num_columns)
-                .map(|i| {
-                    let mut col_name = String::new();
-                    let mut n = i;
-                    loop {
-                        col_name.insert(0, (b'A' + (n % 26) as u8) as char);
-                        if n < 26 {
-                            break;
-                        }
-                        n = n / 26 - 1;
+    } else if let Some(first_row) = all_rows.first() {
+        let num_columns = first_row.len();
+        (0..num_columns)
+            .map(|i| {
+                let mut col_name = String::new();
+                let mut n = i;
+                loop {
+                    col_name.insert(0, (b'A' + (n % 26) as u8) as char);
+                    if n < 26 {
+                        break;
                     }
-                    col_name
-                })
-                .collect()
-        } else {
-            vec![]
-        }
+                    n = n / 26 - 1;
+                }
+                col_name
+            })
+            .collect()
+    } else {
+        vec![]
     };
 
     debug!("[load_xlsx_data] Headers: {:?}", headers);
@@ -1046,7 +1044,7 @@ pub async fn save_table_data(
     }
 
     let final_headers = if headers.is_empty() {
-        if let Some(first_row) = table_data.get(0).and_then(|v| v.as_object()) {
+        if let Some(first_row) = table_data.first().and_then(|v| v.as_object()) {
             first_row.keys().cloned().collect::<Vec<String>>()
         } else {
             vec![]

@@ -362,7 +362,7 @@ pub async fn get_base_asset_for_attachment(
         "%{}%",
         norm_rel_target
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or(&norm_rel_target)
     );
 

@@ -370,7 +370,7 @@ fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, Comman
 }
 
 fn parse_ts(ts_str: &str) -> Result<f64, String> {
-    let parts: Vec<&str> = ts_str.split(|c| c == ':' || c == ',' || c == '.').collect();
+    let parts: Vec<&str> = ts_str.split([':', ',', '.']).collect();
     if parts.len() == 4 {
         // hh:mm:ss:ms
         let h: f64 = parts[0].parse().map_err(|_| "h".to_string())?;

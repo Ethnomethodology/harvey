@@ -319,7 +319,7 @@ async fn translate_file_command<R: Runtime>(
 
                 TranslationJobCompletedPayload {
                     job_id: job_id_clone,
-                    status: status,
+                    status,
                     original_transcript_path: path,
                     new_transcript_path: None,
                     error_message: Some(err_msg),
@@ -494,7 +494,7 @@ async fn run_translation_process<R: Runtime>(
                         row.get("children")
                             .and_then(|c| c.as_array())
                             .and_then(|cells| cells.get(3))
-                            .map(|cell| extract_plain_text_from_lexical(cell))
+                            .map(extract_plain_text_from_lexical)
                     })
                     .collect();
             }

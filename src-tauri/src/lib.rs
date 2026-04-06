@@ -1,6 +1,6 @@
 // src-tauri/src/lib.rs
 use dashmap::DashMap;
-use log; // Added log import
+// Added log import
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::Emitter;
