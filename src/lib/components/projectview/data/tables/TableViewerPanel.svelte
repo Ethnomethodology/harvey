@@ -1314,7 +1314,9 @@
           row[newName] = '';
         });
         const columns = tabulatorInstance.getColumns();
-        let orderedHeaders = columns.filter((c) => c.getField()).map((c) => c.getField());
+        let orderedHeaders = columns
+          .filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col')
+          .map((c) => c.getField());
         if (newFieldTargetColumn) {
           const targetField = newFieldTargetColumn.getField();
           const index = orderedHeaders.indexOf(targetField);
@@ -1453,8 +1455,9 @@
   async function insertRow(row, position) {
     const newRowData = {};
     tabulatorInstance.getColumns().forEach((column) => {
-      if (column.getField()) {
-        newRowData[column.getField()] = '';
+      const field = column.getField();
+      if (field && field !== 'harvey_pseudo_add_col') {
+        newRowData[field] = '';
       }
     });
 
@@ -1596,7 +1599,9 @@
     if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
 
     let currentHighlights = get(project).currentTableHighlights || [];
-    const orderedColumns = tabulatorInstance.getColumns().filter((c) => c.getField());
+    const orderedColumns = tabulatorInstance
+      .getColumns()
+      .filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col');
 
     cellsToModify.forEach((cell) => {
       const row = cell.getRow();
@@ -1633,7 +1638,7 @@
     if (!tabulatorInstance || !rows || rows.length === 0) return;
 
     let currentHighlights = get(project).currentTableHighlights || [];
-    const orderedColumns = tabulatorInstance.getColumns();
+    const orderedColumns = tabulatorInstance.getColumns().filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col');
 
     // 1. Identify rows to highlight
     const newIndices = rows.map((r) => r.getData().harvey_internal_id);
@@ -3708,7 +3713,7 @@
     const data = tabulatorInstance.getData();
     const headers = tabulatorInstance
       .getColumns()
-      .filter((c) => c.getField())
+      .filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col')
       .map((c) => c.getField());
 
     // Deep copy data to avoid mutating the original
