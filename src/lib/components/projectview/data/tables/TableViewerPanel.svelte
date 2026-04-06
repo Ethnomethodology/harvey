@@ -3202,6 +3202,7 @@
         maxWidth: 55,
         resizable: false,
         editable: false,
+        selectable: false,
         headerSort: false,
         tooltip: false,
         cssClass: 'harvey-pseudo-col px-0!',
@@ -5481,6 +5482,15 @@
     color: transparent !important;
     position: relative;
     z-index: 10;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:focus),
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:active) {
+    outline: none !important;
+    box-shadow: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
   }
   :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
     background-color: #0d1222 !important; 
