@@ -3191,7 +3191,7 @@
       dataColumnDefs.push({
         title: `
           <div class="flex items-center justify-center w-full h-[52px] group cursor-pointer" title="Add New Field">
-            <div class="flex items-center justify-center w-[32px] h-[32px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
+            <div class="flex items-center justify-center w-[28px] h-[28px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             </div>
           </div>
@@ -3966,7 +3966,7 @@
             rowElement.innerHTML = `
               <div class="w-full flex items-center group cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all border-t border-gray-200 dark:border-gray-700" style="height: 36px;">
                 <div class="w-[55px] min-w-[55px] h-full flex items-center justify-center bg-blue-50/30 dark:bg-blue-900/20 border-r border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center justify-center w-[24px] h-[24px] rounded-md bg-blue-50/50 dark:bg-blue-900/40 border border-dashed border-blue-400/30 dark:border-blue-500/30 text-blue-500">
+                  <div class="flex items-center justify-center w-[24px] h-[24px] rounded-md bg-blue-50/50 dark:bg-blue-900/40 text-blue-500">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   </div>
                 </div>
