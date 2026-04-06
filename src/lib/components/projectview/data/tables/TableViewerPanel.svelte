@@ -3205,9 +3205,12 @@
         headerSort: false,
         tooltip: false,
         cssClass: 'harvey-pseudo-col px-0!',
-        cellClick: (e) => {
+        cellClick: (e, cell) => {
           e.preventDefault();
           e.stopPropagation();
+          const cols = tabulatorInstance.getColumns();
+          const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
+          insertColumn(lastRealCol, 'after');
         },
         headerClick: (e) => {
           e.preventDefault();
@@ -5464,7 +5467,7 @@
     border-left: 1px dashed rgba(59, 130, 246, 0.3) !important;
     border-right: 1px dashed rgba(59, 130, 246, 0.3) !important;
     background-color: rgba(59, 130, 246, 0.05) !important;
-    pointer-events: none !important;
+    cursor: pointer !important;
     color: transparent !important;
   }
   :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
