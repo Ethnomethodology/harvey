@@ -1367,9 +1367,9 @@
               }
             }
           });
-          const orderedHeaders = tabulatorInstance
-            .getColumns()
-            .filter((c) => c.getField())
+          const columns = tabulatorInstance.getColumns();
+          let orderedHeaders = columns
+            .filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col')
             .map((c) => c.getField());
           await saveTableData(tablePath, data, orderedHeaders);
         }
@@ -3187,23 +3187,23 @@
     }
 
     // Append the pseudo-add-field column at the very end
-    if (mediaEditorStore.isLexicalEditMode && !isViewingDocument) {
-      dataColumnDefs.push({
-        title: `
-          <div class="flex items-center justify-center w-full h-[52px] group cursor-pointer" title="Add New Field">
-            <div class="flex items-center justify-center w-[32px] h-[32px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </div>
+    // We always append it now to keep it in the instance, but control visibility via reactivity
+    dataColumnDefs.push({
+      title: `
+        <div class="flex items-center justify-center w-full h-[52px] group cursor-pointer" title="Add New Field">
+          <div class="flex items-center justify-center w-[32px] h-[32px] rounded-md bg-blue-50/30 dark:bg-blue-900/20 group-hover:bg-blue-100/50 dark:group-hover:bg-blue-900/40 transition-all text-blue-500">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           </div>
-        `,
-        field: 'harvey_pseudo_add_col',
-        width: 55,
-        minWidth: 55,
+        </div>
+      `,
+      field: 'harvey_pseudo_add_col',
+      visible: mediaEditorStore.isLexicalEditMode && !isViewingDocument,
+      width: 55,
+      minWidth: 55,
         maxWidth: 55,
         resizable: false,
         editable: false,
         headerSort: false,
-        tooltip: false,
         cssClass: 'harvey-pseudo-col px-0!',
         cellClick: (e, cell) => {
           e.preventDefault();
@@ -3218,9 +3218,12 @@
           // Insert relative to the last real data column
           const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
           insertColumn(lastRealCol, 'after');
-        }
+        },
+        headerMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
+        headerMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering'),
+        cellMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
+        cellMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering')
       });
-    }
 
     return dataColumnDefs;
   }
@@ -3964,14 +3967,16 @@
           if (data.harvey_internal_id === 'harvey_pseudo_add_row') {
             rowElement.classList.add('harvey-pseudo-row');
             rowElement.innerHTML = `
-              <div class="w-full flex items-center group cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all border-t border-gray-200 dark:border-gray-700" style="height: 36px;">
-                <div class="w-[55px] min-w-[55px] h-full flex items-center justify-center bg-blue-50/30 dark:bg-blue-900/20 border-r border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center justify-center w-[24px] h-[24px] rounded-md bg-blue-50/50 dark:bg-blue-900/40 border border-dashed border-blue-400/30 dark:border-blue-500/30 text-blue-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <div class="w-full flex items-center h-[38px] group cursor-pointer bg-[#f8fbff] dark:bg-[#0d1222] transition-colors duration-150 border border-dotted border-blue-500/50 dark:border-blue-400/50 hover:bg-[#f0f7ff] dark:hover:bg-[#111a33]">
+                <!-- Gutter Plus Button (50px) -->
+                <div class="w-[50px] min-w-[50px] h-full flex items-center justify-center border-r border-dotted border-blue-500/20 dark:border-blue-400/20">
+                  <div class="flex items-center justify-center w-[24px] h-[24px] rounded-md bg-blue-50/20 dark:bg-blue-900/10 text-blue-500 group-hover:bg-blue-100/40 dark:group-hover:bg-blue-900/20 transition-all duration-150">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   </div>
                 </div>
-                <div class="flex-1 h-full px-4 flex items-center">
-                  <div class="w-full border border-dashed border-blue-400/30 dark:border-blue-600/30 rounded-md py-0.5 flex items-center justify-center text-blue-500 font-medium bg-blue-50/20 dark:bg-blue-900/5 group-hover:bg-blue-100/30 dark:group-hover:bg-blue-900/10 transition-all text-xs">
+                <!-- Main Label (Centered) -->
+                <div class="flex-grow flex items-center justify-center h-full transition-colors duration-150">
+                  <div class="text-blue-600/70 dark:text-blue-400/70 font-bold uppercase text-[10px] tracking-[0.1em] select-none">
                     Add New Entry
                   </div>
                 </div>
@@ -4472,6 +4477,22 @@
 
   $effect(() => {
     if (mediaEditorStore.isLexicalEditMode !== undefined && tabulatorInstance && tableReady) {
+      const isEditMode = mediaEditorStore.isLexicalEditMode;
+      
+      // 1. Reactive Column Visibility
+      if (isEditMode) {
+        tabulatorInstance.showColumn('harvey_pseudo_add_col');
+      } else {
+        tabulatorInstance.hideColumn('harvey_pseudo_add_col');
+      }
+
+      // 2. Reactive Row Visibility (Filter)
+      if (!isEditMode) {
+        tabulatorInstance.addFilter('harvey_internal_id', '!=', 'harvey_pseudo_add_row'); 
+      } else {
+        tabulatorInstance.removeFilter('harvey_internal_id', '!=', 'harvey_pseudo_add_row');
+      }
+
       // Small timeout to ensure DOM is settled after a state change or initial build
       setTimeout(updateTableDimensions, 100);
     }
@@ -5452,34 +5473,94 @@
 
   /* Virtual Pseudo-Column/Row Styling */
   :global(.harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.05) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.4) !important;
+    /* Use an opaque background to mask row borders for a "merged" look */
+    background-color: #f8fbff !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    border-top: 1px dotted rgba(59, 130, 246, 0.5) !important;
     transition: background-color 0.15s ease-in-out;
   }
-  :global(html.dark .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.6) !important;
+  :global(.harvey-pseudo-col:hover) {
+    background-color: #f0f7ff !important;
   }
-  /* Hide cells under the Add Field column and style as one long rectangle */
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(html.dark .harvey-pseudo-col) {
+    background-color: #0d1222 !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-top: 1px dotted rgba(59, 130, 246, 0.6) !important;
+  }
+  :global(html.dark .harvey-pseudo-col:hover) {
+    background-color: #111a33 !important;
+  }
+  
+  /* Global Tabulator border shift: move bottom border from row to cells */
+  /* to allow us to hide it for specific columns (Add Field) */
+  :global(.tabulator-row) {
+    border-bottom: none !important;
+  }
+  :global(.tabulator-row .tabulator-cell) {
+    border-bottom: 1px solid #e5e7eb !important; /* Standard gray-200 */
+  }
+  :global(html.dark .tabulator-row .tabulator-cell) {
+    border-bottom: 1px solid #374151 !important; /* Standard gray-700 */
+  }
+  /* Hide cells under the Add Field column and style as one continuous vertical bar without cell borders */
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-focus),
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-selected),
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:focus),
+  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:active),
+  :global(.tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
     border-top: none !important;
     border-bottom: none !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.3) !important;
-    border-right: 1px dashed rgba(59, 130, 246, 0.3) !important;
-    background-color: rgba(59, 130, 246, 0.05) !important;
+    outline: none !important;
+    /* Use box-shadow as a secondary "border killer" to mask row lines */
+    box-shadow: 0 0 0 1px #f8fbff !important; 
+    background-color: #f8fbff !important; 
     cursor: pointer !important;
     color: transparent !important;
+    position: relative;
+    z-index: 10;
   }
-  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
-    border-left: 1px dashed rgba(59, 130, 246, 0.5) !important;
-    border-right: 1px dashed rgba(59, 130, 246, 0.5) !important;
+  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
+  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-focus),
+  :global(html.dark .tabulator-row :hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
+  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-selected) {
+    background-color: #0d1222 !important; 
+    border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    outline: none !important;
+    box-shadow: 0 0 0 1px #0d1222 !important; 
   }
-  :global(.tabulator-row:hover .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.1) !important;
+  
+  /* Unified Bottom Border for the whole column - applied to the last row's pseudo-cell */
+  :global(.tabulator-row:last-of-type .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    border-bottom: 1px dotted rgba(59, 130, 246, 0.5) !important;
   }
-  :global(html.dark .tabulator-row:hover .harvey-pseudo-col) {
-    background-color: rgba(59, 130, 246, 0.15) !important;
+  :global(html.dark .tabulator-row:last-of-type .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    border-bottom: 1px dotted rgba(59, 130, 246, 0.6) !important;
+  }
+  :global(.harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #f0f7ff !important;
+  }
+  :global(html.dark .harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #111a33 !important;
+  }
+  :global(.harvey-add-field-hovering .harvey-pseudo-col) {
+    background-color: #f0f7ff !important;
+  }
+  :global(html.dark .harvey-add-field-hovering .harvey-pseudo-col) {
+    background-color: #111a33 !important;
+  }
+  :global(.tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #f0f7ff !important;
+  }
+  :global(html.dark .tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+    background-color: #111a33 !important;
   }
 
   :global(.harvey-pseudo-row) {
