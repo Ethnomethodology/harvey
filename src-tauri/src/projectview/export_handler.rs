@@ -471,7 +471,7 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
                     .get("displayValue")
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
-                html.push_str(&encode_text(display_value).to_string());
+                html.push_str(encode_text(display_value).as_ref());
             }
             "code" => {
                 html.push_str("<table class=\"codeblock\" custom-style=\"codeblock\" border=\"1\" style=\"width: 100%; border-collapse: collapse; border: 1px solid black;\"><tbody><tr><td style=\"font-family: monospace; background-color: #f5f5f5; padding: 10px; border: 1px solid black;\">");
@@ -492,7 +492,7 @@ fn append_node_html(node: &Value, html: &mut String, inside_code_block: bool) {
                         append_node_html(child, html, inside_code_block);
                     }
                 } else if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
-                    html.push_str(&encode_text(text_content).to_string());
+                    html.push_str(encode_text(text_content).as_ref());
                 }
             }
         }
@@ -603,7 +603,7 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         base_dir.display()
     );
 
-    if let Err(e) = ensure_base_asset_dirs(&base_dir) {
+    if let Err(e) = ensure_base_asset_dirs(base_dir) {
         error!(
             "[export_transcript_to_docx] Failed to ensure base asset dirs: {:?}",
             e
@@ -907,7 +907,7 @@ pub async fn export_transcript_to_docx<R: Runtime>(
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("transcript_export");
-    let temp_html_path = get_unique_temp_path_for_conversion(&base_dir, stem, "html")?;
+    let temp_html_path = get_unique_temp_path_for_conversion(base_dir, stem, "html")?;
     debug!(
         "[export_transcript_to_docx] Writing generated HTML table to temp file: {}",
         temp_html_path.display()
@@ -1085,7 +1085,7 @@ fn extract_plain_text_from_lexical_value(value: &Value, text_buffer: &mut String
                 }
             }
             "linebreak" => {
-                text_buffer.push_str("\n");
+                text_buffer.push('\n');
             }
             "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table"
             | "tablecell" | "tablerow" => {
@@ -1127,15 +1127,15 @@ fn extract_plain_text_from_lexical_value(value: &Value, text_buffer: &mut String
             if i < children.len() - 1 {
                 if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
                     if child_node_type == "paragraph" && !text_buffer.ends_with('\n') {
-                        text_buffer.push_str("\n");
+                        text_buffer.push('\n');
                     }
                 }
             }
         }
     } else if value.is_string()
-        && value.as_str().map_or(false, |s| {
-            s.trim().is_empty() || (!s.contains("{") && !s.contains("}"))
-        })
+        && value
+            .as_str()
+            .is_some_and(|s| s.trim().is_empty() || (!s.contains("{") && !s.contains("}")))
     {
         // If it's a plain string (likely already plain text or empty)
         text_buffer.push_str(value.as_str().unwrap_or(""));
@@ -1200,7 +1200,7 @@ pub async fn export_transcript_to_srt(
     for (index, segment) in segments.iter().enumerate() {
         // Changed _index to index
         srt_content.push_str(&(index + 1).to_string()); // Use index here
-        srt_content.push_str("\n");
+        srt_content.push('\n');
 
         let start_ts = format_srt_timestamp(segment.start_time);
         let end_ts = format_srt_timestamp(segment.end_time);
@@ -1360,10 +1360,10 @@ fn lexical_to_vtt_cue_text(
                                 if !val.is_empty() && val != "transparent" {
                                     has_highlight = true;
                                 }
-                            } else if part_trimmed.starts_with("text-decoration:") {
-                                if part_trimmed.contains("line-through") {
-                                    has_strikethrough = true;
-                                }
+                            } else if part_trimmed.starts_with("text-decoration:")
+                                && part_trimmed.contains("line-through")
+                            {
+                                has_strikethrough = true;
                             }
                         }
                     }
@@ -1421,7 +1421,7 @@ fn lexical_to_vtt_cue_text(
             }
 
             "linebreak" => {
-                vtt_text_buffer.push_str("\n");
+                vtt_text_buffer.push('\n');
             }
             "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table"
             | "tablecell" | "tablerow" => {
@@ -1449,7 +1449,7 @@ fn lexical_to_vtt_cue_text(
             if i < children.len() - 1 {
                 if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
                     if child_node_type == "paragraph" && !vtt_text_buffer.ends_with('\n') {
-                        vtt_text_buffer.push_str("\n");
+                        vtt_text_buffer.push('\n');
                     }
                 }
             }
@@ -1609,8 +1609,8 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                             prefix.push_str("**");
                             suffix.push_str("**");
                         } else if is_italic {
-                            prefix.push_str("*");
-                            suffix.push_str("*");
+                            prefix.push('*');
+                            suffix.push('*');
                         }
 
                         // Escape Markdown special characters in the text_content itself
@@ -1629,25 +1629,25 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                 }
             }
             "linebreak" => {
-                buffer.push_str("\n");
+                buffer.push('\n');
             }
             "paragraph" | "heading" | "listitem" | "quote" => {
                 // Treat these as block elements
                 if !buffer.is_empty() && !buffer.ends_with("\n\n") && !buffer.ends_with("\n") {
                     // Ensure space before new block unless already newlined
-                    buffer.push_str("\n"); // Start new paragraph on a new line
+                    buffer.push('\n'); // Start new paragraph on a new line
                 }
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         lexical_to_markdown_text_node(child, buffer);
                     }
                 }
-                buffer.push_str("\n"); // End paragraph with a newline, will become double with next paragraph's start
+                buffer.push('\n'); // End paragraph with a newline, will become double with next paragraph's start
             }
             "link" => {
                 // Format as Markdown link: [text](url)
                 let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("");
-                buffer.push_str("[");
+                buffer.push('[');
                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
                     for child in children {
                         lexical_to_markdown_text_node(child, buffer); // Process link text
@@ -1676,15 +1676,15 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                                 .get("children")
                                 .and_then(|c| c.as_array())
                                 .map_or(1, |c| c.len());
-                            buffer.push_str("|");
+                            buffer.push('|');
                             for _ in 0..num_cells {
                                 buffer.push_str("---|");
                             }
-                            buffer.push_str("\n");
+                            buffer.push('\n');
                         }
                     }
                 }
-                buffer.push_str("\n");
+                buffer.push('\n');
             }
             "tablerow" => {
                 buffer.push_str("| ");
@@ -1693,7 +1693,7 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                         lexical_to_markdown_text_node(child, buffer);
                     }
                 }
-                buffer.push_str("\n");
+                buffer.push('\n');
             }
             "tablecell" => {
                 let mut cell_buffer = String::new();
@@ -1740,7 +1740,7 @@ fn get_markdown_text_from_lexical_string(text_content: &str) -> String {
                             // Add double newline between top-level blocks from Lexical root
                             if !buffer.ends_with("\n\n") {
                                 if buffer.ends_with("\n") {
-                                    buffer.push_str("\n");
+                                    buffer.push('\n');
                                 } else {
                                     buffer.push_str("\n\n");
                                 }
@@ -1853,7 +1853,7 @@ pub async fn export_transcript_to_markdown(
             "Layout2" => {
                 // | No | Timestamp | then | Speaker | Text |
                 if segment_number > 1 {
-                    md_content.push_str("\n");
+                    md_content.push('\n');
                 } // Use segment_number for condition
                 md_content.push_str(&format!(
                     "**Segment {}** - {}\n\n",
@@ -1869,7 +1869,7 @@ pub async fn export_transcript_to_markdown(
             "Layout3" => {
                 // | Timestamp Speaker | then | Text |
                 if segment_number > 1 {
-                    md_content.push_str("\n");
+                    md_content.push('\n');
                 } // Use segment_number for condition
                 md_content.push_str(&format!(
                     "**{} {}**\n\n",
@@ -1890,14 +1890,14 @@ pub async fn export_transcript_to_markdown(
             "Layout5" => {
                 // | Text |
                 if segment_number > 1 {
-                    md_content.push_str("\n");
+                    md_content.push('\n');
                 } // Use segment_number for condition
                 md_content.push_str(&format!("{}\n", markdown_text));
             }
             _ => {
                 // Fallback to Layout2
                 if segment_number > 1 {
-                    md_content.push_str("\n");
+                    md_content.push('\n');
                 } // Use segment_number for condition
                 md_content.push_str(&format!(
                     "**Segment {}** - {}\n\n",
@@ -1912,7 +1912,7 @@ pub async fn export_transcript_to_markdown(
             }
         }
         if current_layout != "Layout1" && current_layout != "Layout4" {
-            md_content.push_str("\n");
+            md_content.push('\n');
         }
     }
 
@@ -2105,15 +2105,13 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String) {
                         lexical_node_to_ass_tags(child, ass_buffer);
 
                         if node_type == "tablecell" {
-                            ass_buffer.push_str(" ");
+                            ass_buffer.push(' ');
                         }
                     }
                 }
 
-                if node_type == "tablerow" || node_type == "list" {
-                    if !ass_buffer.is_empty() {
-                        ass_buffer.push_str("\\N");
-                    }
+                if (node_type == "tablerow" || node_type == "list") && !ass_buffer.is_empty() {
+                    ass_buffer.push_str("\\N");
                 }
             }
 
@@ -2212,7 +2210,7 @@ pub async fn export_transcript_to_ass(
     ass_content.push_str("PlayResY: 288\n"); // Common default
     ass_content.push_str("WrapStyle: 0\n"); // Smart wrapping, respecting explicit line breaks
     ass_content.push_str("ScaledBorderAndShadow: yes\n");
-    ass_content.push_str("\n");
+    ass_content.push('\n');
 
     // [V4+ Styles]
     ass_content.push_str("[V4+ Styles]\n");
@@ -2230,7 +2228,7 @@ pub async fn export_transcript_to_ass(
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
     );
 
-    for (_index, segment) in segments.iter().enumerate() {
+    for segment in segments.iter() {
         // Changed to _index
         let start_ts = format_ass_timestamp(segment.start_time);
         let end_ts = format_ass_timestamp(segment.end_time);

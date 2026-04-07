@@ -71,7 +71,7 @@ pub async fn start_faster_whisper_live<R: Runtime>(
 
     let is_running_clone = state.is_running.clone();
     let app_handle_clone = app_handle.clone();
-    let start_time_clone = state.start_time.lock().await.clone();
+    let start_time_clone = *state.start_time.lock().await;
 
     tokio::spawn(async move {
         info!("[Faster-Whisper Live] Started listening to python stdout.");

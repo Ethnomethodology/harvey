@@ -15,7 +15,7 @@ fn get_token_path<R: Runtime>(app_handle: &AppHandle<R>) -> PathBuf {
 #[tauri::command]
 pub fn check_hf_auth_status<R: Runtime>(app_handle: AppHandle<R>) -> Result<bool, String> {
     let token_path = get_token_path(&app_handle);
-    Ok(token_path.exists() && fs::read_to_string(token_path).map_or(false, |s| !s.is_empty()))
+    Ok(token_path.exists() && fs::read_to_string(token_path).is_ok_and(|s| !s.is_empty()))
 }
 
 #[tauri::command]

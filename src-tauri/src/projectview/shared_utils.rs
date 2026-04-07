@@ -391,8 +391,11 @@ pub fn truncate_filename_stem(original_filename: &str, max_stem_len: usize) -> S
     ) {
         (Some(s), Some(e)) => {
             // Handles cases like "archive.tar.gz" -> stem: "archive.tar", ext: "gz"
-            if original_filename.ends_with(&format!(".{}.{}", s.split('.').last().unwrap_or(""), e))
-            {
+            if original_filename.ends_with(&format!(
+                ".{}.{}",
+                s.split('.').next_back().unwrap_or(""),
+                e
+            )) {
                 (s, e)
             } else {
                 let stem_part = path

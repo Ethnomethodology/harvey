@@ -207,7 +207,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(
     );
     let mut clean_command = shell.sidecar("micromamba")?;
     clean_command = clean_command
-        .args(&["clean", "--all", "-y"])
+        .args(["clean", "--all", "-y"])
         .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
 
     if cfg!(target_os = "windows") {
@@ -375,7 +375,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(
         "install",
         "--no-cache-dir",
     ];
-    pip_args.extend(pip_packages.iter().map(|s| *s));
+    pip_args.extend(pip_packages.iter().copied());
 
     let mut pip_command = shell.sidecar("micromamba")?;
     pip_command = pip_command
@@ -563,7 +563,7 @@ async fn run_python_import_check<R: Runtime>(
     let command = get_python_command(app)?;
 
     let output = command
-        .args(&["-c", &format!("import {}", import_name)])
+        .args(["-c", &format!("import {}", import_name)])
         .output()
         .await?;
 
@@ -589,7 +589,7 @@ pub async fn install_pip_packages<R: Runtime>(
         "install",
         "--no-cache-dir",
     ];
-    pip_args.extend(packages.iter().map(|s| *s));
+    pip_args.extend(packages.iter().copied());
 
     let mut pip_command = shell.sidecar("micromamba")?;
     pip_command = pip_command

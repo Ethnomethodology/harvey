@@ -260,7 +260,7 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "type": "tablecell",
             "version": 1,
             "headerState": 0,
-            "width": col_widths_json.get(0).cloned().unwrap_or(JsonValue::Null),
+            "width": col_widths_json.first().cloned().unwrap_or(JsonValue::Null),
             "children": [
                 create_lexical_paragraph_json_value(&format!("{}", index + 1))
             ]
@@ -557,7 +557,7 @@ pub async fn trim_media<R: Runtime>(
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = serde_json::from_str(&xml_content)?;
 
-    let original_entry = project_data.find_media(&original_media_identifier).cloned();
+    let original_entry = project_data.find_media(original_media_identifier).cloned();
     let (original_speakers, _original_transcripts, is_video_source) = match original_entry {
         Some(entry) => {
             let path_lower = entry.relative_path.to_lowercase();
@@ -995,7 +995,7 @@ pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<()
         }
 
         // Handle translated_names, defaulting to Some(Vec::new()) if None is provided from payload
-        let validated_translated_names = payload.translated_names.clone().unwrap_or_else(Vec::new);
+        let validated_translated_names = payload.translated_names.clone().unwrap_or_default();
         // Further validation for translated_names (e.g., trimming, ensuring uniqueness if needed) can be added here
         // For now, directly use the provided or defaulted Vec.
 
@@ -1175,7 +1175,7 @@ pub async fn save_transcript_json(
         .parent()
         .and_then(|p| p.parent())
         .map(|p| p.to_string_lossy().replace("\\", "/"))
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_else(String::new);
 
     info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}', Stem Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path, stem_rel_path);
 
@@ -1306,8 +1306,7 @@ pub(crate) fn prepare_output_paths(
         "[prepare_output_paths][{}] Media path: {}, Translate: {}",
         job_id, media_path_str, translate_to_english
     );
-    let media_path =
-        PathBuf::from(media_path_str.replace("/", &std::path::MAIN_SEPARATOR.to_string()));
+    let media_path = PathBuf::from(media_path_str.replace("/", std::path::MAIN_SEPARATOR_STR));
 
     let media_filename_stem = media_path
         .file_stem()
@@ -2153,7 +2152,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
 
     info!("[FFmpeg CMD][{}] Starting FFmpeg conversion...", job_id);
     // Using emit_progress_cmd from this file
-    let _ = emit_progress_cmd(
+    emit_progress_cmd(
         app_handle,
         job_id,
         2.0,
@@ -2871,7 +2870,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     let options = TranscriptionOptions {
         language_code: Some(language_code.to_string()),
         model_path: model_path.to_string(),
-        output_dir: output_dir,
+        output_dir,
         translate: is_translation_pass,
         initial_prompt,
         hotwords,
@@ -3736,7 +3735,7 @@ pub async fn start_live_transcription(
 
     let is_running_clone = state.is_running.clone();
     let app_handle_clone = app_handle.clone();
-    let start_time_clone = state.start_time.lock().await.clone();
+    let start_time_clone = *state.start_time.lock().await;
 
     tokio::spawn(async move {
         info!("[Live Transcription] Started listening to whisper-stream sidecar.");
@@ -3852,14 +3851,12 @@ pub async fn stop_live_transcription(
             let mut candidate_paths: Vec<PathBuf> = Vec::new();
             match fs::read_dir(&attachments_dir) {
                 Ok(entries) => {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            let path = entry.path();
-                            if path.is_file() {
-                                if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
-                                    if extension.eq_ignore_ascii_case("wav") {
-                                        candidate_paths.push(path);
-                                    }
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
+                                if extension.eq_ignore_ascii_case("wav") {
+                                    candidate_paths.push(path);
                                 }
                             }
                         }

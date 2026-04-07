@@ -245,7 +245,8 @@
     // Fallback for cases where rangeSelected doesn't fire
     setTimeout(() => {
       const ranges = tabulatorInstance.getRanges();
-      const isHeaderClick = e.target.closest('.tabulator-header') || e.target.closest('.tabulator-col');
+      const isHeaderClick =
+        e.target.closest('.tabulator-header') || e.target.closest('.tabulator-col');
 
       if (ranges && ranges.length > 0 && !showTableModifyToolbar && !isHeaderClick) {
         const range = ranges[0];
@@ -316,7 +317,7 @@
   // Reactive mapping of store highlights to Tabulator styles
   $effect(() => {
     const highlights = $project.currentTableHighlights; // Primary dependency
-    
+
     untrack(() => {
       if (!highlights) {
         tableStyles = { rowStyles: {}, cellStyles: {} };
@@ -969,7 +970,9 @@
     const updatedData = tabulatorInstance.getData();
 
     // Filter out the pseudo-row before saving data to the backend
-    const filteredData = updatedData.filter(row => row.harvey_internal_id !== 'harvey_pseudo_add_row');
+    const filteredData = updatedData.filter(
+      (row) => row.harvey_internal_id !== 'harvey_pseudo_add_row'
+    );
     const dataToSave = JSON.parse(JSON.stringify(filteredData));
     dataToSave.forEach((row) => {
       delete row.harvey_internal_id;
@@ -1139,7 +1142,7 @@
   let newFieldTargetColumn = $state(null);
 
   function openFieldEditor(column) {
-    const field = column.getField();
+    const field = column.getField() || '';
     editingFieldData = {
       name: field,
       schema: tableSchema[field] || { type: 'Text', subType: 'Small Text' }
@@ -1642,7 +1645,9 @@
     if (!tabulatorInstance || !rows || rows.length === 0) return;
 
     let currentHighlights = get(project).currentTableHighlights || [];
-    const orderedColumns = tabulatorInstance.getColumns().filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col');
+    const orderedColumns = tabulatorInstance
+      .getColumns()
+      .filter((c) => c.getField() && c.getField() !== 'harvey_pseudo_add_col');
 
     // 1. Identify rows to highlight
     const newIndices = rows.map((r) => r.getData().harvey_internal_id);
@@ -3209,35 +3214,34 @@
       visible: mediaEditorStore.isLexicalEditMode && !isViewingDocument,
       width: 55,
       minWidth: 55,
-        maxWidth: 55,
-        resizable: false,
-        editable: false,
-        headerSort: false,
-        cssClass: 'harvey-pseudo-col px-0!',
-        cellClick: (e, cell) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const cols = tabulatorInstance.getColumns();
-          const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
-          insertColumn(lastRealCol, 'after');
-        },
-        headerClick: (e) => {
-          e.preventDefault();
-          const cols = tabulatorInstance.getColumns();
-          // Insert relative to the last real data column
-          const lastRealCol = cols.filter(c => c.getField() !== 'harvey_pseudo_add_col').pop();
-          insertColumn(lastRealCol, 'after');
-        },
-        headerMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
-        headerMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering'),
-        cellMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
-        cellMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering')
-      });
+      maxWidth: 55,
+      resizable: false,
+      editable: false,
+      selectable: false,
+      headerSort: false,
+      cssClass: 'harvey-pseudo-col px-0!',
+      cellClick: (e, cell) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const cols = tabulatorInstance.getColumns();
+        const lastRealCol = cols.filter((c) => c.getField() !== 'harvey_pseudo_add_col').pop();
+        insertColumn(lastRealCol, 'after');
+      },
+      headerClick: (e) => {
+        e.preventDefault();
+        const cols = tabulatorInstance.getColumns();
+        // Insert relative to the last real data column
+        const lastRealCol = cols.filter((c) => c.getField() !== 'harvey_pseudo_add_col').pop();
+        insertColumn(lastRealCol, 'after');
+      },
+      headerMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
+      headerMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering'),
+      cellMouseEnter: () => tableContainer?.classList.add('harvey-add-field-hovering'),
+      cellMouseLeave: () => tableContainer?.classList.remove('harvey-add-field-hovering')
+    });
 
     return dataColumnDefs;
   }
-
-
 
   export function openChart(chart) {
     if (!tabulatorInstance) return;
@@ -3815,7 +3819,7 @@
   async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
     if (newHasHeaders !== null) hasHeaders = newHasHeaders;
     if (!pathForTable || !tableContainer) return;
-    
+
     // Safety check: Don't reload if already loading this path, OR if already loaded (unless forced)
     if (isLoading) return;
     if (!force && tabulatorInstance && currentLoadedPath === pathForTable) return;
@@ -3959,12 +3963,15 @@
       const generatedColumns = await generateColumns(
         tableData,
         tableHeaders,
-            savedLayout,
-            tableSchema
+        savedLayout,
+        tableSchema
       );
 
       tabulatorInstance = new Tabulator(tableContainer, {
-        data: [...JSON.parse(JSON.stringify(tableData)), { harvey_internal_id: 'harvey_pseudo_add_row' }],
+        data: [
+          ...JSON.parse(JSON.stringify(tableData)),
+          { harvey_internal_id: 'harvey_pseudo_add_row' }
+        ],
         reactiveData: false,
         index: 'harvey_internal_id',
         clipboard: 'copy',
@@ -3994,7 +4001,9 @@
             rowElement.onclick = (e) => {
               e.preventDefault();
               const rows = tabulatorInstance.getRows();
-              const lastRealRow = rows.filter(r => r.getData().harvey_internal_id !== 'harvey_pseudo_add_row').pop();
+              const lastRealRow = rows
+                .filter((r) => r.getData().harvey_internal_id !== 'harvey_pseudo_add_row')
+                .pop();
               insertRow(lastRealRow, 'after');
             };
             return; // Don't apply regular row styles to the pseudo-row
@@ -4017,8 +4026,8 @@
           setTimeout(updateTableDimensions, 100);
         },
         langs: {
-          "default": {
-            "columns": generatedColumns
+          default: {
+            columns: generatedColumns
           }
         },
         layout: 'fitColumns',
@@ -4035,7 +4044,7 @@
         rangeSelected: (range) => {
           const rows = range.getRows();
           const totalRows = tabulatorInstance.getRows().length;
-          
+
           // Only show for specific ranges, not whole-column selections
           if (rows && rows.length > 1 && rows.length < totalRows - 1) {
             selectedRows = rows;
@@ -4490,7 +4499,7 @@
   $effect(() => {
     if (mediaEditorStore.isLexicalEditMode !== undefined && tabulatorInstance && tableReady) {
       const isEditMode = mediaEditorStore.isLexicalEditMode;
-      
+
       // 1. Reactive Column Visibility
       if (isEditMode) {
         tabulatorInstance.showColumn('harvey_pseudo_add_col');
@@ -4500,7 +4509,7 @@
 
       // 2. Reactive Row Visibility (Filter)
       if (!isEditMode) {
-        tabulatorInstance.addFilter('harvey_internal_id', '!=', 'harvey_pseudo_add_row'); 
+        tabulatorInstance.addFilter('harvey_internal_id', '!=', 'harvey_pseudo_add_row');
       } else {
         tabulatorInstance.removeFilter('harvey_internal_id', '!=', 'harvey_pseudo_add_row');
       }
@@ -4922,7 +4931,7 @@
               <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
                 {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
               </DropdownItem>
-          </Dropdown>
+            </Dropdown>
           </div>
         </div>
       {/if}
@@ -5248,6 +5257,7 @@
     font-weight: bold;
     color: #555;
     border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd; /* Move horizontal border from row to cell */
     padding: 0 !important;
     text-align: center; /* Center the number */
   }
@@ -5264,19 +5274,13 @@
     background-color: #1f2937;
     color: #9ca3af;
     border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
   }
   :global(html.dark .tabulator-row:hover .tabulator-row-number-column) {
     background-color: #374151 !important;
   }
 
-  :global(.add-column-header) {
-    border-left: 1px dashed #3b82f6 !important;
-    background-color: rgba(59, 130, 246, 0.05) !important;
-  }
-  :global(html.dark .add-column-header) {
-    border-left: 1px dashed #3b82f6 !important;
-    background-color: rgba(59, 130, 246, 0.1) !important;
-  }
+  /* Legacy add-column-header styles removed as they are consolidated into harvey-pseudo-col */
 
   .toolbar button.mini-toolbar-button {
     @apply p-1 rounded inline-flex items-center justify-center
@@ -5340,7 +5344,16 @@
     overflow: hidden;
     word-break: break-word;
     border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd; /* Moved from row to cell */
     min-height: 38px; /* Ensures blank inserted rows exactly match text-filled rows (padding + line height) */
+  }
+  /* Suppress row borders at the row level to control them at the cell level */
+  :global(.tabulator-row) {
+    border-bottom: none !important;
+  }
+  :global(html.dark .tabulator-cell) {
+    border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
   }
 
   /* Fix Tabulator Star Formatter SVG stacking */
@@ -5373,19 +5386,7 @@
     color: #111827 !important;
   }
 
-  /* Ensure the Add Field column doesn't inherit row highlight backgrounds */
-  :global(.tabulator-row .tabulator-cell.add-column-header) {
-    background-color: white !important;
-  }
-  :global(html.dark .tabulator-row .tabulator-cell.add-column-header) {
-    background-color: #030712 !important; /* gray-950 */
-  }
-  :global(.tabulator-row:hover .tabulator-cell.add-column-header) {
-    background-color: #f9fafb !important; /* gray-50 */
-  }
-  :global(html.dark .tabulator-row:hover .tabulator-cell.add-column-header) {
-    background-color: #111827 !important; /* gray-900 */
-  }
+  /* Redundant add-column-header cell styles removed */
 
   :global(.search-match-highlight) {
     background-color: #ffdd77;
@@ -5464,7 +5465,9 @@
     display: flex !important;
     align-items: center !important;
   }
-  :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder) {
+  :global(
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder
+  ) {
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
@@ -5472,7 +5475,14 @@
     display: flex !important;
     align-items: center !important;
   }
-  :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder .tabulator-col-title) {
+  :global(
+    .tabulator
+      .tabulator-header
+      .tabulator-col
+      .tabulator-col-content
+      .tabulator-col-title-holder
+      .tabulator-col-title
+  ) {
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
@@ -5486,7 +5496,7 @@
   /* Virtual Pseudo-Column/Row Styling */
   :global(.harvey-pseudo-col) {
     /* Use an opaque background to mask row borders for a "merged" look */
-    background-color: #f8fbff !important; 
+    background-color: #f8fbff !important;
     border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
     border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
     border-top: 1px dotted rgba(59, 130, 246, 0.5) !important;
@@ -5496,7 +5506,7 @@
     background-color: #f0f7ff !important;
   }
   :global(html.dark .harvey-pseudo-col) {
-    background-color: #0d1222 !important; 
+    background-color: #0d1222 !important;
     border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
     border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
     border-top: 1px dotted rgba(59, 130, 246, 0.6) !important;
@@ -5504,7 +5514,7 @@
   :global(html.dark .harvey-pseudo-col:hover) {
     background-color: #111a33 !important;
   }
-  
+
   /* Global Tabulator border shift: move bottom border from row to cells */
   /* to allow us to hide it for specific columns (Add Field) */
   :global(.tabulator-row) {
@@ -5517,49 +5527,63 @@
     border-bottom: 1px solid #374151 !important; /* Standard gray-700 */
   }
   /* Hide cells under the Add Field column and style as one continuous vertical bar without cell borders */
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-focus),
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-selected),
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:focus),
-  :global(.tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]:active),
-  :global(.tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(.tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col']),
+  :global(.tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col'].tabulator-focus),
+  :global(
+    .tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col'].tabulator-selected
+  ),
+  :global(.tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col']:focus),
+  :global(.tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col']:active),
+  :global(.tabulator-row:hover .tabulator-cell[tabulator-field='harvey_pseudo_add_col']) {
     border-left: 1px dotted rgba(59, 130, 246, 0.5) !important;
     border-right: 1px dotted rgba(59, 130, 246, 0.5) !important;
     border-top: none !important;
     border-bottom: none !important;
     outline: none !important;
     /* Use box-shadow as a secondary "border killer" to mask row lines */
-    box-shadow: 0 0 0 1px #f8fbff !important; 
-    background-color: #f8fbff !important; 
+    box-shadow: 0 0 0 1px #f8fbff !important;
+    background-color: #f8fbff !important;
     cursor: pointer !important;
     color: transparent !important;
     position: relative;
     z-index: 10;
   }
-  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
-  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-focus),
-  :global(html.dark .tabulator-row :hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]),
-  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field="harvey_pseudo_add_col"].tabulator-selected) {
-    background-color: #0d1222 !important; 
+  :global(html.dark .tabulator-row .tabulator-cell[tabulator-field='harvey_pseudo_add_col']),
+  :global(
+    html.dark
+      .tabulator-row
+      .tabulator-cell[tabulator-field='harvey_pseudo_add_col'].tabulator-focus
+  ),
+  :global(html.dark .tabulator-row :hover .tabulator-cell[tabulator-field='harvey_pseudo_add_col']),
+  :global(
+    html.dark
+      .tabulator-row
+      .tabulator-cell[tabulator-field='harvey_pseudo_add_col'].tabulator-selected
+  ) {
+    background-color: #0d1222 !important;
     border-left: 1px dotted rgba(59, 130, 246, 0.6) !important;
     border-right: 1px dotted rgba(59, 130, 246, 0.6) !important;
     border-top: none !important;
     border-bottom: none !important;
     outline: none !important;
-    box-shadow: 0 0 0 1px #0d1222 !important; 
+    box-shadow: 0 0 0 1px #0d1222 !important;
   }
-  
+
   /* Unified Bottom Border for the whole column - applied to the last row's pseudo-cell */
-  :global(.tabulator-row:last-of-type .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(.tabulator-row:last-of-type .tabulator-cell[tabulator-field='harvey_pseudo_add_col']) {
     border-bottom: 1px dotted rgba(59, 130, 246, 0.5) !important;
   }
-  :global(html.dark .tabulator-row:last-of-type .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(
+    html.dark .tabulator-row:last-of-type .tabulator-cell[tabulator-field='harvey_pseudo_add_col']
+  ) {
     border-bottom: 1px dotted rgba(59, 130, 246, 0.6) !important;
   }
-  :global(.harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(.harvey-add-field-hovering .tabulator-cell[tabulator-field='harvey_pseudo_add_col']) {
     background-color: #f0f7ff !important;
   }
-  :global(html.dark .harvey-add-field-hovering .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(
+    html.dark .harvey-add-field-hovering .tabulator-cell[tabulator-field='harvey_pseudo_add_col']
+  ) {
     background-color: #111a33 !important;
   }
   :global(.harvey-add-field-hovering .harvey-pseudo-col) {
@@ -5568,10 +5592,16 @@
   :global(html.dark .harvey-add-field-hovering .harvey-pseudo-col) {
     background-color: #111a33 !important;
   }
-  :global(.tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(.tabulator-row:hover .tabulator-cell[tabulator-field='harvey_pseudo_add_col']) {
     background-color: #f0f7ff !important;
   }
-  :global(html.dark .tabulator-row:hover .tabulator-cell[tabulator-field="harvey_pseudo_add_col"]) {
+  :global(html.dark .tabulator-row:hover .tabulator-cell[tabulator-field='harvey_pseudo_add_col']) {
+    background-color: #111a33 !important;
+  }
+  :global(.harvey-add-field-hovering .harvey-pseudo-col) {
+    background-color: #f0f7ff !important;
+  }
+  :global(html.dark .harvey-add-field-hovering .harvey-pseudo-col) {
     background-color: #111a33 !important;
   }
 
@@ -5589,8 +5619,8 @@
   :global(.harvey-pseudo-row .tabulator-cell),
   :global(.harvey-pseudo-row.tabulator-selected),
   :global(.harvey-pseudo-row.tabulator-focus),
-  :global(.harvey-pseudo-row [class*="tabulator-range"]),
-  :global(.harvey-pseudo-row [class*="selection"]) {
+  :global(.harvey-pseudo-row [class*='tabulator-range']),
+  :global(.harvey-pseudo-row [class*='selection']) {
     border-left: none !important;
     border-right: none !important;
     outline: none !important;

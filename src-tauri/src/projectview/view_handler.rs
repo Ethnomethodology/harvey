@@ -506,7 +506,7 @@ pub async fn generate_survey_documents(
                 .to_string();
             // Register each attachment individually
             let attachment_metadata = FileMetadata {
-                file_name: file_name,
+                file_name,
                 file_path: new_file.clone(),
                 last_modified: chrono::Utc::now().to_rfc3339(),
                 file_type: "document".to_string(), // Lexical docs are 'document'
