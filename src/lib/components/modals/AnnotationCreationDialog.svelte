@@ -205,6 +205,7 @@
       if (
         event.target.closest('.ui-dropdown-menu') ||
         event.target.closest('.lexical-modal') ||
+        event.target.closest('.lexical-dropdown-menu') ||
         event.target.closest('.multi-select-dropdown') ||
         event.target.closest('.group-multi-select-dropdown')
       )
