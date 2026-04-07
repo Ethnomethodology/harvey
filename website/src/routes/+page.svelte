@@ -404,17 +404,17 @@
               </p>
             </div>
 
-            <!-- Feature Visual Area -->
-            <div class="flex-1 relative mt-4 h-full min-h-[400px]">
+            <!-- Feature Visual Area - Uniform Black Frame (Bezel) -->
+            <div class="flex-1 relative mt-12 flex items-center justify-center">
               <!-- Backdrop Glow -->
               <div class="absolute -inset-10 bg-gradient-to-br {slide.gradient} rounded-[3rem] blur-3xl opacity-30 transition-all duration-1000"></div>
               
-              <!-- Clean Image/Illustration Container -->
+              <!-- The Uniform Frame: Slightly more compact with consistent p-4 bezel -->
               <div
-                class="relative h-full w-full rounded-[2rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] border border-slate-800 bg-slate-950"
+                class="relative bg-slate-950 p-4 rounded-[1.5rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-slate-800/50 w-full max-w-[720px] mx-auto transition-all duration-500"
               >
-                <!-- Content -->
-                <div class="absolute inset-0">
+                <!-- Content Container ensures object-contain respects p-6 -->
+                <div class="relative w-full aspect-video">
                   {#if currentSlide === 0}
                     <img
                       src="{base}/transcription-preview.png" 
