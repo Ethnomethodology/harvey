@@ -1205,7 +1205,10 @@
       item.file_type === 'table' ||
       item.file_type === 'image' ||
       item.file_type === 'standalone_transcript' ||
-      item.file_type === 'media'
+      item.file_type === 'standalone-transcript' ||
+      item.file_type === 'media' ||
+      item.file_type === 'audio' ||
+      item.file_type === 'video'
     ) {
       let viewType = item.file_type;
       if (item.file_type === 'doc') viewType = 'documents';

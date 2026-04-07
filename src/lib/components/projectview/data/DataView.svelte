@@ -336,6 +336,8 @@
     if (
       originalDocType === 'audio_transcript' ||
       originalDocType === 'video_transcript' ||
+      originalDocType === 'audio-transcript' ||
+      originalDocType === 'video-transcript' ||
       typeForView === 'media'
     ) {
       console.debug(

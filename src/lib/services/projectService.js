@@ -4358,12 +4358,13 @@ export async function getProjectAssetsForLink(projectId) {
       audio: 'Audios',
       video: 'Videos',
       'audio-transcript': 'Audio Transcripts',
+      'audio_transcript': 'Audio Transcripts',
       'video-transcript': 'Video Transcripts',
-      transcript: 'Transcripts',
-      standalone_transcript: 'Transcripts',
+      'video_transcript': 'Video Transcripts',
+      'standalone-transcript': 'Transcripts',
+      'standalone_transcript': 'Transcripts',
       document: 'Documents',
       doc: 'Documents',
-      pdf: 'Documents',
       table: 'Tables',
       image: 'Images'
     };

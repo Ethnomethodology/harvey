@@ -782,17 +782,20 @@
       originalDocType = category === 'Audios' ? 'audio' : 'video';
     } else if (category === 'Audio Transcripts' || category === 'Video Transcripts') {
       viewType = 'media';
-      originalDocType = category === 'Audio Transcripts' ? 'audio_transcript' : 'video_transcript';
+      originalDocType = category === 'Audio Transcripts' ? 'audio-transcript' : 'video-transcript';
     } else if (category === 'Transcripts') {
       // Standalone transcripts (imported)
-      viewType = 'transcript';
-      originalDocType = 'standalone_transcript';
+      viewType = 'standalone_transcript';
+      originalDocType = 'standalone-transcript';
     } else if (category === 'Tables') {
-      viewType = 'table';
-      originalDocType = 'csv';
+      viewType = 'tables';
+      originalDocType = 'table';
     } else if (category === 'Images') {
-      viewType = 'image';
+      viewType = 'images';
       originalDocType = 'image';
+    } else if (category === 'Documents') {
+      viewType = 'documents';
+      originalDocType = 'document';
     }
 
     const proj = get(project);

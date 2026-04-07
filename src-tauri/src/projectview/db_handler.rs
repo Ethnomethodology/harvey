@@ -242,38 +242,18 @@ pub fn init_db() -> Result<(), CommandError> {
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN thumbnail BLOB", [])?;
     }
 
-    // Always check for records with missing file_type and attempt to backfill
-    let mut stmt_check_nulls = conn
-        .prepare("SELECT COUNT(*) FROM asset_metadata WHERE file_type IS NULL OR file_type = ''")?;
-    let null_count: i64 = stmt_check_nulls.query_row([], |row| row.get(0))?;
-    if null_count > 0 {
-        info!(
-            "[DB] Found {} records with missing file_type. Backfilling...",
-            null_count
-        );
-        if let Err(e) = backfill_file_type(&conn) {
-            error!("[DB] Failed to backfill file_type: {}", e);
-        }
-    } else {
-        // Even if no nulls, run the correction logic to fix mislabeled video transcripts
-        debug!("[DB] Running file_type correction for video transcripts...");
-        let correction_sql = "
-            UPDATE asset_metadata SET file_type = 'video-transcript'
-            WHERE file_type = 'audio-transcript'
-            AND EXISTS (
-                SELECT 1 FROM asset_metadata m
-                WHERE m.project_id = asset_metadata.project_id
-                  AND (m.file_type = 'video' OR m.asset_type = 'video' OR m.file_name LIKE '%.mp4' OR m.file_name LIKE '%.mov' OR m.file_name LIKE '%.avi')
-                  AND substr(REPLACE(m.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(m.asset_relative_path, '\\', '/'), 21), '/') - 1)
-                      = substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21, instr(substr(REPLACE(asset_metadata.asset_relative_path, '\\', '/'), 21), '/') - 1)
-                  AND (REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(m.asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%')
-            )
-            AND (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Media/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Audios/%' OR REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Videos/%');
-        ";
-        if let Err(e) = conn.execute(correction_sql, []) {
-            error!("[DB] Failed to run video-transcript correction: {}", e);
-        }
+    // Always run backfill/correction to normalize legacy underscore types and hyphenated types
+    info!("[DB] Running file_type normalization and backfill...");
+    if let Err(e) = backfill_file_type(&conn) {
+        error!("[DB] Failed to backfill/normalize file_type: {}", e);
     }
+
+    // Always check for and prune ghost assets (records in DB but file missing on disk)
+    info!("[DB] Checking for ghost assets to prune...");
+    if let Err(e) = prune_ghost_assets(&conn) {
+        error!("[DB] Failed to prune ghost assets: {}", e);
+    }
+
 
     // Check and add project_id column to asset_metadata if missing (for older schemas)
     // This simplified migration adds the column if it doesn't exist. It does not change PK for existing tables.
@@ -1065,35 +1045,40 @@ pub fn init_db() -> Result<(), CommandError> {
 fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     info!("[DB] Backfilling file_type column in asset_metadata table.");
 
-    // 1. Documents
+    // 1. Reset specific legacy types to NULL so they can be re-categorized correctly
+    // This handles the transition from underscore to hyphen (e.g. standalone_transcript -> standalone-transcript)
+    // and fixes mislabeled 'document' entries that are actually transcripts or media.
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'document'
-         WHERE (file_type IS NULL OR file_type = '')
-         AND (
-             asset_type IN ('document', 'doc')
-             OR file_name LIKE '%.pdf' OR file_name LIKE '%.docx' OR file_name LIKE '%.txt' OR file_name LIKE '%.rtf' OR file_name LIKE '%.md'
-             OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Documents/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Documents/attachments/%')
+        "UPDATE asset_metadata SET file_type = NULL
+         WHERE (
+            file_type = 'document' -- Reset documents to re-check if they are transcripts/media
+            OR file_type = 'standalone_transcript'
+            OR file_type = 'audio_transcript'
+            OR file_type = 'video_transcript'
+         )
+         OR (
+            file_name LIKE '%.docx' OR file_name LIKE '%.doc' OR file_name LIKE '%.md' OR file_name LIKE '%.rtf'
          )",
         []
     )?;
 
-    // 2. Tables
+    // 2. Standalone Transcripts (Imported)
     conn.execute(
-        "UPDATE asset_metadata SET file_type = 'table'
-         WHERE (file_type IS NULL OR file_type = '')
-         AND (asset_type = 'table' OR file_name LIKE '%.csv' OR file_name LIKE '%.xlsx')",
-        [],
-    )?;
-
-    // 3. Transcripts (Imported)
-    conn.execute(
-        "UPDATE asset_metadata SET file_type = 'transcript'
+        "UPDATE asset_metadata SET file_type = 'standalone-transcript'
          WHERE (file_type IS NULL OR file_type = '')
          AND (
              asset_type IN ('transcript', 'standalone_transcript')
              OR (REPLACE(asset_relative_path, '\\', '/') LIKE 'harvey_files/Transcripts/%' AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/attachments/%')
          )",
         []
+    )?;
+
+    // 3. Tables
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'table'
+         WHERE (file_type IS NULL OR file_type = '')
+         AND (asset_type = 'table' OR file_name LIKE '%.csv' OR file_name LIKE '%.xlsx')",
+        [],
     )?;
 
     // 4. Images
@@ -1129,7 +1114,6 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
     )?;
 
     // 7. Media - Transcripts (Generated)
-    // Heuristic: If it's in Media folder and asset_type is transcript-related or it's in a transcripts subfolder
     conn.execute(
         "UPDATE asset_metadata SET file_type = COALESCE((
             SELECT CASE
@@ -1170,7 +1154,22 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         []
     )?;
 
-    // 10. Correction for mislabeled Video Transcripts
+    // 10. Documents (Catch-all for remaining text files, excluding transcripts and media)
+    conn.execute(
+        "UPDATE asset_metadata SET file_type = 'document'
+         WHERE (file_type IS NULL OR file_type = '')
+         AND (
+             file_name LIKE '%.pdf' OR file_name LIKE '%.txt' OR file_name LIKE '%.json'
+             OR file_name LIKE '%.docx' OR file_name LIKE '%.doc' OR file_name LIKE '%.md' OR file_name LIKE '%.rtf'
+         )
+         AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Transcripts/%'
+         AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Media/%'
+         AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Audios/%'
+         AND REPLACE(asset_relative_path, '\\', '/') NOT LIKE 'harvey_files/Videos/%'",
+        []
+    )?;
+
+    // 11. Correction for mislabeled Video Transcripts
     // If it's already labeled as audio-transcript but its parent media is a video, correct it.
     // We handle all three prefixes (Media, Audios, Videos)
     for prefix in &["Media", "Audios", "Videos"] {
@@ -1196,9 +1195,45 @@ fn backfill_file_type(conn: &Connection) -> Result<(), CommandError> {
         )?;
     }
 
+
     info!("[DB] Finished backfilling file_type column.");
     Ok(())
 }
+
+fn prune_ghost_assets(conn: &Connection) -> Result<(), CommandError> {
+    let mut stmt =
+        conn.prepare("SELECT project_id, asset_relative_path, file_path FROM asset_metadata")?;
+    let assets_iter = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+
+    let mut to_delete = Vec::new();
+    for asset in assets_iter {
+        let (project_id, relative_path, abs_path) = asset?;
+        let path = std::path::Path::new(&abs_path);
+        if !path.exists() {
+            info!(
+                "[DB Prune] Found ghost asset: {} (relative: {}). Pruning from DB.",
+                abs_path, relative_path
+            );
+            to_delete.push((project_id, relative_path));
+        }
+    }
+
+    for (project_id, relative_path) in to_delete {
+        conn.execute(
+            "DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2",
+            params![project_id, relative_path],
+        )?;
+    }
+
+    Ok(())
+}
+
 
 // --- Group Functions ---
 
@@ -3862,7 +3897,7 @@ pub fn get_project_assets_for_link(
         "SELECT file_name, asset_relative_path, file_type
          FROM asset_metadata
          WHERE project_id = ?
-         AND (file_type NOT LIKE '%attachment%' OR file_type IS NULL)
+         AND file_type IN ('audio', 'video', 'document', 'table', 'image', 'standalone-transcript', 'audio-transcript', 'video-transcript')
          ORDER BY file_type, file_name",
     )?;
 
