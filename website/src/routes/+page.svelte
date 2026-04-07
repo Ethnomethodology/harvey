@@ -427,6 +427,12 @@
                       alt="Harvey Translation Interface"
                       class="w-full h-full object-contain"
                     />
+                  {:else if currentSlide === 2}
+                    <img
+                      src="{base}/model-management.png" 
+                      alt="Harvey Model Management Interface"
+                      class="w-full h-full object-contain"
+                    />
                   {:else}
                     <div class="flex flex-col items-center justify-center h-full text-center p-12 bg-gradient-to-br from-slate-900 to-slate-950">
                       <div class="relative mb-8">
