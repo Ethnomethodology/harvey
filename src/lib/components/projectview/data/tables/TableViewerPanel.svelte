@@ -3839,6 +3839,10 @@
 
     try {
       await loadTableViews(pathForTable);
+      // Ensure table highlights/styles are loaded directly by the table viewer component
+      // rather than relying on the HighlightsPanel, which may be unmounted.
+      await loadTableHighlights(pathForTable);
+
       // 1. Load Table Data
       const response = await loadTableData(pathForTable, hasHeaders);
       tableData = response.data;
