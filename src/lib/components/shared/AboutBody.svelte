@@ -48,7 +48,7 @@
   <blockquote
     class="border-l-4 border-blue-500 dark:border-blue-600 pl-4 italic text-gray-600 dark:text-gray-400 mt-8 text-lg"
   >
-    It's an application built <em>by researchers, for researchers</em>.
+    It's an application built <em>by researchers, for researchers</em>, using Vibe Coding to assess the viability of AI-assisted programming in research software development.
   </blockquote>
 
   <div class="pt-8 mt-8 border-t border-gray-100 dark:border-gray-800 flex items-center space-x-4">

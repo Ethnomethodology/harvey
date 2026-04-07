@@ -116,9 +116,11 @@
     <h1 class="text-4xl lg:text-6xl font-bold tracking-tight text-slate-900 mb-6">
         Qualitative Research, <span class="text-green-500">Reimagined.</span>
     </h1>
-    <p class="text-lg lg:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
+    <p class="text-lg lg:text-xl text-slate-600 max-w-2xl mx-auto mb-4 leading-relaxed">
         Harvey is an integrated desktop workspace for transcription, translation, and qualitative analysis.
-        Built by researchers, for researchers.
+    </p>
+    <p class="text-base lg:text-lg text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed italic">
+        It's an application built by researchers, for researchers, using Vibe Coding to assess the viability of AI-assisted programming in research software development.
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="#download" class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-lg shadow-green-200 hover:shadow-green-300 gap-2">
@@ -348,7 +350,7 @@
                         <div class="h-16 w-16 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-6">
                             <Github class="w-8 h-8" />
                         </div>
-                        <h3 class="text-2xl font-bold text-slate-900 mb-2">Build from Source</h3>
+                        <h3 class="text-2xl font-bold text-slate-900 mb-2">Build Harvey from Source</h3>
                         <p class="text-slate-600 mb-4 max-w-md">Use the automated build script to check dependencies and compile Harvey on your platform.</p>
                         <p class="text-sm text-slate-500 mb-8">For detailed build instructions, see the <a href="{base}/help/downloads" class="text-green-600 hover:underline">Help Center</a>.</p>
 
