@@ -201,27 +201,55 @@
 
   function handleClickOutside(event) {
     if (dialogElement && !dialogElement.contains(event.target)) {
-      // Don't close if clicking a dropdown menu or Lexical modal
+      // Use composedPath to reliably check for portaled elements even if they're unmounted
+      // or clicked via a deeply nested SVG element.
+      const path = event.composedPath ? event.composedPath() : [];
+      let isInsideDropdown = false;
+
+      for (const el of path) {
+        if (el && el.classList) {
+          if (
+            el.classList.contains('ui-dropdown-menu') ||
+            el.classList.contains('lexical-modal') ||
+            el.classList.contains('lexical-dropdown-menu') ||
+            el.classList.contains('multi-select-dropdown') ||
+            el.classList.contains('group-multi-select-dropdown')
+          ) {
+            isInsideDropdown = true;
+            break;
+          }
+        }
+      }
+
+      // Fallback to .closest if composedPath didn't catch it
       if (
-        event.target.closest('.ui-dropdown-menu') ||
-        event.target.closest('.lexical-modal') ||
-        event.target.closest('.lexical-dropdown-menu') ||
-        event.target.closest('.multi-select-dropdown') ||
-        event.target.closest('.group-multi-select-dropdown')
-      )
+        !isInsideDropdown &&
+        event.target &&
+        event.target.closest &&
+        (event.target.closest('.ui-dropdown-menu') ||
+          event.target.closest('.lexical-modal') ||
+          event.target.closest('.lexical-dropdown-menu') ||
+          event.target.closest('.multi-select-dropdown') ||
+          event.target.closest('.group-multi-select-dropdown'))
+      ) {
+        isInsideDropdown = true;
+      }
+
+      if (isInsideDropdown) {
         return;
+      }
       handleDone();
     }
   }
 
   onMount(() => {
     setTimeout(() => {
-      window.addEventListener('pointerdown', handleClickOutside, true);
+      window.addEventListener('mousedown', handleClickOutside, true);
     }, 100);
   });
 
   onDestroy(() => {
-    window.removeEventListener('pointerdown', handleClickOutside, true);
+    window.removeEventListener('mousedown', handleClickOutside, true);
   });
 
   const lexicalToolbarConfig = {
