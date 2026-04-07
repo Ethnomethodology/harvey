@@ -737,13 +737,11 @@
 
     currentEditorJson = event.detail.jsonString;
 
-    if (!editEnabled) {
-      // Auto-save read-mode highlight changes with debounce
-      clearTimeout(editorUpdateDebounceTimer);
-      editorUpdateDebounceTimer = setTimeout(() => {
-        commitCurrentSegmentEdits();
-      }, 500);
-    }
+    // Auto-save highlight/text changes with debounce
+    clearTimeout(editorUpdateDebounceTimer);
+    editorUpdateDebounceTimer = setTimeout(() => {
+      commitCurrentSegmentEdits();
+    }, 500);
   }
 
   // In dual mode, listen to secondary editor updates to trigger auto-save if in read mode
@@ -756,12 +754,10 @@
 
     currentEditorJsonSecondary = event.detail.jsonString;
 
-    if (!editEnabled) {
-      clearTimeout(editorUpdateDebounceTimer);
-      editorUpdateDebounceTimer = setTimeout(() => {
-        commitCurrentSegmentEdits();
-      }, 500);
-    }
+    clearTimeout(editorUpdateDebounceTimer);
+    editorUpdateDebounceTimer = setTimeout(() => {
+      commitCurrentSegmentEdits();
+    }, 500);
   }
 
   export function commitCurrentSegmentEdits() {

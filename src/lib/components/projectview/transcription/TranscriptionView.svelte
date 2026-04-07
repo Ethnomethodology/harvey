@@ -247,6 +247,7 @@
 
   export async function handleToggleEditMode() {
     if (panelEditModeActive) {
+      await handleSaveTranscript(true);
       mediaEditorStore.isLexicalEditMode = false;
     } else {
       mediaEditorStore.isLexicalEditMode = true;
