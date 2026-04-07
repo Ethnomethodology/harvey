@@ -16,13 +16,14 @@
     Settings,
     Edit3,
     Image,
-    Table,
-    Video,
     Share2,
-    FileText
+    FileText,
+    FileSpreadsheet,
+    Video,
+    Table
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
 
   let activeTab = 'windows';
   let isMac = false;
@@ -42,58 +43,79 @@
 
   // Carousel logic
   let currentSlide = 0;
+  let previousSlide = 0;
+  let progress = 0;
+  let lastUpdate = Date.now();
+  const SLIDE_DURATION = 6000;
+
   const slides = [
     {
       title: 'Transcription',
       description: 'Convert audio and video into text automatically using state-of-the-art local AI models. Perfect for interviews and focus groups.',
       icon: Mic,
-      color: 'blue'
+      color: 'blue',
+      gradient: 'from-blue-500/20 to-blue-600/5',
+      accent: 'bg-blue-500'
     },
     {
       title: 'Translation',
       description: 'Break language barriers effortlessly. Translate your qualitative data into English, maintaining nuanced meaning across languages.',
       icon: Languages,
-      color: 'purple'
+      color: 'purple',
+      gradient: 'from-purple-500/20 to-purple-600/5',
+      accent: 'bg-purple-500'
     },
     {
       title: 'Model Management',
       description: 'Choose from a variety of Whisper and translation models tailored to your hardware and accuracy needs.',
       icon: Settings,
-      color: 'green'
+      color: 'green',
+      gradient: 'from-green-500/20 to-green-600/5',
+      accent: 'bg-green-500'
     },
     {
       title: 'Rich Text Editor',
       description: 'Draft reports, edit transcripts, and keep your notes organized in a professional, integrated markdown workspace.',
       icon: Edit3,
-      color: 'amber'
+      color: 'amber',
+      gradient: 'from-amber-500/20 to-amber-600/5',
+      accent: 'bg-amber-500'
     },
     {
       title: 'Image Annotation',
       description: 'Work with visual data seamlessly. Annotate images and PDFs directly within the app to support your findings.',
       icon: Image,
-      color: 'rose'
+      color: 'rose',
+      gradient: 'from-rose-500/20 to-rose-600/5',
+      accent: 'bg-rose-500'
     },
     {
       title: 'Table Management',
       description: 'Manipulate structured data with ease. View and edit CSV and XLSX files without leaving your research environment.',
-      icon: Table,
-      color: 'emerald'
+      icon: FileSpreadsheet,
+      color: 'emerald',
+      gradient: 'from-emerald-500/20 to-emerald-600/5',
+      accent: 'bg-emerald-500'
     },
     {
       title: 'Media Sync',
       description: 'Navigate your transcripts instantly. Media playback stays perfectly synchronized with your text for effortless verification.',
       icon: Video,
-      color: 'indigo'
+      color: 'indigo',
+      gradient: 'from-indigo-500/20 to-indigo-600/5',
+      accent: 'bg-indigo-500'
     },
     {
       title: 'Flexible Export',
       description: 'Export your completed work to high-quality DOCX, CSV, or pure text formats, ready for publication or sharing.',
       icon: Share2,
-      color: 'slate'
+      color: 'slate',
+      gradient: 'from-slate-500/20 to-slate-600/5',
+      accent: 'bg-slate-500'
     }
   ];
 
-  let interval;
+  let rafHandle;
   onMount(async () => {
     if (typeof navigator !== 'undefined') {
       const platform = navigator.platform.toLowerCase();
@@ -138,29 +160,42 @@
       console.error('Failed to fetch latest release from GitHub:', error);
     }
 
-    interval = setInterval(() => {
-      nextSlide();
-    }, 5000);
+    // Smooth auto-rotate loop
+    const update = () => {
+      const now = Date.now();
+      const delta = now - lastUpdate;
+      lastUpdate = now;
+      
+      progress += (delta / SLIDE_DURATION) * 100;
+      if (progress >= 100) {
+        nextSlide();
+      }
+      rafHandle = requestAnimationFrame(update);
+    };
+    rafHandle = requestAnimationFrame(update);
   });
 
   onDestroy(() => {
-    clearInterval(interval);
+    if (rafHandle) cancelAnimationFrame(rafHandle);
   });
 
   function nextSlide() {
+    previousSlide = currentSlide;
     currentSlide = (currentSlide + 1) % slides.length;
+    progress = 0;
   }
 
   function prevSlide() {
+    previousSlide = currentSlide;
     currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+    progress = 0;
   }
 
   function goToSlide(index) {
+    if (index === currentSlide) return;
+    previousSlide = currentSlide;
     currentSlide = index;
-    if (interval) {
-      clearInterval(interval);
-      interval = setInterval(nextSlide, 5000);
-    }
+    progress = 0;
   }
 
   function setActiveTab(tab) {
@@ -279,7 +314,7 @@
 </section>
 
 <!-- App Showcase Carousel -->
-<section class="py-24 border-t border-slate-100 overflow-hidden">
+<section class="py-24 border-t border-slate-100 overflow-hidden bg-slate-50/30">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-16">
       <h2 class="text-3xl lg:text-5xl font-extrabold text-slate-900 mb-6">
@@ -293,122 +328,157 @@
 
     <!-- Redesigned Split Carousel -->
     <div
-      class="bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden min-h-[500px]"
+      class="bg-white border border-slate-200 rounded-[2.5rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col lg:flex-row"
     >
-      <div class="grid grid-cols-1 lg:grid-cols-12 h-full">
-        <!-- Sidebar Navigation -->
-        <div class="lg:col-span-4 bg-slate-50/50 border-r border-slate-200 p-8 flex flex-col">
-          <div class="mb-8 hidden lg:block">
-            <span
-              class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase tracking-widest rounded-full"
-            >
-              Core Features
-            </span>
-          </div>
-
-          <div class="flex-1 space-y-2 overflow-y-auto pr-2 custom-scrollbar">
-            {#each slides as slide, i}
-              <button
-                on:click={() => goToSlide(i)}
-                class="w-full text-left p-4 rounded-2xl transition-all duration-300 flex items-center gap-4 group {currentSlide ===
-                i
-                  ? 'bg-white shadow-md border border-slate-200 ring-2 ring-green-500/10'
-                  : 'hover:bg-slate-100/80 text-slate-500'}"
-              >
-                <div
-                  class="h-10 w-10 rounded-xl flex items-center justify-center transition-all {currentSlide ===
-                  i
-                    ? `bg-green-500 text-white shadow-lg shadow-green-200`
-                    : 'bg-slate-200 text-slate-500 group-hover:bg-slate-300'}"
-                >
-                  <svelte:component this={slide.icon} class="w-5 h-5" />
-                </div>
-                <span class="font-bold text-sm lg:text-base {currentSlide === i ? 'text-slate-900' : ''}"
-                  >{slide.title}</span
-                >
-                {#if currentSlide === i}
-                  <ArrowRight class="w-4 h-4 ml-auto text-green-500" />
-                {/if}
-              </button>
-            {/each}
-          </div>
+      <!-- Sidebar Navigation -->
+      <div class="lg:w-1/3 bg-slate-50/50 border-r border-slate-200 p-6 lg:p-8 flex flex-col relative">
+        <div class="mb-8 hidden lg:block">
+          <span
+            class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-widest rounded-full"
+          >
+            Core Features
+          </span>
         </div>
 
-        <!-- Main Display Content -->
-        <div class="lg:col-span-8 p-8 lg:p-12 flex flex-col">
+        <div class="flex-1 relative">
+          <!-- Sliding Indicator Pill -->
+          <div 
+            class="absolute left-0 right-0 h-[72px] bg-white border border-slate-200 rounded-3xl shadow-sm transition-all duration-500 ease-out pointer-events-none hidden lg:block"
+            style="transform: translateY({currentSlide * 80}px);"
+          >
+            <!-- Progress Line: Positioned absolutely at the very bottom edge -->
+            <div class="absolute inset-x-6 bottom-0 h-[3px] bg-slate-100 rounded-full overflow-hidden">
+               <div class="h-full bg-green-500 transition-none" style="width: {progress}%"></div>
+            </div>
+          </div>
+
           {#each slides as slide, i}
-            {#if currentSlide === i}
-              <div
-                class="flex flex-col h-full space-y-8"
-                in:fade={{ duration: 400 }}
-                out:fade={{ duration: 200 }}
+            <div class="h-[80px] flex items-center">
+              <button
+                on:click={() => goToSlide(i)}
+                class="relative w-full text-left px-6 h-[72px] rounded-3xl transition-all duration-300 flex items-center gap-4 group z-10 {currentSlide === i ? 'text-slate-950 antialiased pb-1' : 'text-slate-400 hover:text-slate-600'}"
               >
-                <!-- Feature Title & Description -->
-                <div class="max-w-2xl">
-                  <h3 class="text-3xl lg:text-4xl font-extrabold text-slate-900 mb-4">
-                    {slide.title}
-                  </h3>
-                  <p class="text-lg text-slate-700 leading-relaxed font-medium">
-                    {slide.description}
-                  </p>
+                <div
+                  class="h-11 w-11 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all duration-500 {currentSlide === i ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-slate-200/50 text-slate-400 group-hover:bg-slate-200'}"
+                >
+                  <svelte:component this={slide.icon} class="w-6 h-6 {currentSlide === i ? 'scale-110' : 'scale-100'} transition-transform" />
                 </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="font-bold text-base lg:text-[18px] leading-none truncate">{slide.title}</span>
+                  {#if currentSlide === i}
+                     <span class="text-[10px] text-green-600 font-bold lg:hidden uppercase tracking-wider mt-1">Active Now</span>
+                  {/if}
+                </div>
+                
+                {#if currentSlide === i}
+                  <span class="ml-auto hidden lg:block" in:fade>
+                    <ArrowRight class="w-5 h-5 text-green-500" />
+                  </span>
+                {/if}
+              </button>
+            </div>
+          {/each}
+        </div>
+      </div>
 
-                <!-- Feature Visual Area -->
-                <div class="flex-1 relative group mt-4 h-full min-h-[300px]">
-                  <!-- Backdrop Glow -->
-                  <div class="absolute -inset-4 bg-slate-100 rounded-[2.5rem] blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-500"></div>
-                  
-                  <!-- Unified Monitor Mockup -->
-                  <div
-                    class="relative aspect-[16/10] w-full bg-slate-950 rounded-[1.8rem] border-[10px] border-slate-900 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden"
-                  >
-                    <!-- Screen Content -->
-                    <div class="absolute inset-0 bg-slate-900">
-                      {#if i === 0}
-                        <img
-                          src="{base}/transcription-preview.png"
-                          alt="Harvey Transcription Interface"
-                          class="w-full h-full object-top object-cover opacity-90 transition-opacity duration-300"
-                        />
-                      {:else}
-                        <!-- Icon Placeholder for other features within the same monitor frame -->
-                        <div class="flex flex-col items-center justify-center h-full text-center p-12 bg-gradient-to-br from-slate-900 to-slate-950">
-                          <div class="h-24 w-24 rounded-3xl bg-white/5 backdrop-blur-xl flex items-center justify-center text-white mb-8 border border-white/10 shadow-2xl">
-                             <svelte:component this={slide.icon} class="w-12 h-12" />
-                          </div>
-                          <h4 class="text-2xl font-bold text-white mb-3">{slide.title}</h4>
-                          <p class="text-slate-400 text-base max-w-sm mx-auto leading-relaxed">{slide.description}</p>
-                          <div class="mt-8 flex gap-2">
-                             {#each Array(3) as _}
-                                <div class="h-1 w-12 bg-white/10 rounded-full"></div>
-                             {/each}
-                          </div>
-                        </div>
-                      {/if}
+      <!-- Main Display Content -->
+      <div class="lg:w-2/3 p-8 lg:p-16 flex flex-col bg-gradient-to-br from-white to-slate-50/50 relative">
+        {#each [slides[currentSlide]] as slide (currentSlide)}
+          <div
+            class="flex flex-col h-full space-y-8"
+            in:fly={{ y: 20, duration: 600, delay: 100 }}
+            out:fade={{ duration: 300 }}
+          >
+            <!-- Feature Title & Description -->
+            <div class="max-w-2xl">
+              <div class="flex items-center gap-3 mb-4">
+                 <div class="h-8 w-8 rounded-lg {slide.accent} bg-opacity-10 flex items-center justify-center text-slate-900">
+                    <svelte:component this={slide.icon} class="w-4 h-4" />
+                 </div>
+                 <h3 class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
+                   {slide.title}
+                 </h3>
+              </div>
+              <p class="text-lg lg:text-xl text-slate-600 leading-relaxed font-medium mb-2">
+                {slide.description}
+              </p>
+            </div>
+
+            <!-- Feature Visual Area -->
+            <div class="flex-1 relative mt-4 h-full min-h-[400px]">
+              <!-- Backdrop Glow -->
+              <div class="absolute -inset-10 bg-gradient-to-br {slide.gradient} rounded-[3rem] blur-3xl opacity-30 transition-all duration-1000"></div>
+              
+              <!-- Clean Image/Illustration Container -->
+              <div
+                class="relative h-full w-full rounded-[2rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] border border-slate-800 bg-slate-950"
+              >
+                <!-- Content -->
+                <div class="absolute inset-0">
+                  {#if currentSlide === 0}
+                    <img
+                      src="{base}/transcription-preview.png" 
+                      alt="Harvey Transcription Interface"
+                      class="w-full h-full object-contain"
+                    />
+                  {:else if currentSlide === 1}
+                    <img
+                      src="{base}/translation-preview.png" 
+                      alt="Harvey Translation Interface"
+                      class="w-full h-full object-contain"
+                    />
+                  {:else}
+                    <div class="flex flex-col items-center justify-center h-full text-center p-12 bg-gradient-to-br from-slate-900 to-slate-950">
+                      <div class="relative mb-8">
+                         <div class="absolute inset-0 bg-white/5 blur-3xl rounded-full scale-150 opacity-50"></div>
+                         <div class="relative h-32 w-32 rounded-[2.5rem] bg-white/5 backdrop-blur-xl flex items-center justify-center text-white border border-white/10 shadow-2xl">
+                            <svelte:component this={slide.icon} class="w-16 h-16" />
+                         </div>
+                      </div>
+                      <h4 class="text-3xl font-black text-white mb-4 tracking-tight">{slide.title}</h4>
+                      <p class="text-slate-400 text-lg max-w-sm mx-auto leading-relaxed font-medium">{slide.description}</p>
+                      
+                      <!-- Decorative UI elements for premium feel -->
+                      <div class="mt-12 flex gap-3">
+                         {#each Array(3) as _}
+                            <div class="h-2 w-16 bg-white/5 rounded-full overflow-hidden">
+                               <div class="h-full bg-white/20 w-1/3"></div>
+                            </div>
+                         {/each}
+                      </div>
                     </div>
-
-                    <!-- Reflective Overlay for "Screen" feel -->
-                    <div class="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/5 to-transparent opacity-30"></div>
-                  </div>
-                </div>
-
-                <!-- Controls for Mobile (Quick jump arrows) -->
-                <div class="flex lg:hidden justify-between items-center pt-8 border-t border-slate-100">
-                   <button on:click={prevSlide} class="p-3 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-700">
-                      <ChevronLeft class="w-6 h-6" />
-                   </button>
-                   <div class="flex gap-2">
-                      {#each slides as _, dotIndex}
-                         <div class="h-2 w-2 rounded-full {currentSlide === dotIndex ? 'bg-green-500 w-4' : 'bg-slate-300'} transition-all"></div>
-                      {/each}
-                   </div>
-                   <button on:click={nextSlide} class="p-3 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-700">
-                      <ChevronRight class="w-6 h-6" />
-                   </button>
+                  {/if}
                 </div>
               </div>
-            {/if}
-          {/each}
+            </div>
+          </div>
+        {/each}
+
+        <div class="flex lg:hidden justify-between items-center mt-8 pt-8 border-t border-slate-100">
+           <button 
+            on:click={prevSlide} 
+            class="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 text-slate-700 shadow-sm transition-all active:scale-95"
+            aria-label="Previous Slide"
+           >
+              <ChevronLeft class="w-6 h-6" />
+           </button>
+           <div class="flex gap-2.5">
+              {#each slides as _, dotIndex}
+                 <button 
+                  on:click={() => goToSlide(dotIndex)}
+                  class="h-2 rounded-full transition-all duration-500 {currentSlide === dotIndex ? 'bg-green-500 w-8' : 'bg-slate-300 w-2 hover:bg-slate-400'}"
+                  aria-label="Go to slide {dotIndex + 1}"
+                  aria-current={currentSlide === dotIndex}
+                 ></button>
+              {/each}
+           </div>
+           <button 
+            on:click={nextSlide} 
+            class="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 text-slate-700 shadow-sm transition-all active:scale-95"
+            aria-label="Next Slide"
+           >
+              <ChevronRight class="w-6 h-6" />
+           </button>
         </div>
       </div>
     </div>
