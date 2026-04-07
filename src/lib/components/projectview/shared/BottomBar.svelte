@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/BottomBar.svelte -->
 <script>
   // *** FIXED: Import single project store ***
-import { project } from '$lib/stores/projectStore.js';
+  import { project } from '$lib/stores/projectStore.js';
 
   export let selectedTab = null;
 
@@ -12,10 +12,11 @@ import { project } from '$lib/stores/projectStore.js';
   $: error = $project.error;
   $: textCount = selectedTab === 'data' ? $project.documentTextCount : null;
   $: isIdle = !isLoading && !error;
-
 </script>
 
-<div class="p-1.5 px-4 text-xs bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 flex justify-between items-center h-8 flex-shrink-0">
+<div
+  class="p-1.5 px-4 text-xs bg-gray-50 dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 flex justify-between items-center h-8 flex-shrink-0"
+>
   <div class="flex items-center flex-grow min-w-0">
     {#if isLoading}
       <span>Loading project...</span>

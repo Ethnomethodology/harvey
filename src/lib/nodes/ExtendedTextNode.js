@@ -12,7 +12,7 @@ import {
   IS_SUBSCRIPT,
   IS_SUPERSCRIPT,
   IS_HIGHLIGHT, // Assuming this is also a constant you might use or is standard
-  $createTextNode as _createTextNode,
+  $createTextNode as _createTextNode
 } from 'lexical';
 
 /**
@@ -78,7 +78,8 @@ export class ExtendedTextNode extends TextNode {
   }
 
   // ---- DOM ------------------------------------------------------------------
-  createDOM(config, editor) { // Added editor instance for consistency, though not strictly used by super.createDOM for TextNode
+  createDOM(config, editor) {
+    // Added editor instance for consistency, though not strictly used by super.createDOM for TextNode
     const dom = super.createDOM(config, editor); // Pass editor if super expects it
     const latest = this.getLatest();
     if (latest.__highlightId) dom.setAttribute('data-highlight-id', latest.__highlightId);
@@ -90,7 +91,8 @@ export class ExtendedTextNode extends TextNode {
     return dom;
   }
 
-  updateDOM(prevNode, dom, config) { // Correctly accept EditorConfig
+  updateDOM(prevNode, dom, config) {
+    // Correctly accept EditorConfig
     let changed = super.updateDOM(prevNode, dom, config); // Pass config to super
     const latest = this.getLatest();
 
@@ -115,7 +117,8 @@ export class ExtendedTextNode extends TextNode {
   }
 
   // ---- HTML export ----------------------------------------------------------
-  exportDOM(editor) { // editor instance is passed by $generateHtmlFromNodes
+  exportDOM(editor) {
+    // editor instance is passed by $generateHtmlFromNodes
     let element = document.createElement('span');
     const latest = this.getLatest();
 
@@ -190,7 +193,6 @@ export class ExtendedTextNode extends TextNode {
     //   element = mark;
     // }
 
-
     return { element };
   }
 
@@ -200,7 +202,7 @@ export class ExtendedTextNode extends TextNode {
       ...super.exportJSON(), // Includes text, format, detail, mode, version (from TextNode)
       type: 'extended-text', // Override type
       highlightId: this.getLatest().__highlightId,
-      style: this.getLatest().getStyle(),
+      style: this.getLatest().getStyle()
       // version for ExtendedTextNode specific properties, TextNode's version handles its own.
       // If ExtendedTextNode itself evolves, increment this.
       // For now, keeping it simple or aligning with TextNode's version if not adding new persistent fields.
@@ -218,7 +220,6 @@ export class ExtendedTextNode extends TextNode {
     node.setHighlightId(serializedNode.highlightId || null);
     return node;
   }
-
 
   // ---- misc -----------------------------------------------------------------
   isSimpleText() {
@@ -243,144 +244,163 @@ export class ExtendedTextNode extends TextNode {
         const original = importers?.span?.(node);
         return {
           conversion: patchStyleConversion(original?.conversion || null),
-          priority: 1,
+          priority: 1
         };
       },
-      b: (node) => ({
+      b: (node) => {
+        console.log('[ExtendedTextNode] importDOM: b tag encountered.');
+        return {
           conversion: (domNode) => ({
             forChild: (lexicalNode) => {
               if (_isTextNode(lexicalNode)) {
                 lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
               }
               return lexicalNode;
-            },
+            }
           }),
-          priority: 1,
-      }),
-      strong: (node) => ({
+          priority: 3
+        };
+      },
+      strong: (node) => {
+        console.log('[ExtendedTextNode] importDOM: strong tag encountered.');
+        return {
           conversion: (domNode) => ({
             forChild: (lexicalNode) => {
               if (_isTextNode(lexicalNode)) {
                 lexicalNode.setFormat(lexicalNode.getFormat() | IS_BOLD);
               }
               return lexicalNode;
-            },
+            }
           }),
-          priority: 1,
-      }),
-      i: (node) => ({
+          priority: 3
+        };
+      },
+      i: (node) => {
+        console.log('[ExtendedTextNode] importDOM: i tag encountered.');
+        return {
           conversion: (domNode) => ({
             forChild: (lexicalNode) => {
               if (_isTextNode(lexicalNode)) {
                 lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
               }
               return lexicalNode;
-            },
+            }
           }),
-          priority: 1,
-      }),
-      em: (node) => ({
+          priority: 3
+        };
+      },
+      em: (node) => {
+        console.log('[ExtendedTextNode] importDOM: em tag encountered.');
+        return {
           conversion: (domNode) => ({
             forChild: (lexicalNode) => {
               if (_isTextNode(lexicalNode)) {
                 lexicalNode.setFormat(lexicalNode.getFormat() | IS_ITALIC);
               }
               return lexicalNode;
-            },
+            }
           }),
-          priority: 1,
-      }),
+          priority: 3
+        };
+      },
       u: (node) => ({
-          conversion: (domNode) => ({
-            forChild: (lexicalNode) => {
-              if (_isTextNode(lexicalNode)) {
-                lexicalNode.setFormat(lexicalNode.getFormat() | IS_UNDERLINE);
-              }
-              return lexicalNode;
-            },
-          }),
-          priority: 1,
+        conversion: (domNode) => ({
+          forChild: (lexicalNode) => {
+            if (_isTextNode(lexicalNode)) {
+              lexicalNode.setFormat(lexicalNode.getFormat() | IS_UNDERLINE);
+            }
+            return lexicalNode;
+          }
+        }),
+        priority: 1
       }),
       s: (node) => ({
-          conversion: (domNode) => ({
-            forChild: (lexicalNode) => {
-              if (_isTextNode(lexicalNode)) {
-                lexicalNode.setFormat(lexicalNode.getFormat() | IS_STRIKETHROUGH);
-              }
-              return lexicalNode;
-            },
-          }),
-          priority: 1,
+        conversion: (domNode) => ({
+          forChild: (lexicalNode) => {
+            if (_isTextNode(lexicalNode)) {
+              lexicalNode.setFormat(lexicalNode.getFormat() | IS_STRIKETHROUGH);
+            }
+            return lexicalNode;
+          }
+        }),
+        priority: 1
       }),
       sub: (node) => ({
-          conversion: (domNode) => ({
-            forChild: (lexicalNode) => {
-              if (_isTextNode(lexicalNode)) {
-                lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUBSCRIPT);
-              }
-              return lexicalNode;
-            },
-          }),
-          priority: 1,
+        conversion: (domNode) => ({
+          forChild: (lexicalNode) => {
+            if (_isTextNode(lexicalNode)) {
+              lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUBSCRIPT);
+            }
+            return lexicalNode;
+          }
+        }),
+        priority: 1
       }),
       sup: (node) => ({
-          conversion: (domNode) => ({
-            forChild: (lexicalNode) => {
-              if (_isTextNode(lexicalNode)) {
-                lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUPERSCRIPT);
-              }
-              return lexicalNode;
-            },
-          }),
-          priority: 1,
+        conversion: (domNode) => ({
+          forChild: (lexicalNode) => {
+            if (_isTextNode(lexicalNode)) {
+              lexicalNode.setFormat(lexicalNode.getFormat() | IS_SUPERSCRIPT);
+            }
+            return lexicalNode;
+          }
+        }),
+        priority: 1
       }),
-      code: (node) => ({ // Inline code
-          conversion: (domNode) => ({
-            forChild: (lexicalNode) => {
-              if (_isTextNode(lexicalNode)) {
-                lexicalNode.setFormat(lexicalNode.getFormat() | IS_CODE);
-              }
-              return lexicalNode;
-            },
-          }),
-          priority: 1,
+      code: (node) => ({
+        // Inline code
+        conversion: (domNode) => ({
+          forChild: (lexicalNode) => {
+            if (_isTextNode(lexicalNode)) {
+              lexicalNode.setFormat(lexicalNode.getFormat() | IS_CODE);
+            }
+            return lexicalNode;
+          }
+        }),
+        priority: 1
       }),
-      font: (node) => { // Handle <font color="..."> for pasted content
+      font: (node) => {
+        // Handle <font color="..."> for pasted content
         const color = node.getAttribute('color');
         return {
           conversion: (htmlElementNode) => ({
-              node: null, // Let Lexical walk children
-              forChild: (lexicalNode) => {
-                  if (_isTextNode(lexicalNode) && color) {
-                      const existingStyle = lexicalNode.getStyle() || '';
-                      if (!existingStyle.includes(`color: ${color}`)) {
-                        lexicalNode.setStyle(`${existingStyle}${existingStyle ? ';' : ''}color: ${color}`);
-                      }
-                  }
-                  return lexicalNode;
+            node: null, // Let Lexical walk children
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode) && color) {
+                const existingStyle = lexicalNode.getStyle() || '';
+                if (!existingStyle.includes(`color: ${color}`)) {
+                  lexicalNode.setStyle(
+                    `${existingStyle}${existingStyle ? ';' : ''}color: ${color}`
+                  );
+                }
               }
+              return lexicalNode;
+            }
           }),
-          priority: 1,
+          priority: 1
         };
       },
-      mark: (node) => { // Handle <mark> for pasted content
+      mark: (node) => {
+        // Handle <mark> for pasted content
         return {
           conversion: (htmlElementNode) => ({
-              node: null,
-              forChild: (lexicalNode) => {
-                  if (_isTextNode(lexicalNode)) {
-                      const existingStyle = lexicalNode.getStyle() || '';
-                      if (!existingStyle.includes('background-color: yellow')) {
-                        lexicalNode.setStyle(`${existingStyle}${existingStyle ? ';' : ''}background-color: yellow;`);
-                      }
-                      lexicalNode.setFormat(lexicalNode.getFormat() | IS_HIGHLIGHT);
-                  }
-                  return lexicalNode;
+            node: null,
+            forChild: (lexicalNode) => {
+              if (_isTextNode(lexicalNode)) {
+                const existingStyle = lexicalNode.getStyle() || '';
+                if (!existingStyle.includes('background-color: yellow')) {
+                  lexicalNode.setStyle(
+                    `${existingStyle}${existingStyle ? ';' : ''}background-color: yellow;`
+                  );
+                }
+                lexicalNode.setFormat(lexicalNode.getFormat() | IS_HIGHLIGHT);
               }
+              return lexicalNode;
+            }
           }),
-          priority: 1,
+          priority: 1
         };
-      },
+      }
     };
   }
 }
@@ -399,7 +419,10 @@ function getEffectiveStyle(style, isBold) {
     // Remove font-weight from inline style if bold formatting is active,
     // to allow the bold class/tag to take precedence.
     // Handles 'font-weight: ...;' with potential spaces.
-    return style.replace(/(^|;)\s*font-weight\s*:[^;]+(;|$)/gi, '$1').replace(/^;+/, '').replace(/;+$/, '');
+    return style
+      .replace(/(^|;)\s*font-weight\s*:[^;]+(;|$)/gi, '$1')
+      .replace(/^;+/, '')
+      .replace(/;+$/, '');
   }
   return style;
 }
@@ -413,16 +436,16 @@ function patchStyleConversion(originalDOMConverter) {
   return (htmlElementNode) => {
     let conversionResult;
     if (typeof originalDOMConverter === 'function') {
-        const tempResult = originalDOMConverter(htmlElementNode);
-        if (tempResult && typeof tempResult.conversion === 'function') {
-            conversionResult = tempResult.conversion(htmlElementNode);
-        } else if (tempResult && tempResult.node) {
-            conversionResult = tempResult;
-        } else {
-            conversionResult = { node: _createTextNode(htmlElementNode.textContent ?? '') };
-        }
-    } else {
+      const tempResult = originalDOMConverter(htmlElementNode);
+      if (tempResult && typeof tempResult.conversion === 'function') {
+        conversionResult = tempResult.conversion(htmlElementNode);
+      } else if (tempResult && tempResult.node) {
+        conversionResult = tempResult;
+      } else {
         conversionResult = { node: _createTextNode(htmlElementNode.textContent ?? '') };
+      }
+    } else {
+      conversionResult = { node: _createTextNode(htmlElementNode.textContent ?? '') };
     }
 
     let lexicalNode = conversionResult.node;
@@ -449,12 +472,12 @@ function patchStyleConversion(originalDOMConverter) {
       const styles = [];
       const s = htmlElementNode.style;
       if (s) {
-          if (s.backgroundColor) styles.push(`background-color: ${s.backgroundColor}`);
-          if (s.color) styles.push(`color: ${s.color}`);
-          if (s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
-          if (s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
-          if (s.fontSize) styles.push(`font-size: ${s.fontSize}`);
-          if (s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
+        if (s.backgroundColor) styles.push(`background-color: ${s.backgroundColor}`);
+        if (s.color) styles.push(`color: ${s.color}`);
+        if (s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
+        if (s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
+        if (s.fontSize) styles.push(`font-size: ${s.fontSize}`);
+        if (s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
       }
 
       const styleString = styles.filter(Boolean).join('; ');

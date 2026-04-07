@@ -1,24 +1,19 @@
 // src/lib/nodes/LexicalConfig.js
-import {
-  RootNode,
-  ParagraphNode,
-  TextNode,
-  LineBreakNode
-} from "lexical";
-import { HeadingNode, QuoteNode } from "@lexical/rich-text";
-import { CodeNode } from "@lexical/code";
-import { ListNode, ListItemNode } from "@lexical/list";
-import { TableNode, TableRowNode, TableCellNode } from "@lexical/table";
-import { LinkNode } from "@lexical/link";
+import { RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
+import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { CodeNode } from '@lexical/code';
+import { ListNode, ListItemNode } from '@lexical/list';
+import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
+import { LinkNode } from '@lexical/link';
 
 import {
   ExtendedTextNode,
-  $createExtendedTextNode as _createExtendedTextNode,
-} from "./ExtendedTextNode.js";
-import { HorizontalRuleNode } from "./HorizontalRuleNode.js";
-import { ImageNode } from "./ImageNode.js";
-import { DateNode } from "./DateNode.js";
-import { EquationNode } from "./EquationNode.js";
+  $createExtendedTextNode as _createExtendedTextNode
+} from './ExtendedTextNode.js';
+import { HorizontalRuleNode } from './HorizontalRuleNode.js';
+import { ImageNode } from './ImageNode.js';
+import { DateNode } from './DateNode.js';
+import { EquationNode } from './EquationNode.js';
 
 /**
  * Shared transformation function to upgrade a standard TextNode to an ExtendedTextNode
@@ -27,13 +22,13 @@ import { EquationNode } from "./EquationNode.js";
 export const upgradeToExtendedTextNode = (node) => {
   const text = node.getTextContent();
   const extended = _createExtendedTextNode(text);
-  
+
   // Faithfully copy all standard TextNode properties
   extended.__format = node.__format;
   extended.__style = node.__style;
   extended.__detail = node.__detail;
   extended.__mode = node.__mode;
-  
+
   return extended;
 };
 
@@ -45,9 +40,8 @@ export const SHARED_NODES = [
   ExtendedTextNode,
   {
     replace: TextNode,
-    with: upgradeToExtendedTextNode,
+    with: upgradeToExtendedTextNode
   },
-  RootNode,
   ParagraphNode,
   LineBreakNode,
   HeadingNode,
@@ -62,5 +56,5 @@ export const SHARED_NODES = [
   HorizontalRuleNode,
   ImageNode,
   DateNode,
-  EquationNode,
+  EquationNode
 ];

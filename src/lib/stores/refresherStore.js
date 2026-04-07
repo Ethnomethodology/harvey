@@ -6,5 +6,5 @@ import { writable } from 'svelte/store';
 export const refresher = writable(0);
 
 export function triggerRefresh() {
-    refresher.update(n => n + 1);
+  refresher.update((n) => n + 1);
 }

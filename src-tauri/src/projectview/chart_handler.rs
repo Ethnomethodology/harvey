@@ -1,9 +1,9 @@
 // src-tauri/src/projectview/chart_handler.rs
-use crate::welcome::config::CommandError;
 use crate::projectview::db_handler::get_db_path;
-use rusqlite::{params, Connection, OptionalExtension};
+use crate::welcome::config::CommandError;
+use log::{debug, info};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use log::{info, debug, error};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartConfig {
@@ -27,7 +27,10 @@ pub fn save_chart_config(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Saving chart config '{}' for table '{}' in project '{}'", chart_name, table_path, project_id);
+    info!(
+        "[DB] Saving chart config '{}' for table '{}' in project '{}'",
+        chart_name, table_path, project_id
+    );
 
     // Insert or replace based on unique constraint (project_id, table_path, chart_name)
     conn.execute(
@@ -70,7 +73,10 @@ pub fn load_chart_configs(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    debug!("[DB] Loading chart configs for table '{}' in project '{}'", table_path, project_id);
+    debug!(
+        "[DB] Loading chart configs for table '{}' in project '{}'",
+        table_path, project_id
+    );
 
     let mut stmt = conn.prepare(
         "SELECT id, project_id, table_path, chart_name, chart_type, config_json, created_at, updated_at
@@ -108,7 +114,10 @@ pub fn delete_chart_config(
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Deleting chart config '{}' for table '{}' in project '{}'", chart_name, table_path, project_id);
+    info!(
+        "[DB] Deleting chart config '{}' for table '{}' in project '{}'",
+        chart_name, table_path, project_id
+    );
 
     conn.execute(
         "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2 AND chart_name = ?3",
@@ -118,14 +127,14 @@ pub fn delete_chart_config(
     Ok(())
 }
 
-pub fn delete_all_charts_for_table(
-    project_id: &str,
-    table_path: &str,
-) -> Result<(), CommandError> {
+pub fn delete_all_charts_for_table(project_id: &str, table_path: &str) -> Result<(), CommandError> {
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
-    info!("[DB] Deleting all chart configs for table '{}' in project '{}'", table_path, project_id);
+    info!(
+        "[DB] Deleting all chart configs for table '{}' in project '{}'",
+        table_path, project_id
+    );
 
     conn.execute(
         "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2",

@@ -39,7 +39,7 @@ export class DateNode extends DecoratorNode {
       timeFormat: this.__timeFormat,
       displayValue: this.__displayValue,
       type: 'date',
-      version: 1,
+      version: 1
     };
   }
 
@@ -55,9 +55,10 @@ export class DateNode extends DecoratorNode {
   createDOM(config) {
     const span = document.createElement('span');
     span.contentEditable = 'false';
-    span.className = 'lexical-date-node inline-flex items-center cursor-pointer transition-colors align-baseline text-inherit font-inherit border-b border-dashed border-gray-400 hover:border-gray-600 dark:border-gray-500 dark:hover:border-gray-300';
+    span.className =
+      'lexical-date-node inline-flex items-center cursor-pointer transition-colors align-baseline text-inherit font-inherit border-b border-dashed border-gray-400 hover:border-gray-600 dark:border-gray-500 dark:hover:border-gray-300';
     span.innerText = this.__displayValue;
-    
+
     return span;
   }
 

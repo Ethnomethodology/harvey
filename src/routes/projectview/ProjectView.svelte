@@ -18,6 +18,7 @@
         checkUnsavedChangesThenProceed,
         importDocumentFile,
         importTableFile,
+        importTableSheet,
         importImageFile,
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
@@ -28,6 +29,7 @@
         clearProjectDataStore,
         createManualTranscript,
         createNewDocument,
+        saveTableSchema,
     } from "$lib/services/projectService.js";
     import {
         getDownloadedModels,
@@ -42,7 +44,7 @@
         prepareStandaloneTranscriptView,
         prepareMediaNoteView,
     } from "$lib/stores/projectStore.js";
-    import { fetchAllTags } from "$lib/stores/tagStore.js";
+    import { fetchAllTags } from "$lib/stores/tagStore.svelte.js";
     import {
         transcriptStore,
         setRanInBackground,
@@ -98,13 +100,15 @@
         MessageSquareText,
         Sheet,
         Image as ImageIcon,
+        ChevronRight,
     } from "@lucide/svelte";
     import DataTopBar from "$lib/components/projectview/data/DataTopBar.svelte";
     import TranscriptionTopBar from "$lib/components/projectview/transcription/TopBar.svelte";
     import SimpleTopBar from "$lib/components/projectview/shared/SimpleTopBar.svelte";
-    import panelStateStore from "$lib/stores/panelStateStore.js";
+    import panelStateStore from "$lib/stores/panelStateStore.svelte.js";
     import CreateGroupModal from "$lib/components/projectview/modals/CreateGroupModal.svelte";
     import CreateTableModal from "$lib/components/projectview/modals/CreateTableModal.svelte";
+    import TableSheetSelectionModal from "$lib/components/projectview/modals/TableSheetSelectionModal.svelte";
 
     let transcribeModalRef;
     let transcriptionViewRef;
@@ -121,6 +125,10 @@
     let tagsViewRef;
     let selectedTab = "data";
     let importMenuVisible = false;
+    let activeSubMenu = null; // 'documents' or 'tables'
+    let subMenuX = 0;
+    let subMenuY = 0;
+    let subMenuTimer = null;
     let importMenuX = 0;
     let importMenuY = 0;
     let closeImportMenuListener = null;
@@ -133,6 +141,13 @@
     let showCreateTableModal = false;
     let fileToAddForGroup = null;
     let headerConfirmationData = {};
+    // --- Full table import state (mirrors DataLeftPanel logic) ---
+    let showTableSheetSelectionModal = false;
+    let tableSheetSelectionData = { sheets: [], filename: '', sourceFilePath: '', projectXmlPath: '' };
+    let pendingSheetNamesToImport = [];
+    let pendingTableImports = [];
+    let importedTablePathsToRevert = [];
+    let isActivelyImportingTable = false;
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
     let unlistenCloseRequested = null;
@@ -560,9 +575,15 @@
                 await handleCloseProject();
             },
         );
+        
+        // Expose handleCloseProject for E2E testing to simulate OS window close
+        window.__E2E_CLOSE_PROJECT__ = handleCloseProject;
     });
 
     onDestroy(() => {
+        // Clean up E2E testing hook
+        delete window.__E2E_CLOSE_PROJECT__;
+        
         cleanupProgressListener();
         if (unlistenMenuEvents) {
             unlistenMenuEvents.forEach((unlisten) => unlisten());
@@ -1055,7 +1076,9 @@
                 new LogicalSize(PROJECT_MIN_WIDTH, WELCOME_HEIGHT),
             );
             await appWindow.center();
-            await goto("/");
+            handlingCloseRequest = false;
+            // eslint-disable-next-line svelte/no-navigation-without-resolve
+            return goto("/");
         }
         handlingCloseRequest = false;
     }
@@ -1244,14 +1267,16 @@
         }));
 
         // Determine if we are already viewing this path
-        const isAlreadyViewing =
+        const isAlreadyViewingBase =
             normalizePath(proj.selectedDocumentPath) === path ||
             normalizePath(proj.currentStandaloneTranscriptPath) === path ||
             normalizePath(proj.selectedMediaNotePath) === path;
 
-        if (isAlreadyViewing) {
+        const isTrulyViewingSubItem = !attachmentToOpen || (activeSubItemPath && normalizePath(activeSubItemPath) === normalizePath(attachmentToOpen));
+
+        if (isAlreadyViewingBase && isTrulyViewingSubItem) {
             console.log(
-                `[ProjectView] Already viewing ${itemLogName}. Just ensuring correct tab.`,
+                `[ProjectView] Already viewing ${itemLogName} and requested sub-item. Just ensuring correct tab.`,
             );
             if (selectedTab !== tabName) {
                 await handleTabClick(tabName);
@@ -1260,124 +1285,134 @@
             return;
         }
 
-        // Not already viewing, proceed with full load
-        let canProceed = await checkUnsavedChangesThenProceed(
-            path,
-            "opening item",
-        );
-        if (!canProceed) {
-            project.update((p) => ({ ...p, isLoading: false }));
-            return;
-        }
+        if (isAlreadyViewingBase && !isTrulyViewingSubItem) {
+            console.log(
+                `[ProjectView] Already viewing base ${itemLogName}, but switching to sub-item: ${attachmentToOpen}`,
+            );
+            if (selectedTab !== tabName) {
+                await handleTabClick(tabName);
+                await tick();
+            }
+        } else {
+            // Not already viewing base document, proceed with full load
+            let canProceed = await checkUnsavedChangesThenProceed(
+                path,
+                "opening item",
+            );
+            if (!canProceed) {
+                project.update((p) => ({ ...p, isLoading: false }));
+                return;
+            }
 
-        if (selectedTab !== tabName) {
-            await handleTabClick(tabName);
-            await tick();
-        }
+            if (selectedTab !== tabName) {
+                await handleTabClick(tabName);
+                await tick();
+            }
 
-        // Determine type and prepare view
-        if (tabName === "data") {
-            const isStandaloneTranscript =
-                viewType === "standalone_transcript" ||
-                originalDocType === "standalone_transcript" ||
-                proj.standaloneTranscriptFiles?.some(
-                    (f) =>
-                        normalizePath(
-                            `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
-                        ) === path,
-                );
-
-            const isMediaTranscript =
-                viewType === "audio_transcript" ||
-                viewType === "video_transcript" ||
-                originalDocType === "audio_transcript" ||
-                originalDocType === "video_transcript";
-
-            if (isStandaloneTranscript) {
-                prepareStandaloneTranscriptView(path);
-            } else if (isMediaTranscript) {
-                function findMediaByTranscriptPathRecursive(
-                    nodes,
-                    transcriptPath,
-                ) {
-                    if (!Array.isArray(nodes)) return null;
-                    const normTranscriptPath = transcriptPath.replace(
-                        /\\/g,
-                        "/",
+            // Determine type and prepare view
+            if (tabName === "data") {
+                const isStandaloneTranscript =
+                    viewType === "standalone_transcript" ||
+                    originalDocType === "standalone_transcript" ||
+                    proj.standaloneTranscriptFiles?.some(
+                        (f) =>
+                            normalizePath(
+                                `${proj.baseDirectory}/${f.relative_path || f.relativePath}`,
+                            ) === path,
                     );
-                    for (const node of nodes) {
-                        if (
-                            node.file_type === "media" &&
-                            node.associated_transcripts?.some(
-                                (t) =>
-                                    t.path.replace(/\\/g, "/") ===
-                                    normTranscriptPath,
-                            )
-                        )
-                            return node;
-                        const found = findMediaByTranscriptPathRecursive(
-                            node.children || [],
-                            transcriptPath,
+
+                const isMediaTranscript =
+                    viewType === "audio_transcript" ||
+                    viewType === "video_transcript" ||
+                    originalDocType === "audio_transcript" ||
+                    originalDocType === "video_transcript";
+
+                if (isStandaloneTranscript) {
+                    prepareStandaloneTranscriptView(path);
+                } else if (isMediaTranscript) {
+                    function findMediaByTranscriptPathRecursive(
+                        nodes,
+                        transcriptPath,
+                    ) {
+                        if (!Array.isArray(nodes)) return null;
+                        const normTranscriptPath = transcriptPath.replace(
+                            /\\/g,
+                            "/",
                         );
-                        if (found) return found;
+                        for (const node of nodes) {
+                            if (
+                                node.file_type === "media" &&
+                                node.associated_transcripts?.some(
+                                    (t) =>
+                                        t.path.replace(/\\/g, "/") ===
+                                        normTranscriptPath,
+                                )
+                            )
+                                return node;
+                            const found = findMediaByTranscriptPathRecursive(
+                                node.children || [],
+                                transcriptPath,
+                            );
+                            if (found) return found;
+                        }
+                        return null;
                     }
-                    return null;
-                }
-                const mediaNode = findMediaByTranscriptPathRecursive(
-                    proj.files,
-                    path,
-                );
-                if (mediaNode) {
-                    console.log(
-                        `[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`,
+                    const mediaNode = findMediaByTranscriptPathRecursive(
+                        proj.files,
+                        path,
                     );
-                    prepareMediaNoteView(mediaNode.path, path); // dual-path call
-                    // Selection highlighting in Left Panel
-                    project.update((p) => ({
-                        ...p,
-                        activeTranscriptPathInDataTab: path,
-                    }));
-                } else {
-                    console.warn(
-                        `[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`,
-                    );
-                    prepareDocumentView(path, "documents");
-                }
-            } else if (
-                viewType === "media_note" ||
-                viewType === "media" ||
-                [
-                    "mp3",
-                    "wav",
-                    "m4a",
-                    "ogg",
-                    "aac",
-                    "flac",
-                    "mp4",
-                    "mov",
-                    "avi",
-                    "mkv",
-                    "webm",
-                ].includes(path.split(".").pop()?.toLowerCase())
-            ) {
-                prepareMediaNoteView(path);
-            } else {
-                const ext = path.split(".").pop()?.toLowerCase();
-                let type = "documents";
-                if (["csv", "xlsx"].includes(ext)) type = "tables";
-                else if (
+                    if (mediaNode) {
+                        console.log(
+                            `[ProjectView] Found parent media for transcript deep-link: ${mediaNode.path}`,
+                        );
+                        prepareMediaNoteView(mediaNode.path, path); // dual-path call
+                        // Selection highlighting in Left Panel
+                        project.update((p) => ({
+                            ...p,
+                            activeTranscriptPathInDataTab: path,
+                        }));
+                    } else {
+                        console.warn(
+                            `[ProjectView] Parent media not found for transcript: ${path}. Attempting standalone document view.`,
+                        );
+                        prepareDocumentView(path, "documents");
+                    }
+                } else if (
+                    viewType === "media_note" ||
+                    viewType === "media" ||
                     [
-                        "jpg",
-                        "jpeg",
-                        "png",
-                        "gif",
-                        "bmp",
-                        "webp",
-                        "tiff",
-                    ].includes(ext)
-                )
-                    type = "images";
-                prepareDocumentView(path, type);
+                        "mp3",
+                        "wav",
+                        "m4a",
+                        "ogg",
+                        "aac",
+                        "flac",
+                        "mp4",
+                        "mov",
+                        "avi",
+                        "mkv",
+                        "webm",
+                    ].includes(path.split(".").pop()?.toLowerCase())
+                ) {
+                    prepareMediaNoteView(path);
+                } else {
+                    const ext = path.split(".").pop()?.toLowerCase();
+                    let type = "documents";
+                    if (["csv", "xlsx"].includes(ext)) type = "tables";
+                    else if (
+                        [
+                            "jpg",
+                            "jpeg",
+                            "png",
+                            "gif",
+                            "bmp",
+                            "webp",
+                            "tiff",
+                        ].includes(ext)
+                    )
+                        type = "images";
+                    prepareDocumentView(path, type);
+                }
             }
         }
 
@@ -1725,7 +1760,13 @@
                 });
             closeImportMenuListener = (e) => {
                 const menu = document.getElementById("import-context-menu-div");
-                if (menu && !menu.contains(e.target)) closeImportMenu();
+                const submenu = document.getElementById("import-submenu-div");
+                const isOutsideMenu = menu && !menu.contains(e.target);
+                const isOutsideSubmenu = !submenu || !submenu.contains(e.target);
+
+                if (isOutsideMenu && isOutsideSubmenu) {
+                    closeImportMenu();
+                }
             };
             document.addEventListener("click", closeImportMenuListener, {
                 capture: true,
@@ -1786,25 +1827,8 @@
                     }
                 }
             } else if (actionType === "table") {
-                const importResult = await importTableFile();
-                if (
-                    importResult &&
-                    importResult.table_path &&
-                    String(importResult.table_path).trim() !== ""
-                ) {
-                    headerConfirmationData = {
-                        tablePath: importResult.table_path,
-                        previewData: importResult.preview_data,
-                    };
-                    showHeaderConfirmationModal = true;
-                } else {
-                    // Canceled or error already handled in importTableFile
-                    project.update((p) => ({
-                        ...p,
-                        isLoading: false,
-                        isImportingAsset: false,
-                    }));
-                }
+                await handleTableImport();
+                return; // handleTableImport manages its own loading state
             } else if (actionType === "image") {
                 const importedPath = await importImageFile();
                 if (importedPath) {
@@ -1861,6 +1885,8 @@
     function closeImportMenu() {
         if (importMenuVisible) {
             importMenuVisible = false;
+            activeSubMenu = null;
+            if (subMenuTimer) clearTimeout(subMenuTimer);
             if (closeImportMenuListener)
                 document.removeEventListener("click", closeImportMenuListener, {
                     capture: true,
@@ -1868,31 +1894,261 @@
             closeImportMenuListener = null;
         }
     }
+
     function handleImportMenuAction(event, actionType) {
+        if (actionType === "documents" || actionType === "tables") {
+            // These use submenus on hover; clicking can also toggle them
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (activeSubMenu === actionType) {
+                activeSubMenu = null;
+            } else {
+                activeSubMenu = actionType;
+                subMenuX = rect.right + 2;
+                subMenuY = rect.top - 4;
+            }
+            return;
+        }
         closeImportMenu();
         triggerMediaImport(actionType);
     }
 
-    async function handleHeaderConfirmation(event) {
-        const { hasHeaders } = event.detail;
-        const { tablePath } = headerConfirmationData;
-        try {
-            await invoke("set_table_headers", {
-                tablePathStr: tablePath,
-                hasHeaders,
-            });
-            await refreshProjectFiles();
-            if (await ensureTab("data")) {
-                prepareDocumentView(tablePath, "tables", hasHeaders);
-            }
-        } catch (error) {
-            console.error(`[ProjectView] Error setting table headers:`, error);
-            await message(
-                `Error setting table headers: ${error.message || error}`,
-                { title: "Error", type: "error" },
-            );
+    function handleMenuMouseEnter(event, type) {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+        if (type === "documents" || type === "tables") {
+            const rect = event.currentTarget.getBoundingClientRect();
+            subMenuTimer = setTimeout(() => {
+                activeSubMenu = type;
+                subMenuX = rect.right + 2;
+                subMenuY = rect.top - 4;
+            }, 100);
+        } else {
+            subMenuTimer = setTimeout(() => {
+                activeSubMenu = null;
+            }, 100);
         }
     }
+
+    function handleSubMenuMouseEnter() {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+    }
+
+    function handleSubMenuMouseLeave() {
+        if (subMenuTimer) clearTimeout(subMenuTimer);
+        subMenuTimer = setTimeout(() => {
+            activeSubMenu = null;
+        }, 200);
+    }
+
+    async function handleSubMenuAction(action, category) {
+        closeImportMenu();
+        if (category === "documents") {
+            if (action === "create") {
+                const currentProject = get(project);
+                if (currentProject && currentProject.xmlPath) {
+                    if (await ensureTab("data")) {
+                        await tick();
+                        createNewDocument(currentProject.xmlPath);
+                    }
+                }
+            } else if (action === "import") {
+                triggerMediaImport("document");
+            }
+        } else if (category === "tables") {
+            if (action === "create") {
+                showCreateTableModal = true;
+            } else if (action === "import") {
+                triggerMediaImport("table");
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Full table import flow (mirrors DataLeftPanel.handleTableImport)
+    // ---------------------------------------------------------------------------
+    async function handleTableImport() {
+        try {
+            const importResult = await importTableFile();
+            if (!importResult) {
+                project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
+                return;
+            }
+            isActivelyImportingTable = true;
+
+            // Multi-sheet XLSX: show sheet selection first
+            if (importResult.sheets && importResult.sheets.length > 1) {
+                tableSheetSelectionData = {
+                    sheets: importResult.sheets,
+                    filename: importResult.filename,
+                    sourceFilePath: importResult.sourceFilePath,
+                    projectXmlPath: importResult.projectXmlPath
+                };
+                showTableSheetSelectionModal = true;
+                return;
+            }
+
+            // Single sheet / CSV: go straight to header confirmation
+            if (Array.isArray(importResult) && importResult.length > 0) {
+                pendingTableImports = importResult;
+                importedTablePathsToRevert = [];
+                processNextTableImport();
+            } else {
+                project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
+            }
+        } catch (e) {
+            console.error('[ProjectView] Error in handleTableImport:', e);
+            message(e.message || String(e), { title: 'Import Error', type: 'error' });
+            project.update((p) => ({ ...p, isLoading: false, isImportingAsset: false }));
+        }
+    }
+
+    async function handleTableSheetSelectionConfirm(event) {
+        const { selectedSheets } = event.detail;
+        showTableSheetSelectionModal = false;
+        if (!selectedSheets || selectedSheets.length === 0) {
+            isActivelyImportingTable = false;
+            project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: 'Table import cancelled.' }));
+            return;
+        }
+        pendingSheetNamesToImport = [...selectedSheets];
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
+        await processNextTableImport();
+    }
+
+    function handleTableSheetSelectionCancel() {
+        showTableSheetSelectionModal = false;
+        isActivelyImportingTable = false;
+        project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: 'Table import cancelled.' }));
+    }
+
+    async function processNextTableImport() {
+        if (!isActivelyImportingTable) return;
+
+        // Extract the next pending sheet
+        if (pendingSheetNamesToImport.length > 0) {
+            const nextSheet = pendingSheetNamesToImport.shift();
+            try {
+                project.update((p) => ({ ...p, isImportingAsset: true, statusMessage: `Extracting sheet ${nextSheet}...` }));
+                const result = await importTableSheet(
+                    tableSheetSelectionData.sourceFilePath,
+                    tableSheetSelectionData.projectXmlPath,
+                    nextSheet,
+                    tableSheetSelectionData.filename
+                );
+                if (!isActivelyImportingTable) return;
+                project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: '' }));
+                if (result && result.table_path) {
+                    pendingTableImports.push(result);
+                    showNextHeaderConfirmation();
+                } else {
+                    await processNextTableImport();
+                }
+            } catch (e) {
+                console.error(`[ProjectView] Error extracting sheet ${nextSheet}:`, e);
+                if (isActivelyImportingTable) {
+                    message(`Error extracting sheet ${nextSheet}: ${e?.message || e}`, { title: 'Import Error', type: 'error' });
+                    await triggerTableImportCancel();
+                }
+            }
+            return;
+        }
+
+        // Process pending header confirmations
+        if (pendingTableImports.length > 0) {
+            showNextHeaderConfirmation();
+            return;
+        }
+
+        // All done — open the final imported table
+        if (importedTablePathsToRevert.length > 0) {
+            const lastImported = importedTablePathsToRevert[importedTablePathsToRevert.length - 1];
+            const count = importedTablePathsToRevert.length;
+            if (await ensureTab('data')) {
+                prepareDocumentView(lastImported, 'tables');
+            }
+            message(
+                `${count} ${count === 1 ? 'Table' : 'Tables'} imported and configured successfully.`,
+                { title: 'Import Success', type: 'info' }
+            );
+        }
+        importedTablePathsToRevert = [];
+        isActivelyImportingTable = false;
+        project.update((p) => ({ ...p, isImportingAsset: false, statusMessage: '' }));
+    }
+
+    function showNextHeaderConfirmation() {
+        const next = pendingTableImports[0];
+        headerConfirmationData = {
+            tablePath: next.table_path,
+            previewData: next.preview_data,
+            filename: next.filename
+        };
+        showNextHeaderConfirmation_modal();
+    }
+
+    function showNextHeaderConfirmation_modal() {
+        showHeaderConfirmationModal = true;
+    }
+
+    async function triggerTableImportCancel() {
+        showHeaderConfirmationModal = false;
+        if (!isActivelyImportingTable) return;
+        isActivelyImportingTable = false;
+
+        const pathsToDelete = [...importedTablePathsToRevert];
+        if (headerConfirmationData.tablePath && !pathsToDelete.includes(headerConfirmationData.tablePath)) {
+            pathsToDelete.push(headerConfirmationData.tablePath);
+        }
+        for (const pending of pendingTableImports) {
+            if (pending.table_path && !pathsToDelete.includes(pending.table_path)) {
+                pathsToDelete.push(pending.table_path);
+            }
+        }
+
+        if (pathsToDelete.length > 0) {
+            for (const path of pathsToDelete) {
+                try {
+                    const xmlPath = get(project).xmlPath;
+                    if (xmlPath) {
+                        await invoke('delete_project_item', { itemPath: path, projectXmlPath: xmlPath });
+                    }
+                } catch (e) {
+                    console.error(`[ProjectView] Failed to revert table: ${path}`, e);
+                }
+            }
+            await refreshProjectFiles();
+            message('Table import cancelled. All imported files have been reverted.', { title: 'Import Cancelled', type: 'info' });
+        }
+
+        pendingTableImports = [];
+        importedTablePathsToRevert = [];
+        headerConfirmationData = {};
+        project.update((p) => ({ ...p, isImportingAsset: false, isLoading: false, statusMessage: 'Table import cancelled.' }));
+    }
+
+    async function handleHeaderConfirmation(event) {
+        const { hasHeaders, schema } = event.detail;
+        showHeaderConfirmationModal = false;
+        try {
+            await invoke('set_table_headers', { tablePathStr: headerConfirmationData.tablePath, hasHeaders });
+            if (schema && Object.keys(schema).length > 0) {
+                await saveTableSchema(headerConfirmationData.tablePath, schema);
+            }
+            importedTablePathsToRevert.push(headerConfirmationData.tablePath);
+            pendingTableImports.shift();
+            await refreshProjectFiles();
+            processNextTableImport();
+        } catch (error) {
+            console.error('[ProjectView] Error confirming table headers/schema:', error);
+            message(`Error finalising table import: ${error.message || error}`, { title: 'Import Error', type: 'error' });
+            await triggerTableImportCancel();
+        }
+    }
+
+    async function handleHeaderConfirmationCancel() {
+        await triggerTableImportCancel();
+    }
+    // ---------------------------------------------------------------------------
 
     async function handleTableCreated(event) {
         const { path } = event.detail;
@@ -1927,7 +2183,6 @@
                 {activeSubItemType}
                 on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestTranslationTabWithMediaAndDialog={handleRequestTranslationTabWithMediaAndDialog}
-                on:requestImport={handleImportMediaInSidebar}
                 on:requestImageExport={() => dataViewRef?.triggerImageExport()}
                 on:openConfig={() => {
                     showConfigurationModal = true;
@@ -1944,7 +2199,6 @@
         {:else if selectedTab === "transcription"}
             <TranscriptionTopBar
                 bind:this={transcriptionTopBarRef}
-                on:requestImport={handleImportMediaInSidebar}
                 on:cancelTranslationRequest={handleCancelTranslationRequest}
                 on:runTranslationInBackground={() =>
                     setRanTranslationInBackground(true)}
@@ -1956,7 +2210,6 @@
             />
         {:else if selectedTab === "tags"}
             <SimpleTopBar
-                on:requestImport={handleImportMediaInSidebar}
                 on:close={handleCloseProject}
             />
         {/if}
@@ -1965,9 +2218,23 @@
     <!-- Main Content Area -->
     <div class="flex flex-grow w-full overflow-visible min-h-0">
         <div
-            class="w-12 h-full bg-white dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 py-2 px-1 border-r border-gray-300 dark:border-gray-700"
+            class="w-12 h-full bg-gray-50 dark:bg-gray-950 shadow-lg flex flex-col flex-shrink-0 border-r border-gray-300 dark:border-gray-700"
         >
-            <div class="flex-grow flex flex-col space-y-2">
+            <!-- Import button zone — h-9 matches the 'Data' panel header height exactly -->
+            <div class="h-9 flex-shrink-0 flex items-center justify-center">
+                <button
+                    title="Import"
+                    aria-label="Import"
+                    on:click={handleImportMediaInSidebar}
+                    class="w-8 h-8 flex items-center justify-center rounded-full bg-blue-600 text-white dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md focus:outline-none focus:outline-2 focus:outline-blue-500"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Tab icons -->
+            <div class="flex-grow flex flex-col space-y-2 py-2 px-1">
                 <button
                     title="Data"
                     aria-label="Data"
@@ -2109,7 +2376,7 @@
         </div>
 
         <div
-            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0"
+            class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-gray-950 min-w-0 border-t border-gray-200 dark:border-gray-800"
         >
             <div class="flex flex-col flex-grow min-h-0">
                 {#if selectedTab === "transcription"}
@@ -2215,6 +2482,15 @@
         tablePath={headerConfirmationData.tablePath}
         previewData={headerConfirmationData.previewData}
         on:confirm={handleHeaderConfirmation}
+        on:cancel={handleHeaderConfirmationCancel}
+    />
+
+    <TableSheetSelectionModal
+        bind:showModal={showTableSheetSelectionModal}
+        sheets={tableSheetSelectionData.sheets}
+        filename={tableSheetSelectionData.filename}
+        on:confirm={handleTableSheetSelectionConfirm}
+        on:cancel={handleTableSheetSelectionCancel}
     />
 
     <CreateTableModal
@@ -2267,35 +2543,75 @@
                 <Music class="w-4 h-4" /><span>Audio</span>
             </button>
             <button
-                on:click={(event) => handleImportMenuAction(event, "document")}
-                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                on:click={(event) => handleImportMenuAction(event, "documents")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "documents")}
+                on:mouseleave={handleSubMenuMouseLeave}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 group"
             >
-                <FileText class="w-4 h-4" /><span>Document</span>
+                <FileText class="w-4 h-4" />
+                <span class="flex-grow">Documents</span>
+                <ChevronRight class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200" />
             </button>
             <button
                 on:click={(event) => handleImportMenuAction(event, "image")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "image")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <ImageIcon class="w-4 h-4" /><span>Image</span>
             </button>
             <button
-                on:click={(event) => handleImportMenuAction(event, "table")}
-                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+                on:click={(event) => handleImportMenuAction(event, "tables")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "tables")}
+                on:mouseleave={handleSubMenuMouseLeave}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 group"
             >
-                <Sheet class="w-4 h-4" /><span>Table</span>
+                <Sheet class="w-4 h-4" />
+                <span class="flex-grow">Tables</span>
+                <ChevronRight class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200" />
             </button>
             <button
                 on:click={(event) =>
                     handleImportMenuAction(event, "transcript")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "transcript")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <MessageSquareText class="w-4 h-4" /><span>Transcript</span>
             </button>
             <button
                 on:click={(event) => handleImportMenuAction(event, "video")}
+                on:mouseenter={(e) => handleMenuMouseEnter(e, "video")}
                 class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
             >
                 <Film class="w-4 h-4" /><span>Video</span>
+            </button>
+        </div>
+    {/if}
+
+    {#if importMenuVisible && activeSubMenu}
+        <div
+            id="import-submenu-div"
+            class="fixed z-[60] bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xl py-1 text-sm min-w-[120px]"
+            style="left: {subMenuX}px; top: {subMenuY}px;"
+            on:mouseenter={handleSubMenuMouseEnter}
+            on:mouseleave={handleSubMenuMouseLeave}
+            on:click|stopPropagation
+            role="menu"
+            tabindex="-1"
+            on:keydown={(e) => {
+                if (e.key === "Escape") closeImportMenu();
+            }}
+        >
+            <button
+                on:click={() => handleSubMenuAction("create", activeSubMenu)}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+            >
+                <span>Create New</span>
+            </button>
+            <button
+                on:click={() => handleSubMenuAction("import", activeSubMenu)}
+                class="flex items-center space-x-2 w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200"
+            >
+                <span>Import</span>
             </button>
         </div>
     {/if}

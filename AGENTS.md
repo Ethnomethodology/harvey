@@ -4,6 +4,12 @@ This document outlines the necessary steps to set up the build environment for t
 
 **Important Note:** These commands must be executed inside the specific build environment (e.g., within the Docker container, VM, or CI/CD runner) where the application build will take place.
 
+> [!TIP]
+> You can also use the automated bootstrapper to check your environment and install missing dependencies:
+> ```bash
+> bash scripts/bootstrap.sh
+> ```
+
 ## 1. System Dependencies
 
 First, ensure the package list is up to date within your build environment:
@@ -56,7 +62,19 @@ Before submitting any changes, ensure the following checks pass:
     ```bash
     npm run check
     ```
-2.  **Cargo Check**:
+2.  **Frontend Linting**:
+    ```bash
+    npm run lint
+    ```
+3.  **Backend Formatting**:
+    ```bash
+    cd src-tauri && cargo fmt --all -- --check
+    ```
+4.  **Backend Linting (Clippy)**:
+    ```bash
+    cd src-tauri && cargo clippy -- -D warnings
+    ```
+5.  **Cargo Check**:
     ```bash
     cd src-tauri && cargo check
     ```
@@ -94,7 +112,22 @@ npm run tauri build
 
 ---
 
-## 7. Documentation is the Source of Truth
+## 7. E2E Testing
+
+Full end-to-end test docs live in `Docs/E2E_TESTING.md`. The critical rule to be aware of:
+
+> [!CAUTION]
+> **Never run the e2e test suite against a stale binary.**
+> The tests launch the compiled native binary directly (`src-tauri/target/debug/harvey`), which has the entire `build/` directory **embedded at compile time**. If you run tests without first rebuilding both the frontend and the binary, the application logic and behavior reflected in the logs may be incorrect or outdated.
+
+**Always run this command before executing `npx wdio run wdio.conf.mjs`:**
+```bash
+npm run tauri build -- --debug
+```
+
+---
+
+## 8. Documentation is the Source of Truth
 The Harvey application is complex, utilizing SvelteKit, Tauri IPC, SQLite, and Python subprocesses. It relies on a strictly enforced **"Visual First" documentation standard**.
 
 Before attempting to implement a new feature, modify a component, or debug an issue, you **MUST**:

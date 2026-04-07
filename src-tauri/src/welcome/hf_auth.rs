@@ -1,7 +1,7 @@
 // src-tauri/src/welcome/hf_auth.rs
-use tauri::{Manager, AppHandle, Runtime};
 use std::fs;
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager, Runtime};
 
 // Function to get the path to the token file
 fn get_token_path<R: Runtime>(app_handle: &AppHandle<R>) -> PathBuf {
@@ -15,11 +15,14 @@ fn get_token_path<R: Runtime>(app_handle: &AppHandle<R>) -> PathBuf {
 #[tauri::command]
 pub fn check_hf_auth_status<R: Runtime>(app_handle: AppHandle<R>) -> Result<bool, String> {
     let token_path = get_token_path(&app_handle);
-    Ok(token_path.exists() && fs::read_to_string(token_path).map_or(false, |s| !s.is_empty()))
+    Ok(token_path.exists() && fs::read_to_string(token_path).is_ok_and(|s| !s.is_empty()))
 }
 
 #[tauri::command]
-pub fn save_hf_auth_token<R: Runtime>(app_handle: AppHandle<R>, token: String) -> Result<(), String> {
+pub fn save_hf_auth_token<R: Runtime>(
+    app_handle: AppHandle<R>,
+    token: String,
+) -> Result<(), String> {
     if token.is_empty() {
         return Err("Token cannot be empty".into());
     }

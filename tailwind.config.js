@@ -1,4 +1,6 @@
-// tailwind.config.js
+import typography from '@tailwindcss/typography';
+import flowbite from 'flowbite/plugin';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -26,7 +28,7 @@ export default {
     },
   },
   plugins: [
-    require('@tailwindcss/typography'),
-    require('flowbite/plugin')
+    typography,
+    flowbite
   ],
 }

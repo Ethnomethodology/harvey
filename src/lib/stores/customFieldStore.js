@@ -17,48 +17,69 @@ export const definitionError = writable(null);
  * @returns {string|null} The project ID or null if not found/error.
  */
 function getCurrentProjectId() {
-    const currentProject = get(project); // 'project' store should already be imported
+  const currentProject = get(project); // 'project' store should already be imported
 
-    if (currentProject && currentProject.id && typeof currentProject.id === 'string' && currentProject.id.trim() !== '') {
-        console.debug(`[customFieldStore] Determined projectId from currentProject.id (UUID): "${currentProject.id}"`);
-        return currentProject.id.trim();
-    }
+  if (
+    currentProject &&
+    currentProject.id &&
+    typeof currentProject.id === 'string' &&
+    currentProject.id.trim() !== ''
+  ) {
+    console.debug(
+      `[customFieldStore] Determined projectId from currentProject.id (UUID): "${currentProject.id}"`
+    );
+    return currentProject.id.trim();
+  }
 
-    // Log if the UUID is missing, as this is now unexpected after prior fixes
-    console.warn(`[customFieldStore] getCurrentProjectId: currentProject.id (UUID) is missing, null, or empty. This might indicate an issue with project loading. Current project state:`, currentProject);
-    return null;
+  // Log if the UUID is missing, as this is now unexpected after prior fixes
+  console.warn(
+    `[customFieldStore] getCurrentProjectId: currentProject.id (UUID) is missing, null, or empty. This might indicate an issue with project loading. Current project state:`,
+    currentProject
+  );
+  return null;
 }
-
 
 /**
  * Fetches all custom field definitions from the backend and updates the store.
  */
 export async function loadAllDefinitions() {
-    isLoadingDefinitions.set(true);
-    definitionError.set(null);
-    const projectId = getCurrentProjectId();
+  isLoadingDefinitions.set(true);
+  definitionError.set(null);
+  const projectId = getCurrentProjectId();
 
-    if (!projectId) {
-        console.error('[customFieldStore] Cannot load definitions: Project ID could not be determined.');
-        customFieldDefinitions.set([]);
-        definitionError.set('Cannot load definitions: No active project selected or project path is invalid.');
-        isLoadingDefinitions.set(false);
-        return;
-    }
+  if (!projectId) {
+    console.error(
+      '[customFieldStore] Cannot load definitions: Project ID could not be determined.'
+    );
+    customFieldDefinitions.set([]);
+    definitionError.set(
+      'Cannot load definitions: No active project selected or project path is invalid.'
+    );
+    isLoadingDefinitions.set(false);
+    return;
+  }
 
-    console.debug(`[customFieldStore] Attempting to load all definitions for projectId: ${projectId}...`);
-    try {
-        const definitions = await invoke('get_all_custom_field_definitions_command', { projectId });
-        customFieldDefinitions.set(definitions || []); // Ensure it's an array, even if null/undefined from backend
-        console.info(`[customFieldStore] Definitions loaded successfully for projectId ${projectId}. Count:`, definitions?.length || 0);
-    } catch (err) {
-        const errorMessage = err.message || String(err);
-        console.error(`[customFieldStore] Error loading definitions for projectId ${projectId}:`, errorMessage);
-        definitionError.set(errorMessage);
-        customFieldDefinitions.set([]); // Clear definitions on error
-    } finally {
-        isLoadingDefinitions.set(false);
-    }
+  console.debug(
+    `[customFieldStore] Attempting to load all definitions for projectId: ${projectId}...`
+  );
+  try {
+    const definitions = await invoke('get_all_custom_field_definitions_command', { projectId });
+    customFieldDefinitions.set(definitions || []); // Ensure it's an array, even if null/undefined from backend
+    console.info(
+      `[customFieldStore] Definitions loaded successfully for projectId ${projectId}. Count:`,
+      definitions?.length || 0
+    );
+  } catch (err) {
+    const errorMessage = err.message || String(err);
+    console.error(
+      `[customFieldStore] Error loading definitions for projectId ${projectId}:`,
+      errorMessage
+    );
+    definitionError.set(errorMessage);
+    customFieldDefinitions.set([]); // Clear definitions on error
+  } finally {
+    isLoadingDefinitions.set(false);
+  }
 }
 
 /**
@@ -70,33 +91,42 @@ export async function loadAllDefinitions() {
  * @returns {Promise<{success: boolean}>} A promise that resolves to an object indicating success.
  * @throws {Error} If the backend command fails or projectId is not found, an error is thrown.
  */
-export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr) { // Removed defaultValue
-    const projectId = getCurrentProjectId();
+export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr) {
+  // Removed defaultValue
+  const projectId = getCurrentProjectId();
 
-    if (!projectId) {
-        const errorMsg = "Cannot add definition: No active project selected or project ID could not be determined.";
-        console.error(`[customFieldStore] ${errorMsg}`);
-        throw new Error(errorMsg);
-    }
+  if (!projectId) {
+    const errorMsg =
+      'Cannot add definition: No active project selected or project ID could not be determined.';
+    console.error(`[customFieldStore] ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
 
-    console.debug(`[customFieldStore] Attempting to add definition for projectId ${projectId}: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`);
-    try {
-        await invoke('create_custom_field_definition_command', {
-            projectId, // Added projectId
-            fieldKey,
-            fieldName,
-            fieldType,
-            scopeStr
-            // defaultValue field removed from payload
-        });
-        console.info(`[customFieldStore] Definition added successfully for projectId ${projectId}, key: ${fieldKey}`);
-        await loadAllDefinitions(); // Refresh the list
-        return { success: true };
-    } catch (err) {
-        const errorMessage = err.message || String(err);
-        console.error(`[customFieldStore] Error adding definition for projectId ${projectId}, key ${fieldKey}:`, errorMessage);
-        throw new Error(errorMessage); // Propagate error
-    }
+  console.debug(
+    `[customFieldStore] Attempting to add definition for projectId ${projectId}: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`
+  );
+  try {
+    await invoke('create_custom_field_definition_command', {
+      projectId, // Added projectId
+      fieldKey,
+      fieldName,
+      fieldType,
+      scopeStr
+      // defaultValue field removed from payload
+    });
+    console.info(
+      `[customFieldStore] Definition added successfully for projectId ${projectId}, key: ${fieldKey}`
+    );
+    await loadAllDefinitions(); // Refresh the list
+    return { success: true };
+  } catch (err) {
+    const errorMessage = err.message || String(err);
+    console.error(
+      `[customFieldStore] Error adding definition for projectId ${projectId}, key ${fieldKey}:`,
+      errorMessage
+    );
+    throw new Error(errorMessage); // Propagate error
+  }
 }
 
 /**
@@ -106,28 +136,35 @@ export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr) { 
  * @throws {Error} If the backend command fails or projectId is not found, an error is thrown.
  */
 export async function deleteDefinition(fieldKey) {
-    const projectId = getCurrentProjectId();
+  const projectId = getCurrentProjectId();
 
-    if (!projectId) {
-        const errorMsg = `[customFieldStore] Cannot delete definition: No active project or project ID could not be determined for fieldKey: ${fieldKey}`;
-        console.error(errorMsg);
-        throw new Error("Cannot delete definition: Project ID not found."); // User-facing
-    }
+  if (!projectId) {
+    const errorMsg = `[customFieldStore] Cannot delete definition: No active project or project ID could not be determined for fieldKey: ${fieldKey}`;
+    console.error(errorMsg);
+    throw new Error('Cannot delete definition: Project ID not found.'); // User-facing
+  }
 
-    console.debug(`[customFieldStore] Attempting to delete definition for projectId ${projectId}, key: '${fieldKey}'`);
-    try {
-        await invoke('delete_custom_field_definition_command', {
-            projectId,
-            fieldKey
-        });
-        console.info(`[customFieldStore] Definition deleted successfully for projectId ${projectId}, key: ${fieldKey}`);
-        await loadAllDefinitions(); // Refresh the list
-        return { success: true };
-    } catch (err) {
-        const errorMessage = err.message || String(err);
-        console.error(`[customFieldStore] Error deleting definition for projectId ${projectId}, key ${fieldKey}:`, errorMessage);
-        throw new Error(`Failed to delete custom field '${fieldKey}': ${errorMessage}`);
-    }
+  console.debug(
+    `[customFieldStore] Attempting to delete definition for projectId ${projectId}, key: '${fieldKey}'`
+  );
+  try {
+    await invoke('delete_custom_field_definition_command', {
+      projectId,
+      fieldKey
+    });
+    console.info(
+      `[customFieldStore] Definition deleted successfully for projectId ${projectId}, key: ${fieldKey}`
+    );
+    await loadAllDefinitions(); // Refresh the list
+    return { success: true };
+  } catch (err) {
+    const errorMessage = err.message || String(err);
+    console.error(
+      `[customFieldStore] Error deleting definition for projectId ${projectId}, key ${fieldKey}:`,
+      errorMessage
+    );
+    throw new Error(`Failed to delete custom field '${fieldKey}': ${errorMessage}`);
+  }
 }
 
 // Example of how to initialize the store when the app loads,

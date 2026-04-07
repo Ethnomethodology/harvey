@@ -8,12 +8,12 @@ import { emit, listen } from '@tauri-apps/api/event';
 
 // Mock Tauri APIs
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn()
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
   emit: vi.fn(() => Promise.resolve()), // Ensure emit returns a promise
-  listen: vi.fn(() => Promise.resolve(() => {})), // listen returns a promise that resolves to an unlisten function
+  listen: vi.fn(() => Promise.resolve(() => {})) // listen returns a promise that resolves to an unlisten function
 }));
 
 // Helper to reset store to a known initial state for testing
@@ -32,9 +32,8 @@ const getInitialProjectState = () => ({
   tableFiles: [],
   imageFiles: [],
   standaloneTranscriptFiles: [],
-  documentMetadataFiles: [],
+  documentMetadataFiles: []
 });
-
 
 describe('projectService - loadProjectDataAndUpdateStore', () => {
   beforeEach(() => {
@@ -55,12 +54,21 @@ describe('projectService - loadProjectDataAndUpdateStore', () => {
       project_xml_path: '/fake/project.xml',
       base_directory: '/fake/base',
       project_uuid: mockProjectUuid,
-      files: [{ name: 'file1.mp4', path: '/fake/base/harvey_files/Media/file1/media/file1.mp4', relative_path: 'harvey_files/Media/file1/media/file1.mp4', file_type: 'media', is_directory: false, children: [] }],
+      files: [
+        {
+          name: 'file1.mp4',
+          path: '/fake/base/harvey_files/Media/file1/media/file1.mp4',
+          relative_path: 'harvey_files/Media/file1/media/file1.mp4',
+          file_type: 'media',
+          is_directory: false,
+          children: []
+        }
+      ],
       document_files: [],
       table_files: [],
       image_files: [],
       standalone_transcript_files: [],
-      document_metadata_files: [],
+      document_metadata_files: []
       // No need for other_fields if they are not directly set by dataToSet in the function
     };
 
@@ -70,7 +78,9 @@ describe('projectService - loadProjectDataAndUpdateStore', () => {
     await loadProjectDataAndUpdateStore('/fake/project.xml');
 
     const updatedProjectState = get(project);
-    expect(invoke).toHaveBeenCalledWith('load_project_data', { projectXmlPath: '/fake/project.xml' });
+    expect(invoke).toHaveBeenCalledWith('load_project_data', {
+      projectXmlPath: '/fake/project.xml'
+    });
     expect(updatedProjectState.id).toBe(mockProjectUuid);
     expect(updatedProjectState.name).toBe(mockBackendPayload.project_name);
     expect(updatedProjectState.xmlPath).toBe(mockBackendPayload.project_xml_path);
@@ -78,8 +88,12 @@ describe('projectService - loadProjectDataAndUpdateStore', () => {
     expect(updatedProjectState.files).toEqual(mockBackendPayload.files); // or .length if content is complex
     expect(updatedProjectState.isLoading).toBe(false);
     expect(updatedProjectState.error).toBeNull();
-    expect(updatedProjectState.statusMessage).toBe(`Loaded project: ${mockBackendPayload.project_name}`);
-    expect(emit).toHaveBeenCalledWith('project-view-ready', { projectXmlPath: '/fake/project.xml' });
+    expect(updatedProjectState.statusMessage).toBe(
+      `Loaded project: ${mockBackendPayload.project_name}`
+    );
+    expect(emit).toHaveBeenCalledWith('project-view-ready', {
+      projectXmlPath: '/fake/project.xml'
+    });
   });
 
   it('should handle errors from backend correctly', async () => {
@@ -87,10 +101,14 @@ describe('projectService - loadProjectDataAndUpdateStore', () => {
     vi.mocked(invoke).mockRejectedValue({ message: errorMessage });
 
     // Expect the function to throw the error so the caller can catch it
-    await expect(loadProjectDataAndUpdateStore('/fake/project.xml')).rejects.toMatchObject({ message: errorMessage });
+    await expect(loadProjectDataAndUpdateStore('/fake/project.xml')).rejects.toMatchObject({
+      message: errorMessage
+    });
 
     const updatedProjectState = get(project);
-    expect(invoke).toHaveBeenCalledWith('load_project_data', { projectXmlPath: '/fake/project.xml' });
+    expect(invoke).toHaveBeenCalledWith('load_project_data', {
+      projectXmlPath: '/fake/project.xml'
+    });
     expect(updatedProjectState.isLoading).toBe(false);
     expect(updatedProjectState.error).toBe(errorMessage); // Error message from backend
     expect(updatedProjectState.statusMessage).toBe('Error loading project.'); // Status message set by the function

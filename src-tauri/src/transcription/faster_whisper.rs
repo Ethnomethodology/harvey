@@ -1,18 +1,21 @@
-use crate::welcome::config::{CommandError, read_config};
-use crate::welcome::python_env::get_python_path;
 use super::{TranscriptionEngine, TranscriptionOptions};
 use crate::projectview::shared_types::TranscriptSegment;
-use tauri::{AppHandle, Runtime, Manager};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
+use crate::welcome::config::{read_config, CommandError};
+use crate::welcome::python_env::get_python_path;
 use async_trait::async_trait;
-use std::path::{Path};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use log::{debug, error, info, warn};
-use tokio::sync::Mutex;
-use std::time::Duration;
-use tokio::time::sleep;
 use serde::Deserialize;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
+use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 
 pub struct FasterWhisperEngine<R: Runtime> {
     app_handle: AppHandle<R>,
@@ -36,6 +39,8 @@ struct FasterWhisperSegment {
     end: f64,
     text: String,
     speaker: String,
+    #[serde(default)]
+    words: Vec<crate::projectview::shared_types::Word>,
 }
 
 #[async_trait]
@@ -50,9 +55,19 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
         let python_path = get_python_path()
             .map_err(|e| CommandError::from(format!("Failed to get python path: {}", e)))?;
 
-        let script_path = self.app_handle.path()
-            .resolve("scripts/run_transcription.py", tauri::path::BaseDirectory::Resource)
-            .map_err(|e| CommandError::from(format!("Failed to resolve transcription script path: {}", e)))?;
+        let script_path = self
+            .app_handle
+            .path()
+            .resolve(
+                "scripts/run_transcription.py",
+                tauri::path::BaseDirectory::Resource,
+            )
+            .map_err(|e| {
+                CommandError::from(format!(
+                    "Failed to resolve transcription script path: {}",
+                    e
+                ))
+            })?;
 
         let lang_arg = options.language_code.as_deref().unwrap_or("auto");
 
@@ -138,10 +153,14 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
             }
         }
 
-        info!("[FasterWhisperEngine][{}] Executing python script: {:?}", job_id, python_args);
+        info!(
+            "[FasterWhisperEngine][{}] Executing python script: {:?}",
+            job_id, python_args
+        );
 
         let shell_scope = self.app_handle.shell();
-        let (mut rx, child) = shell_scope.command(python_path.to_string_lossy().to_string())
+        let (mut rx, child) = shell_scope
+            .command(python_path.to_string_lossy().to_string())
             .args(python_args)
             .spawn()
             .map_err(|e| CommandError::from(format!("Failed to spawn Python script: {}", e)))?;
@@ -155,7 +174,10 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
         tokio::spawn(async move {
             loop {
                 if cancel_flag_clone.load(Ordering::Relaxed) {
-                    warn!("[FasterWhisperEngine][{}] Cancellation requested. Killing process...", job_id_clone);
+                    warn!(
+                        "[FasterWhisperEngine][{}] Cancellation requested. Killing process...",
+                        job_id_clone
+                    );
                     if let Some(child) = shared_child_clone.lock().await.take() {
                         let _ = child.kill();
                     }
@@ -175,24 +197,24 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
                 CommandEvent::Stdout(line) => {
                     // Accumulate JSON output
                     python_stdout.extend_from_slice(&line);
-                },
+                }
                 CommandEvent::Stderr(line) => {
                     let l = String::from_utf8_lossy(&line).to_string();
                     debug!("[FasterWhisperEngine][stderr][{}] {}", job_id, l.trim_end());
                     python_stderr.extend_from_slice(&line);
-                },
+                }
                 CommandEvent::Error(msg) => {
                     error!("[FasterWhisperEngine][error][{}] {}", job_id, msg);
                     python_error = Some(msg);
                     break;
-                },
+                }
                 CommandEvent::Terminated(payload) => {
                     python_exit_code = payload.code;
                     if payload.signal.is_some() && python_exit_code.is_none() {
                         python_exit_code = Some(-1);
                     }
                     break;
-                },
+                }
                 _ => {}
             }
         }
@@ -203,23 +225,37 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
 
         if python_error.is_some() || python_exit_code != Some(0) {
             let stderr_output = String::from_utf8_lossy(&python_stderr);
-            return Err(CommandError::from(format!("Transcription script failed. Code: {:?}. Error: {:?}. Stderr: {}", python_exit_code, python_error, stderr_output)));
+            return Err(CommandError::from(format!(
+                "Transcription script failed. Code: {:?}. Error: {:?}. Stderr: {}",
+                python_exit_code, python_error, stderr_output
+            )));
         }
 
         let output_str = String::from_utf8_lossy(&python_stdout);
-        let parsed_output: FasterWhisperOutput = serde_json::from_str(&output_str)
-            .map_err(|e| CommandError::from(format!("Failed to parse transcription output: {}. Output was: {}", e, output_str)))?;
+        let parsed_output: FasterWhisperOutput =
+            serde_json::from_str(&output_str).map_err(|e| {
+                CommandError::from(format!(
+                    "Failed to parse transcription output: {}. Output was: {}",
+                    e, output_str
+                ))
+            })?;
 
         if let Some(err) = parsed_output.error {
             return Err(CommandError::from(format!("Faster-whisper error: {}", err)));
         }
 
-        let segments = parsed_output.segments.unwrap_or_default().into_iter().map(|s| TranscriptSegment {
-            start_time: s.start,
-            end_time: s.end,
-            text: s.text,
-            speaker: s.speaker,
-        }).collect();
+        let segments = parsed_output
+            .segments
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| TranscriptSegment {
+                start_time: s.start,
+                end_time: s.end,
+                text: s.text,
+                speaker: s.speaker,
+                words: Some(s.words),
+            })
+            .collect();
 
         Ok(segments)
     }

@@ -1,32 +1,42 @@
 // src-tauri/src/welcome/commands.rs
 
-use crate::welcome::config::{
-    ModelInfo, ProjectInfo, add_or_update_project_in_config, read_config, write_config, // Keep these config functions
-    PROJECT_FILE_EXTENSION, CommandError, get_default_download_location, AdvancedTranslationConfig,
-};
+use crate::projectview::db_handler; // Added for DB operations
+use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
 use crate::utils::canonicalize_path;
+use crate::welcome::config::{
+    add_or_update_project_in_config,
+    get_config_dir,
+    get_default_download_location,
+    read_config,
+    write_config, // Keep these config functions
+    AdvancedTranslationConfig,
+    CommandError,
+    ModelInfo,
+    ProjectInfo,
+    PROJECT_FILE_EXTENSION,
+};
 use crate::DownloadCancellationState;
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
+use futures_util::StreamExt;
 use log; // Use log crate
-use quick_xml::{Reader, Writer, events::{Event, BytesText}};
-use serde_json::from_str;
-use serde::{Deserialize};
+use reqwest;
+use rusqlite::Connection;
+use serde::Deserialize;
 use std::{
     collections::HashSet,
     fs::{self, File},
-    io::{BufReader, Cursor, Write},
-    path::{PathBuf, Path},
-    sync::{Arc, atomic::{AtomicBool, Ordering}},
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
-use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
-use tauri_plugin_shell::ShellExt;
-use uuid::Uuid; // Added for UUID generation
-use crate::projectview::db_handler; // Added for DB operations
-use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
+use tauri::{command, AppHandle, Emitter, Manager, Runtime, State};
 #[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
-use reqwest;
-use futures_util::StreamExt;
+use tauri_plugin_shell::ShellExt;
+use uuid::Uuid; // Added for UUID generation // Added for DB operations
 
 use crate::welcome::python_env;
 use walkdir::WalkDir;
@@ -38,7 +48,9 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
     let family = model.family.as_deref().unwrap_or("");
     let is_faster_whisper = family == "faster-whisper";
     let is_whisper_cpp = family == "whisper-cpp";
-    let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper && !is_whisper_cpp;
+    let is_translation = (model.name.contains('/') || model.family.is_some())
+        && !is_faster_whisper
+        && !is_whisper_cpp;
 
     let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
         format!("models--{}", model.name.replace('/', "--"))
@@ -49,14 +61,20 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
     let sub_dir = if is_faster_whisper {
         PathBuf::from("transcription").join("faster-whisper")
     } else if is_translation {
-         let family = model.family.as_deref().unwrap_or("helsinki");
-         let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
-         PathBuf::from("translation").join(org_dir)
+        let family = model.family.as_deref().unwrap_or("helsinki");
+        let org_dir = if family == "nllb" {
+            "facebook"
+        } else {
+            "helsinki-nlp"
+        };
+        PathBuf::from("translation").join(org_dir)
     } else {
-         PathBuf::from("transcription").join("whisper-cpp")
+        PathBuf::from("transcription").join("whisper-cpp")
     };
 
-    let path = PathBuf::from(base_location).join(sub_dir).join(&folder_name);
+    let path = PathBuf::from(base_location)
+        .join(sub_dir)
+        .join(&folder_name);
     // Return path and whether it is expected to be a directory-based model (HF style)
     (path, is_translation || is_faster_whisper)
 }
@@ -64,33 +82,37 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
 #[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationDownloadProgress {
-  model_name: String,
-  file_name: String,
-  downloaded_bytes: u64,
-  total_bytes: Option<u64>,
+    model_name: String,
+    file_name: String,
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
 }
 
 #[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 struct TranslationErrorPayload {
-  model_name: String,
-  error_message: String,
+    model_name: String,
+    error_message: String,
 }
 
 #[command]
-pub async fn get_advanced_translation_config() -> Result<Option<AdvancedTranslationConfig>, CommandError> {
+pub async fn get_advanced_translation_config(
+) -> Result<Option<AdvancedTranslationConfig>, CommandError> {
     let config = read_config()?;
     Ok(config.advanced_translation)
 }
 
 #[command]
-pub async fn get_advanced_transcription_config() -> Result<Option<crate::welcome::config::AdvancedTranscriptionConfig>, CommandError> {
+pub async fn get_advanced_transcription_config(
+) -> Result<Option<crate::welcome::config::AdvancedTranscriptionConfig>, CommandError> {
     let config = read_config()?;
     Ok(config.advanced_transcription)
 }
 
 #[command]
-pub async fn set_advanced_transcription_config(new_config: crate::welcome::config::AdvancedTranscriptionConfig) -> Result<(), CommandError> {
+pub async fn set_advanced_transcription_config(
+    new_config: crate::welcome::config::AdvancedTranscriptionConfig,
+) -> Result<(), CommandError> {
     log::info!("CMD: set_advanced_transcription_config: {:?}", new_config);
     let mut config = read_config()?;
     config.advanced_transcription = Some(new_config);
@@ -99,75 +121,234 @@ pub async fn set_advanced_transcription_config(new_config: crate::welcome::confi
 }
 
 #[command]
-pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) -> Result<(), CommandError> {
+pub async fn set_menu_context<R: Runtime>(
+    app: AppHandle<R>,
+    context: String,
+) -> Result<(), CommandError> {
     #[cfg(target_os = "macos")]
     {
-        use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
-        
+        use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
         let app_handle = &app;
-        
+
         // 1. App Menu (Harvey)
-        let about_item = MenuItem::with_id(app_handle, "about_harvey", "About Harvey", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let configurations_item = MenuItem::with_id(app_handle, "configurations_harvey", "Configurations", true, Some("CmdOrCtrl+,")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let sep = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let quit = PredefinedMenuItem::quit(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let app_menu = Submenu::with_items(app_handle, "Harvey", true, &[&about_item, &configurations_item, &sep, &quit]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let about_item = MenuItem::with_id(
+            app_handle,
+            "about_harvey",
+            "About Harvey",
+            true,
+            None::<&str>,
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let configurations_item = MenuItem::with_id(
+            app_handle,
+            "configurations_harvey",
+            "Configurations",
+            true,
+            Some("CmdOrCtrl+,"),
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep = PredefinedMenuItem::separator(app_handle)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let quit = PredefinedMenuItem::quit(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let app_menu = Submenu::with_items(
+            app_handle,
+            "Harvey",
+            true,
+            &[&about_item, &configurations_item, &sep, &quit],
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         // 2. Edit Menu
-        let undo = PredefinedMenuItem::undo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let redo = PredefinedMenuItem::redo(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let cut = PredefinedMenuItem::cut(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let copy = PredefinedMenuItem::copy(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let paste = PredefinedMenuItem::paste(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let select_all = PredefinedMenuItem::select_all(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let sep2 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let edit_menu = Submenu::with_items(app_handle, "Edit", true, &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let undo = PredefinedMenuItem::undo(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let redo = PredefinedMenuItem::redo(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let cut = PredefinedMenuItem::cut(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let copy = PredefinedMenuItem::copy(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let paste = PredefinedMenuItem::paste(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let select_all = PredefinedMenuItem::select_all(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep2 = PredefinedMenuItem::separator(app_handle)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let edit_menu = Submenu::with_items(
+            app_handle,
+            "Edit",
+            true,
+            &[&undo, &redo, &sep2, &cut, &copy, &paste, &select_all],
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         // 3. Window Menu
-        let minimize = PredefinedMenuItem::minimize(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let close = PredefinedMenuItem::close_window(app_handle, None).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let sep3 = PredefinedMenuItem::separator(app_handle).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let window_menu = Submenu::with_items(app_handle, "Window", true, &[&minimize, &sep3, &close]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let minimize = PredefinedMenuItem::minimize(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let close = PredefinedMenuItem::close_window(app_handle, None)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let sep3 = PredefinedMenuItem::separator(app_handle)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let window_menu =
+            Submenu::with_items(app_handle, "Window", true, &[&minimize, &sep3, &close])
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         // 4. Help Menu
-        let help_center = MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let license_item = MenuItem::with_id(app_handle, "view_license", "License", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let credits_item = MenuItem::with_id(app_handle, "view_credits", "Credits", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        let version_item = MenuItem::with_id(app_handle, "view_version", "Version", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        
-        let help_menu = Submenu::with_items(app_handle, "Help", true, &[&help_center, &license_item, &credits_item, &version_item]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let help_center =
+            MenuItem::with_id(app_handle, "help_center", "Help Center", true, None::<&str>)
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let license_item =
+            MenuItem::with_id(app_handle, "view_license", "License", true, None::<&str>)
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let credits_item =
+            MenuItem::with_id(app_handle, "view_credits", "Credits", true, None::<&str>)
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let version_item =
+            MenuItem::with_id(app_handle, "view_version", "Version", true, None::<&str>)
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+        let help_menu = Submenu::with_items(
+            app_handle,
+            "Help",
+            true,
+            &[&help_center, &license_item, &credits_item, &version_item],
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         // 5. File Menu (Dynamic)
         let file_menu;
         if context == "welcome" {
-            let new_proj = MenuItem::with_id(app_handle, "file_new_project", "Create New Project", true, Some("CmdOrCtrl+N")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let open_proj = MenuItem::with_id(app_handle, "file_open_project", "Open Project...", true, Some("CmdOrCtrl+O")).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            file_menu = Submenu::with_items(app_handle, "File", true, &[&new_proj, &open_proj]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_proj = MenuItem::with_id(
+                app_handle,
+                "file_new_project",
+                "Create New Project",
+                true,
+                Some("CmdOrCtrl+N"),
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let open_proj = MenuItem::with_id(
+                app_handle,
+                "file_open_project",
+                "Open Project...",
+                true,
+                Some("CmdOrCtrl+O"),
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            file_menu = Submenu::with_items(app_handle, "File", true, &[&new_proj, &open_proj])
+                .map_err(|e| CommandError::TauriApi(e.to_string()))?;
         } else {
             // Import Submenu
-            let imp_audio = MenuItem::with_id(app_handle, "file_import_audio", "Audio...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let imp_video = MenuItem::with_id(app_handle, "file_import_video", "Video...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let imp_doc = MenuItem::with_id(app_handle, "file_import_doc", "Document...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let imp_image = MenuItem::with_id(app_handle, "file_import_image", "Image...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let imp_table = MenuItem::with_id(app_handle, "file_import_table", "Table...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let imp_trans = MenuItem::with_id(app_handle, "file_import_transcript", "Transcript...", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            
-            let import_submenu = Submenu::with_items(app_handle, "Import", true, &[&imp_audio, &imp_video, &imp_doc, &imp_image, &imp_table, &imp_trans]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_audio = MenuItem::with_id(
+                app_handle,
+                "file_import_audio",
+                "Audio...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_video = MenuItem::with_id(
+                app_handle,
+                "file_import_video",
+                "Video...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_doc = MenuItem::with_id(
+                app_handle,
+                "file_import_doc",
+                "Document...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_image = MenuItem::with_id(
+                app_handle,
+                "file_import_image",
+                "Image...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_table = MenuItem::with_id(
+                app_handle,
+                "file_import_table",
+                "Table...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let imp_trans = MenuItem::with_id(
+                app_handle,
+                "file_import_transcript",
+                "Transcript...",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            let import_submenu = Submenu::with_items(
+                app_handle,
+                "Import",
+                true,
+                &[
+                    &imp_audio, &imp_video, &imp_doc, &imp_image, &imp_table, &imp_trans,
+                ],
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
             // Create New Submenu
-            let new_doc = MenuItem::with_id(app_handle, "file_create_doc", "Document", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let new_table = MenuItem::with_id(app_handle, "file_create_table", "Table", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let new_group = MenuItem::with_id(app_handle, "file_create_group", "Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let new_tag = MenuItem::with_id(app_handle, "file_create_tag", "Tag", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            let new_tag_group = MenuItem::with_id(app_handle, "file_create_tag_group", "Tag Group", true, None::<&str>).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-            
-            let create_submenu = Submenu::with_items(app_handle, "Create New", true, &[&new_doc, &new_table, &new_group, &new_tag, &new_tag_group]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_doc = MenuItem::with_id(
+                app_handle,
+                "file_create_doc",
+                "Document",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_table =
+                MenuItem::with_id(app_handle, "file_create_table", "Table", true, None::<&str>)
+                    .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_group =
+                MenuItem::with_id(app_handle, "file_create_group", "Group", true, None::<&str>)
+                    .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag =
+                MenuItem::with_id(app_handle, "file_create_tag", "Tag", true, None::<&str>)
+                    .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let new_tag_group = MenuItem::with_id(
+                app_handle,
+                "file_create_tag_group",
+                "Tag Group",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
-            file_menu = Submenu::with_items(app_handle, "File", true, &[&import_submenu, &create_submenu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+            let create_submenu = Submenu::with_items(
+                app_handle,
+                "Create New",
+                true,
+                &[&new_doc, &new_table, &new_group, &new_tag, &new_tag_group],
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+
+            file_menu = Submenu::with_items(
+                app_handle,
+                "File",
+                true,
+                &[&import_submenu, &create_submenu],
+            )
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
         }
 
-        let menu = Menu::with_items(app_handle, &[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu]).map_err(|e| CommandError::TauriApi(e.to_string()))?;
-        app.set_menu(menu).map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        let menu = Menu::with_items(
+            app_handle,
+            &[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu],
+        )
+        .map_err(|e| CommandError::TauriApi(e.to_string()))?;
+        app.set_menu(menu)
+            .map_err(|e| CommandError::TauriApi(e.to_string()))?;
 
         app.on_menu_event(move |app, event| {
             let id = event.id().as_ref();
@@ -178,7 +359,7 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
                     let _ = tauri::WebviewWindowBuilder::new(
                         app,
                         "license",
-                        tauri::WebviewUrl::App("license".into())
+                        tauri::WebviewUrl::App("license".into()),
                     )
                     .title("License")
                     .inner_size(600.0, 500.0)
@@ -192,7 +373,7 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
                     let _ = tauri::WebviewWindowBuilder::new(
                         app,
                         "credits",
-                        tauri::WebviewUrl::App("credits".into())
+                        tauri::WebviewUrl::App("credits".into()),
                     )
                     .title("Credits")
                     .inner_size(600.0, 500.0)
@@ -206,7 +387,7 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
                     let _ = tauri::WebviewWindowBuilder::new(
                         app,
                         "version",
-                        tauri::WebviewUrl::App("version".into())
+                        tauri::WebviewUrl::App("version".into()),
                     )
                     .title("Version")
                     .inner_size(600.0, 500.0)
@@ -220,7 +401,9 @@ pub async fn set_menu_context<R: Runtime>(app: AppHandle<R>, context: String) ->
 }
 
 #[command]
-pub async fn set_advanced_translation_config(new_config: AdvancedTranslationConfig) -> Result<(), CommandError> {
+pub async fn set_advanced_translation_config(
+    new_config: AdvancedTranslationConfig,
+) -> Result<(), CommandError> {
     log::info!("CMD: set_advanced_translation_config: {:?}", new_config);
     let mut config = read_config()?;
     config.advanced_translation = Some(new_config);
@@ -234,7 +417,9 @@ pub async fn is_ctranslate2_installed<R: Runtime>(app: AppHandle<R>) -> Result<b
 }
 
 #[command]
-pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Result<Vec<String>, CommandError> {
+pub async fn get_dependency_check_errors<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<String>, CommandError> {
     let mut errors = Vec::new();
     let packages = vec!["faster_whisper", "sounddevice", "ctranslate2"];
 
@@ -248,47 +433,65 @@ pub async fn get_dependency_check_errors<R: Runtime>(app: AppHandle<R>) -> Resul
 }
 
 #[command]
-pub async fn is_whisper_cpp_installed<R: Runtime>(_app: AppHandle<R>) -> Result<bool, CommandError> {
+pub async fn is_whisper_cpp_installed<R: Runtime>(
+    _app: AppHandle<R>,
+) -> Result<bool, CommandError> {
     let env_path = python_env::get_env_path()?;
 
     #[cfg(target_os = "windows")]
     let (cli_path, stream_path) = (
         env_path.join("Library").join("bin").join("whisper-cli.exe"),
-        env_path.join("Library").join("bin").join("whisper-stream.exe")
+        env_path
+            .join("Library")
+            .join("bin")
+            .join("whisper-stream.exe"),
     );
 
     #[cfg(not(target_os = "windows"))]
     let (cli_path, stream_path) = (
         env_path.join("bin").join("whisper-cli"),
-        env_path.join("bin").join("whisper-stream")
+        env_path.join("bin").join("whisper-stream"),
     );
 
     Ok(cli_path.exists() && stream_path.exists())
 }
 
 #[command]
-pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+pub async fn is_faster_whisper_dependencies_installed<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<bool, CommandError> {
     // Check for faster-whisper, sounddevice, and ctranslate2
     let fw_installed = python_env::check_package_installed(&app, "faster_whisper").await?;
     let sd_installed = python_env::check_package_installed(&app, "sounddevice").await?;
     let ct2_installed = python_env::check_package_installed(&app, "ctranslate2").await?;
-    
+
     let all_installed = fw_installed && sd_installed && ct2_installed;
-    log::info!("Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}", fw_installed, sd_installed, ct2_installed, all_installed);
-    
+    log::info!(
+        "Faster-Whisper dependencies check: fw={}, sd={}, ct2={} -> all={}",
+        fw_installed,
+        sd_installed,
+        ct2_installed,
+        all_installed
+    );
+
     Ok(all_installed)
 }
 
 #[command]
-pub async fn install_faster_whisper_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+pub async fn install_faster_whisper_dependencies_command<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), CommandError> {
     log::info!("CMD: install_faster_whisper_dependencies_command");
-    python_env::install_faster_whisper_dependencies(&app, &app.shell(), "installation-log", None).await
+    python_env::install_faster_whisper_dependencies(&app, app.shell(), "installation-log", None)
+        .await
 }
 
 #[command]
-pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), CommandError> {
     log::info!("CMD: install_whisper_cpp_dependencies_command");
-    python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "installation-log", None).await
+    python_env::install_whisper_cpp_dependencies(&app, app.shell(), "installation-log", None).await
 }
 
 // --- Transcription Model Download Command (Faster-Whisper) ---
@@ -298,45 +501,80 @@ pub async fn download_faster_whisper_model_command(
     model_info: ModelInfo,
     download_location: String,
 ) -> Result<(), CommandError> {
-    log::info!("CMD: download_faster_whisper_model: {} -> {}", model_info.name, download_location);
+    log::info!(
+        "CMD: download_faster_whisper_model: {} -> {}",
+        model_info.name,
+        download_location
+    );
     let model_name = model_info.name.clone();
 
     let sub_dir = "faster-whisper";
-    let target_dir = PathBuf::from(&download_location).join("transcription").join(sub_dir);
+    let target_dir = PathBuf::from(&download_location)
+        .join("transcription")
+        .join(sub_dir);
     let target_dir_str = target_dir.to_string_lossy().to_string();
 
     if download_location.trim().is_empty() {
-        return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
+        return Err(CommandError::from(format!(
+            "Download location is empty for '{}'.",
+            model_name
+        )));
     }
     if !target_dir.exists() {
-        log::info!("Target directory {:?} does not exist. Creating...", target_dir);
+        log::info!(
+            "Target directory {:?} does not exist. Creating...",
+            target_dir
+        );
         fs::create_dir_all(&target_dir)?;
     } else if !target_dir.is_dir() {
-        return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
+        return Err(CommandError::from(format!(
+            "Target path {:?} is not a directory.",
+            target_dir
+        )));
     }
 
     let window = app.get_webview_window("main").unwrap();
 
     // 1. Check/Install dependencies
-    let dependencies_installed = is_faster_whisper_dependencies_installed(app.clone()).await.unwrap_or(false);
+    let dependencies_installed = is_faster_whisper_dependencies_installed(app.clone())
+        .await
+        .unwrap_or(false);
     if !dependencies_installed {
         log::info!("Faster-Whisper dependencies not found. Installing...");
         window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Faster-Whisper dependencies are missing. Installing them now..." })).unwrap();
-        python_env::install_faster_whisper_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+        python_env::install_faster_whisper_dependencies(
+            &app,
+            app.shell(),
+            "transcription-download-log",
+            Some(&model_name),
+        )
+        .await?;
         window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Dependencies installed successfully." })).unwrap();
     }
 
     let python_path = python_env::get_python_path()?;
-    let script_path = app.path().resource_dir().unwrap().join("scripts/download_transcription_model.py");
+    let script_path = app
+        .path()
+        .resource_dir()
+        .unwrap()
+        .join("scripts/download_transcription_model.py");
 
-    let (mut rx, _child) = app.shell()
+    let (mut rx, _child) = app
+        .shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
+        .args([
+            script_path.to_str().unwrap(),
+            &model_name,
+            &target_dir_str,
+            "",
+        ])
         .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
-    window.emit("transcription-download-start", &model_name).unwrap();
+    window
+        .emit("transcription-download-start", &model_name)
+        .unwrap();
 
     let mut success = false;
     while let Some(event) = rx.recv().await {
@@ -344,15 +582,29 @@ pub async fn download_faster_whisper_model_command(
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
                 log::info!("[Python] {}", &line_str);
-                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                window
+                    .emit(
+                        "transcription-download-log",
+                        serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                    )
+                    .unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
                 log::error!("[Python] {}", &line_str);
-                window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                window
+                    .emit(
+                        "transcription-download-log",
+                        serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                    )
+                    .unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                log::info!("Transcription download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                log::info!(
+                    "Transcription download process for '{}' terminated with code: {:?}",
+                    &model_name,
+                    payload.code
+                );
                 if payload.code == Some(0) {
                     success = true;
                 } else {
@@ -366,18 +618,27 @@ pub async fn download_faster_whisper_model_command(
 
     if !success {
         window.emit("transcription-download-finished", ()).unwrap();
-        return Err(CommandError::Message("Transcription model download failed.".to_string()));
+        return Err(CommandError::Message(
+            "Transcription model download failed.".to_string(),
+        ));
     }
 
     if success {
-        log::info!("Transcription model '{}' downloaded successfully. Updating config.", &model_name);
+        log::info!(
+            "Transcription model '{}' downloaded successfully. Updating config.",
+            &model_name
+        );
         match || -> Result<(), CommandError> {
             let mut config = read_config()?;
             let mut downloaded_model_info = model_info.clone();
             downloaded_model_info.download_location = Some(download_location.clone());
             downloaded_model_info.family = Some("faster-whisper".to_string());
 
-            if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+            if let Some(idx) = config
+                .downloaded_models
+                .iter()
+                .position(|m| m.name == downloaded_model_info.name)
+            {
                 log::info!("Model '{}' already in config. Updating.", &model_name);
                 config.downloaded_models[idx] = downloaded_model_info;
             } else {
@@ -390,19 +651,30 @@ pub async fn download_faster_whisper_model_command(
         }() {
             Ok(_) => {
                 // Emit complete event ONLY after config is updated to avoid race conditions
-                window.emit("transcription-download-complete", &model_name).unwrap();
+                window
+                    .emit("transcription-download-complete", &model_name)
+                    .unwrap();
                 window.emit("transcription-download-finished", ()).unwrap();
                 Ok(())
-            },
+            }
             Err(e) => {
-                log::error!("Failed to update config for transcription model '{}': {}", &model_name, e);
+                log::error!(
+                    "Failed to update config for transcription model '{}': {}",
+                    &model_name,
+                    e
+                );
                 window.emit("transcription-download-finished", ()).unwrap();
-                Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
+                Err(CommandError::from(format!(
+                    "Model downloaded but failed to save configuration: {}",
+                    e
+                )))
             }
         }
     } else {
         window.emit("transcription-download-finished", ()).unwrap();
-        Err(CommandError::Message("Transcription model download failed.".to_string()))
+        Err(CommandError::Message(
+            "Transcription model download failed.".to_string(),
+        ))
     }
 }
 
@@ -413,24 +685,44 @@ pub async fn download_translation_model_command(
     model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
     download_location: String,
 ) -> Result<(), CommandError> {
-    log::info!("CMD: download_translation_model: {} (family: {:?}) -> {}", model_info.name, model_info.family, download_location);
+    log::info!(
+        "CMD: download_translation_model: {} (family: {:?}) -> {}",
+        model_info.name,
+        model_info.family,
+        download_location
+    );
     let model_name = model_info.name.clone();
-    
+
     // Determine target directory based on family
     let family = model_info.family.as_deref().unwrap_or("helsinki");
-    let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
-    
-    let target_dir = PathBuf::from(&download_location).join("translation").join(org_dir);
+    let org_dir = if family == "nllb" {
+        "facebook"
+    } else {
+        "helsinki-nlp"
+    };
+
+    let target_dir = PathBuf::from(&download_location)
+        .join("translation")
+        .join(org_dir);
     let target_dir_str = target_dir.to_string_lossy().to_string();
 
     if download_location.trim().is_empty() {
-        return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
+        return Err(CommandError::from(format!(
+            "Download location is empty for '{}'.",
+            model_name
+        )));
     }
     if !target_dir.exists() {
-        log::info!("Target directory {:?} does not exist. Creating...", target_dir);
+        log::info!(
+            "Target directory {:?} does not exist. Creating...",
+            target_dir
+        );
         fs::create_dir_all(&target_dir)?;
     } else if !target_dir.is_dir() {
-        return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
+        return Err(CommandError::from(format!(
+            "Target path {:?} is not a directory.",
+            target_dir
+        )));
     }
 
     let python_path = python_env::get_python_path()?;
@@ -444,21 +736,40 @@ pub async fn download_translation_model_command(
         if !ct2_installed {
             log::info!("CTranslate2 not found. Installing...");
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 is missing. Installing it now for faster translations..." })).unwrap();
-            python_env::install_pip_packages(&app, &app.shell(), vec!["ctranslate2~=4.5.0"], "translation-download-log", Some(&model_name)).await?;
+            python_env::install_pip_packages(
+                &app,
+                app.shell(),
+                vec!["ctranslate2~=4.5.0"],
+                "translation-download-log",
+                Some(&model_name),
+            )
+            .await?;
             window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "CTranslate2 installed successfully." })).unwrap();
         }
     }
 
     // 2. Download model weights
-    let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
+    let script_path = app
+        .path()
+        .resource_dir()
+        .unwrap()
+        .join("scripts/download_translation_model.py");
 
-    let (mut rx, _child) = app.shell()
+    let (mut rx, _child) = app
+        .shell()
         .command(python_path.to_str().unwrap())
-        .args(&[script_path.to_str().unwrap(), &model_name, &target_dir_str, ""])
+        .args([
+            script_path.to_str().unwrap(),
+            &model_name,
+            &target_dir_str,
+            "",
+        ])
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
-    window.emit("translation-download-start", &model_name).unwrap();
+    window
+        .emit("translation-download-start", &model_name)
+        .unwrap();
 
     let mut success = false;
     while let Some(event) = rx.recv().await {
@@ -470,16 +781,26 @@ pub async fn download_translation_model_command(
                     if let Some(percent_str) = parts.get(1) {
                         if let Ok(percent) = percent_str.trim().parse::<u32>() {
                             let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
-                            window.emit("translation-download-progress", serde_json::json!({ 
-                                "model_name": &model_name, 
-                                "percent": percent,
-                                "file_name": file_name
-                            })).unwrap();
+                            window
+                                .emit(
+                                    "translation-download-progress",
+                                    serde_json::json!({
+                                        "model_name": &model_name,
+                                        "percent": percent,
+                                        "file_name": file_name
+                                    }),
+                                )
+                                .unwrap();
                         }
                     }
                 } else {
                     log::info!("[Python] {}", &line_str);
-                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                    window
+                        .emit(
+                            "translation-download-log",
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        )
+                        .unwrap();
                 }
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
@@ -489,20 +810,34 @@ pub async fn download_translation_model_command(
                     if let Some(percent_str) = parts.get(1) {
                         if let Ok(percent) = percent_str.trim().parse::<u32>() {
                             let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
-                            window.emit("translation-download-progress", serde_json::json!({ 
-                                "model_name": &model_name, 
-                                "percent": percent,
-                                "file_name": file_name
-                            })).unwrap();
+                            window
+                                .emit(
+                                    "translation-download-progress",
+                                    serde_json::json!({
+                                        "model_name": &model_name,
+                                        "percent": percent,
+                                        "file_name": file_name
+                                    }),
+                                )
+                                .unwrap();
                         }
                     }
                 } else {
                     log::error!("[Python] {}", &line_str);
-                    window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                    window
+                        .emit(
+                            "translation-download-log",
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        )
+                        .unwrap();
                 }
             }
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                log::info!("Translation download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                log::info!(
+                    "Translation download process for '{}' terminated with code: {:?}",
+                    &model_name,
+                    payload.code
+                );
                 if payload.code == Some(0) {
                     success = true;
                 } else {
@@ -516,22 +851,34 @@ pub async fn download_translation_model_command(
 
     if !success {
         window.emit("translation-download-finished", ()).unwrap();
-        return Err(CommandError::Message("Translation model download failed.".to_string()));
+        return Err(CommandError::Message(
+            "Translation model download failed.".to_string(),
+        ));
     }
 
     // 3. Optimize model for CTranslate2
     window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Optimizing model for faster CPU inference..." })).unwrap();
-    
-    let optimize_script = app.path().resource_dir().unwrap().join("scripts/optimize_translation_model.py");
+
+    let optimize_script = app
+        .path()
+        .resource_dir()
+        .unwrap()
+        .join("scripts/optimize_translation_model.py");
     let folder_name = format!("models--{}", model_name.replace('/', "--"));
     let model_path = target_dir.join(&folder_name);
     let output_path = model_path.join("ct2_optimized");
 
     // Fetch quantization preference
     let config = read_config()?;
-    let quantization = config.advanced_translation.and_then(|c| c.quantization_preference);
+    let quantization = config
+        .advanced_translation
+        .and_then(|c| c.quantization_preference);
 
-    let mut args = vec![optimize_script.to_str().unwrap(), model_path.to_str().unwrap(), output_path.to_str().unwrap()];
+    let mut args = vec![
+        optimize_script.to_str().unwrap(),
+        model_path.to_str().unwrap(),
+        output_path.to_str().unwrap(),
+    ];
 
     // We need to keep the string alive if we are pushing a reference to it into args
     let quant_str;
@@ -541,7 +888,8 @@ pub async fn download_translation_model_command(
         args.push(&quant_str);
     }
 
-    let (mut rx_opt, _child_opt) = app.shell()
+    let (mut rx_opt, _child_opt) = app
+        .shell()
         .command(python_path.to_str().unwrap())
         .args(&args)
         .spawn()
@@ -552,7 +900,12 @@ pub async fn download_translation_model_command(
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
                 log::info!("[Optimization] {}", &line_str);
-                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+                window
+                    .emit(
+                        "translation-download-log",
+                        serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                    )
+                    .unwrap();
             }
             tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                 let line_str = String::from_utf8_lossy(&line).to_string();
@@ -572,18 +925,27 @@ pub async fn download_translation_model_command(
         }
     }
 
-    window.emit("translation-download-complete", &model_name).unwrap();
+    window
+        .emit("translation-download-complete", &model_name)
+        .unwrap();
     window.emit("translation-download-finished", ()).unwrap();
 
     if success {
-        log::info!("Translation model '{}' downloaded successfully. Updating config.", &model_name);
+        log::info!(
+            "Translation model '{}' downloaded successfully. Updating config.",
+            &model_name
+        );
         match || -> Result<(), CommandError> {
             let mut config = read_config()?;
             let mut downloaded_model_info = model_info.clone();
             // Store the BASE download location in config, consistent with other models
             downloaded_model_info.download_location = Some(download_location.clone());
 
-            if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+            if let Some(idx) = config
+                .downloaded_models
+                .iter()
+                .position(|m| m.name == downloaded_model_info.name)
+            {
                 log::info!("Model '{}' already in config. Updating.", &model_name);
                 config.downloaded_models[idx] = downloaded_model_info;
             } else {
@@ -596,12 +958,21 @@ pub async fn download_translation_model_command(
         }() {
             Ok(_) => Ok(()),
             Err(e) => {
-                log::error!("Failed to update config for translation model '{}': {}", &model_name, e);
-                Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
+                log::error!(
+                    "Failed to update config for translation model '{}': {}",
+                    &model_name,
+                    e
+                );
+                Err(CommandError::from(format!(
+                    "Model downloaded but failed to save configuration: {}",
+                    e
+                )))
             }
         }
     } else {
-        Err(CommandError::Message("Translation model download failed.".to_string()))
+        Err(CommandError::Message(
+            "Translation model download failed.".to_string(),
+        ))
     }
 }
 
@@ -611,10 +982,7 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
     let base_download_dir = PathBuf::from(get_download_location().await?);
     let mut models = Vec::new();
 
-    let families = [
-        ("helsinki", "helsinki-nlp"),
-        ("nllb", "facebook"),
-    ];
+    let families = [("helsinki", "helsinki-nlp"), ("nllb", "facebook")];
 
     for (family_id, sub_dir) in families {
         let download_dir = base_download_dir.join("translation").join(sub_dir);
@@ -716,10 +1084,12 @@ pub async fn get_selected_transcription_engine() -> Result<Option<String>, Comma
 }
 
 #[tauri::command]
-pub async fn is_cuda_available_command<R: tauri::Runtime>(_app_handle: tauri::AppHandle<R>) -> bool {
+pub async fn is_cuda_available_command<R: tauri::Runtime>(
+    _app_handle: tauri::AppHandle<R>,
+) -> bool {
     use tauri_plugin_shell::ShellExt;
     let shell = _app_handle.shell();
-    let strategy = super::python_env::get_pytorch_install_strategy(&shell).await;
+    let strategy = super::python_env::get_pytorch_install_strategy(shell).await;
     strategy == super::python_env::PyTorchInstallStrategy::Gpu
 }
 
@@ -738,16 +1108,15 @@ struct HuggingFaceApiFile {
 // --- Structs (DownloadProgress, ErrorPayload) - Unchanged ---
 #[derive(Clone, serde::Serialize)]
 struct DownloadProgress {
-  model_name: String,
-  downloaded_bytes: u64,
-  total_bytes: Option<u64>,
+    model_name: String,
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
 }
 #[derive(Clone, serde::Serialize)]
 struct ErrorPayload {
-  model_name: String,
-  error_message: String,
+    model_name: String,
+    error_message: String,
 }
-
 
 // --- Project Commands (Unchanged - Omitted for brevity) ---
 #[command]
@@ -755,23 +1124,48 @@ pub async fn load_recent_projects() -> Result<Vec<ProjectInfo>, CommandError> {
     log::info!("---- load_recent_projects: Start ----");
     let mut config = read_config()?;
     let original_project_count = config.projects.len();
-    let existing_paths: HashSet<String> = config.projects.iter().filter(|p| PathBuf::from(&p.path).exists()).map(|p| p.path.clone()).collect();
+    let existing_paths: HashSet<String> = config
+        .projects
+        .iter()
+        .filter(|p| PathBuf::from(&p.path).exists())
+        .map(|p| p.path.clone())
+        .collect();
     let mut updated_config = false;
     if existing_paths.len() < original_project_count {
         config.projects.retain(|p| existing_paths.contains(&p.path));
-        log::info!("load_recent_projects: Removed {} missing projects.", original_project_count - existing_paths.len());
+        log::info!(
+            "load_recent_projects: Removed {} missing projects.",
+            original_project_count - existing_paths.len()
+        );
         updated_config = true;
     }
-    log::info!("load_recent_projects: Found {} valid projects.", config.projects.len());
-    if updated_config { write_config(&config)?; log::info!("load_recent_projects: Updated db after removing missing projects."); }
-    config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
+    log::info!(
+        "load_recent_projects: Found {} valid projects.",
+        config.projects.len()
+    );
+    if updated_config {
+        write_config(&config)?;
+        log::info!("load_recent_projects: Updated db after removing missing projects.");
+    }
+    config
+        .projects
+        .sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
     log::info!("---- load_recent_projects: End ----");
     Ok(config.projects)
 }
 #[command]
-pub async fn create_project(name: String, parent_location: String, overwrite: Option<bool>) -> Result<String, CommandError> {
+pub async fn create_project(
+    name: String,
+    parent_location: String,
+    overwrite: Option<bool>,
+) -> Result<String, CommandError> {
     let should_overwrite = overwrite.unwrap_or(false);
-    log::info!("---- create_project: Start. Name='{}', Location='{}', Overwrite={} ----", name, parent_location, should_overwrite);
+    log::info!(
+        "---- create_project: Start. Name='{}', Location='{}', Overwrite={} ----",
+        name,
+        parent_location,
+        should_overwrite
+    );
 
     let project_uuid = Uuid::new_v4().to_string(); // Generate UUID
     log::info!("create_project: Generated Project UUID: {}", project_uuid);
@@ -791,7 +1185,10 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
             log::warn!("create_project: Target directory exists and overwrite is true. Attempting deletion...");
             delete_project_folder_internal(&project_dir_path)?;
             log::info!("create_project: Existing directory deleted successfully.");
-            let old_xml_path_str = project_dir_path.join(format!("{}.{}", trimmed_name, PROJECT_FILE_EXTENSION)).to_string_lossy().to_string();
+            let old_xml_path_str = project_dir_path
+                .join(format!("{}.{}", trimmed_name, PROJECT_FILE_EXTENSION))
+                .to_string_lossy()
+                .to_string();
             // Note: If the project existed in the new DB, its record is not explicitly deleted here.
             // `add_project_to_db` uses ON CONFLICT for ID, but root_path/xml_path are UNIQUE.
             // If a new UUID is generated, but paths conflict with an *old* entry not yet cleaned from DB,
@@ -799,13 +1196,19 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
             // This is a potential edge case if overwriting projects that were previously in the new DB.
             remove_project_from_config_internal(&old_xml_path_str)?;
         } else {
-            let error_msg = format!("Directory '{}' already exists in the selected location.", trimmed_name);
+            let error_msg = format!(
+                "Directory '{}' already exists in the selected location.",
+                trimmed_name
+            );
             log::error!("create_project: Error - {}", error_msg);
             return Err(CommandError::Message(format!("E_DIR_EXISTS:{}", error_msg)));
         }
     } else if project_dir_path.is_file() {
         log::error!("create_project: Error - Target path is a file.");
-        return Err(CommandError::from(format!("A file named '{}' already exists in the selected location.", trimmed_name)));
+        return Err(CommandError::from(format!(
+            "A file named '{}' already exists in the selected location.",
+            trimmed_name
+        )));
     }
 
     fs::create_dir_all(&project_dir_path)?;
@@ -833,20 +1236,34 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
         .to_str()
         .ok_or("Failed to convert project XML path to string")?
         .to_string();
-    log::info!("create_project: Canonicalized XML path: {}", absolute_xml_path);
+    log::info!(
+        "create_project: Canonicalized XML path: {}",
+        absolute_xml_path
+    );
 
     let absolute_root_path = canonicalize_path(&project_dir_path)?
         .to_str()
         .ok_or("Failed to convert project root path to string")?
         .to_string();
-    log::info!("create_project: Canonicalized root path: {}", absolute_root_path);
+    log::info!(
+        "create_project: Canonicalized root path: {}",
+        absolute_root_path
+    );
 
     // Call add_project_to_db BEFORE add_or_update_project_in_config
     // This ensures the project is in our primary DB before potentially failing on legacy config.
     // Error handling: if DB call fails, we log it but proceed to update config.xml.
     // This could be changed to a hard error if DB persistence is paramount.
-    match db_handler::add_project_to_db(&project_uuid, trimmed_name, &absolute_root_path, &absolute_xml_path) {
-        Ok(_) => log::info!("create_project: Added project to DB successfully. UUID: {}", project_uuid),
+    match db_handler::add_project_to_db(
+        &project_uuid,
+        trimmed_name,
+        &absolute_root_path,
+        &absolute_xml_path,
+    ) {
+        Ok(_) => log::info!(
+            "create_project: Added project to DB successfully. UUID: {}",
+            project_uuid
+        ),
         Err(e) => {
             log::error!("create_project: CRITICAL - Failed to add project to DB: {}. Project files were created but metadata might be missing.", e);
             // Depending on product requirements, this might be a hard error:
@@ -855,9 +1272,11 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     }
 
     let now = Utc::now();
-    let project_info = ProjectInfo { // This struct is for the legacy config.xml
+    let project_info = ProjectInfo {
+        // This struct is for the legacy config.xml
         name: trimmed_name.to_string(),
         path: absolute_xml_path.clone(), // XML path
+        id: Some(project_uuid),
         created_ts: now,
         last_opened_ts: now,
     };
@@ -870,22 +1289,33 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
 }
 #[command]
 #[allow(unused_variables)]
-pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
-    log::info!("---- locate_in_finder: Start. Path='{}' ----", project_xml_path);
+pub async fn locate_in_finder(
+    app: AppHandle,
+    project_xml_path: String,
+) -> Result<(), CommandError> {
+    log::info!(
+        "---- locate_in_finder: Start. Path='{}' ----",
+        project_xml_path
+    );
 
     let path = PathBuf::from(project_xml_path);
     if !path.exists() {
         log::error!("locate_in_finder: Error - Project file not found.");
         return Err("Project file not found.".into());
     }
-    let dir_to_open = path.parent().ok_or("Could not get parent directory from path.")?;
+    let dir_to_open = path
+        .parent()
+        .ok_or("Could not get parent directory from path.")?;
     log::info!("locate_in_finder: Directory to open: {:?}", dir_to_open);
     let absolute_dir_path = dunce::canonicalize(dir_to_open)?;
 
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        log::info!("locate_in_finder: Attempting to open directory with explorer.exe: {:?}", absolute_dir_path);
+        log::info!(
+            "locate_in_finder: Attempting to open directory with explorer.exe: {:?}",
+            absolute_dir_path
+        );
         Command::new("explorer.exe")
             .arg(absolute_dir_path.to_string_lossy().as_ref())
             .spawn()
@@ -895,92 +1325,143 @@ pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Resul
     #[cfg(not(target_os = "windows"))]
     {
         // For non-Windows (e.g., macOS), use file:// URL. Ensure forward slashes.
-        let dir_url = format!("file://{}", absolute_dir_path.to_string_lossy().replace('\\', "/"));
+        let dir_url = format!(
+            "file://{}",
+            absolute_dir_path.to_string_lossy().replace('\\', "/")
+        );
         log::info!("locate_in_finder: Attempting to open URL: {}", dir_url);
-        app.opener().open_url(dir_url, None::<String>).map_err(|e| {
-            log::error!("locate_in_finder: Error opening URL: {}", e);
-            CommandError::from(format!("Failed to open project location: {}", e))
-        })?;
+        app.opener()
+            .open_url(dir_url, None::<String>)
+            .map_err(|e| {
+                log::error!("locate_in_finder: Error opening URL: {}", e);
+                CommandError::from(format!("Failed to open project location: {}", e))
+            })?;
     }
     log::info!("---- locate_in_finder: End ----");
     Ok(())
 }
 #[command]
-pub async fn rename_project(project_xml_path: String, new_name: String) -> Result<String, CommandError> {
-    log::info!("---- rename_project: Start. Path='{}', NewName='{}' ----", project_xml_path, new_name);
+pub async fn rename_project(
+    project_xml_path: String,
+    new_name: String,
+) -> Result<String, CommandError> {
+    log::info!(
+        "---- rename_project: Start. Path='{}', NewName='{}' ----",
+        project_xml_path,
+        new_name
+    );
     let trimmed_new_name = new_name.trim();
     if trimmed_new_name.is_empty() {
         log::error!("rename_project: Error - New name is empty.");
         return Err("New project name cannot be empty.".into());
     }
-    if trimmed_new_name.contains('/') || trimmed_new_name.contains('\\') || trimmed_new_name.contains(':') {
+    if trimmed_new_name.contains('/')
+        || trimmed_new_name.contains('\\')
+        || trimmed_new_name.contains(':')
+    {
         log::error!("rename_project: Error - New name contains invalid chars.");
         return Err("New project name cannot contain path separators or colons.".into());
     }
     log::info!("rename_project: Validating old path...");
     let old_xml_path = PathBuf::from(&project_xml_path);
     if !old_xml_path.exists() {
-        log::error!("rename_project: Error - Original XML file not found at '{}'.", project_xml_path);
+        log::error!(
+            "rename_project: Error - Original XML file not found at '{}'.",
+            project_xml_path
+        );
         return Err("Original project XML file not found.".into());
     }
     log::info!("rename_project: Old path exists: {:?}", old_xml_path);
-    let old_project_dir = old_xml_path.parent().ok_or("Could not get parent directory from old path.")?;
+    let old_project_dir = old_xml_path
+        .parent()
+        .ok_or("Could not get parent directory from old path.")?;
     log::info!("rename_project: Old project dir: {:?}", old_project_dir);
-    let base_dir = old_project_dir.parent().ok_or("Could not get base directory.")?;
+    let base_dir = old_project_dir
+        .parent()
+        .ok_or("Could not get base directory.")?;
     log::info!("rename_project: Base dir: {:?}", base_dir);
     let new_project_dir = base_dir.join(trimmed_new_name);
-    log::info!("rename_project: New project dir target: {:?}", new_project_dir);
+    log::info!(
+        "rename_project: New project dir target: {:?}",
+        new_project_dir
+    );
     let new_xml_filename = format!("{}.{}", trimmed_new_name, PROJECT_FILE_EXTENSION);
     let new_xml_path = new_project_dir.join(&new_xml_filename);
     log::info!("rename_project: New XML path target: {:?}", new_xml_path);
-    let new_xml_path_str = new_xml_path.to_str().ok_or("Failed to convert new project XML path to string")?.to_string();
+    let new_xml_path_str = new_xml_path
+        .to_str()
+        .ok_or("Failed to convert new project XML path to string")?
+        .to_string();
     log::info!("rename_project: New XML path string: {}", new_xml_path_str);
     log::info!("rename_project: Checking if target directory exists and differs...");
     if new_project_dir.exists() && new_project_dir != old_project_dir {
-        log::info!("rename_project: Target directory '{}' exists and is different. Checking if same entry...", new_project_dir.display());
         let are_same_entry = || -> std::io::Result<bool> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::MetadataExt;
                 log::info!("rename_project: Comparing inodes (Unix)...");
-                let meta1 = fs::metadata(&old_project_dir)?;
+                let meta1 = fs::metadata(old_project_dir)?;
                 let meta2 = fs::metadata(&new_project_dir)?;
                 Ok(meta1.dev() == meta2.dev() && meta1.ino() == meta2.ino())
             }
             #[cfg(windows)]
             {
                 log::info!("rename_project: Comparing canonical paths (Windows)...");
-                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon1 = canonicalize_path(&old_project_dir)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
                 Ok(canon1 == canon2)
             }
             #[cfg(not(any(unix, windows)))]
             {
                 log::info!("rename_project: Comparing canonical paths (Other OS)...");
-                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon1 = canonicalize_path(&old_project_dir)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
                 Ok(canon1 == canon2)
             }
         };
         match are_same_entry() {
             Ok(true) => {
-                log::info!("rename_project: Target is the same directory (case change?). Proceeding.");
+                log::info!(
+                    "rename_project: Target is the same directory (case change?). Proceeding."
+                );
             }
             Ok(false) => {
-                log::error!("rename_project: Error - A different directory with name '{}' already exists.", trimmed_new_name);
-                return Err(format!("A different directory with name '{}' exists.", trimmed_new_name).into());
+                log::error!(
+                    "rename_project: Error - A different directory with name '{}' already exists.",
+                    trimmed_new_name
+                );
+                return Err(format!(
+                    "A different directory with name '{}' exists.",
+                    trimmed_new_name
+                )
+                .into());
             }
             Err(e) => {
-                log::error!("rename_project: Error - Could not compare existing directory effectively: {}", e);
-                return Err(format!("Could not reliably check if '{}' is the same directory.", trimmed_new_name).into());
+                log::error!(
+                    "rename_project: Error - Could not compare existing directory effectively: {}",
+                    e
+                );
+                return Err(format!(
+                    "Could not reliably check if '{}' is the same directory.",
+                    trimmed_new_name
+                )
+                .into());
             }
         }
     } else {
         log::info!("rename_project: Target directory doesn't exist or is the same as old one.");
     }
     if old_project_dir != new_project_dir {
-        log::info!("rename_project: === Attempting FOLDER rename: {:?} -> {:?} ===", old_project_dir, new_project_dir);
-        fs::rename(&old_project_dir, &new_project_dir).map_err(|e| {
+        log::info!(
+            "rename_project: === Attempting FOLDER rename: {:?} -> {:?} ===",
+            old_project_dir,
+            new_project_dir
+        );
+        fs::rename(old_project_dir, &new_project_dir).map_err(|e| {
             log::error!("rename_project: *** FOLDER RENAME FAILED: {} ***", e);
             CommandError::from(format!("Failed to rename project folder: {}", e))
         })?;
@@ -988,11 +1469,20 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
     } else {
         log::info!("rename_project: Folder name same, skipping folder rename.");
     }
-    let original_xml_filename_osstr = old_xml_path.file_name().ok_or("Could not get old XML filename.")?;
+    let original_xml_filename_osstr = old_xml_path
+        .file_name()
+        .ok_or("Could not get old XML filename.")?;
     let xml_path_in_potentially_new_dir = new_project_dir.join(original_xml_filename_osstr);
-    log::info!("rename_project: Path of XML inside new/current dir: {:?}", xml_path_in_potentially_new_dir);
+    log::info!(
+        "rename_project: Path of XML inside new/current dir: {:?}",
+        xml_path_in_potentially_new_dir
+    );
     if xml_path_in_potentially_new_dir.exists() && xml_path_in_potentially_new_dir != new_xml_path {
-        log::info!("rename_project: === Attempting XML FILE rename: {:?} -> {:?} ===", xml_path_in_potentially_new_dir, new_xml_path);
+        log::info!(
+            "rename_project: === Attempting XML FILE rename: {:?} -> {:?} ===",
+            xml_path_in_potentially_new_dir,
+            new_xml_path
+        );
         fs::rename(&xml_path_in_potentially_new_dir, &new_xml_path).map_err(|e| {
             log::error!("rename_project: *** XML FILE RENAME FAILED: {} ***", e);
             CommandError::from(format!("Failed to rename project XML file: {}", e))
@@ -1004,47 +1494,83 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
             log::error!("rename_project: XML file missing after rename attempt. Target {:?} does not exist.", new_xml_path);
             return Err("Project XML file missing after rename.".into());
         } else {
-            log::info!("rename_project: XML file already exists at target {:?}. No file rename needed.", new_xml_path);
+            log::info!(
+                "rename_project: XML file already exists at target {:?}. No file rename needed.",
+                new_xml_path
+            );
         }
     } else {
         log::info!("rename_project: XML filename same or matches target. Skipping file rename.");
     }
-    log::info!("rename_project: === Attempting read XML from final path: {:?} ===", new_xml_path);
+    log::info!(
+        "rename_project: === Attempting read XML from final path: {:?} ===",
+        new_xml_path
+    );
     let original_xml_content = fs::read(&new_xml_path).map_err(|e| {
-        log::error!("rename_project: *** FAILED READ XML from {:?}: {} ***", new_xml_path, e);
+        log::error!(
+            "rename_project: *** FAILED READ XML from {:?}: {} ***",
+            new_xml_path,
+            e
+        );
         CommandError::from(format!("Failed read XML after rename: {}", e))
     })?;
-    log::info!("rename_project: Read {} bytes from XML.", original_xml_content.len());
+    log::info!(
+        "rename_project: Read {} bytes from XML.",
+        original_xml_content.len()
+    );
     log::info!("rename_project: === Parsing and updating manifest (JSON) content ===");
     let project_json_content = String::from_utf8(original_xml_content).map_err(|e| {
-        log::error!("rename_project: *** Project manifest is not valid UTF-8: {} ***", e);
+        log::error!(
+            "rename_project: *** Project manifest is not valid UTF-8: {} ***",
+            e
+        );
         CommandError::from(format!("Project manifest is not valid UTF-8: {}", e))
     })?;
 
-    let mut project_data: ProjectXml = serde_json::from_str(&project_json_content).map_err(|e| {
-        log::error!("rename_project: *** FAILED PARSE project JSON: {} ***", e);
-        CommandError::from(format!("Failed to parse project manifest JSON: {}", e))
-    })?;
+    let mut project_data: ProjectXml =
+        serde_json::from_str(&project_json_content).map_err(|e| {
+            log::error!("rename_project: *** FAILED PARSE project JSON: {} ***", e);
+            CommandError::from(format!("Failed to parse project manifest JSON: {}", e))
+        })?;
 
-    log::info!("rename_project: Manifest parsed. Original Name='{}', UUID='{}'", project_data.name, project_data.project_uuid);
+    log::info!(
+        "rename_project: Manifest parsed. Original Name='{}', UUID='{}'",
+        project_data.name,
+        project_data.project_uuid
+    );
     project_data.name = trimmed_new_name.to_string();
 
     let updated_json_bytes = serde_json::to_vec_pretty(&project_data).map_err(|e| {
-        log::error!("rename_project: *** FAILED SERIALIZE project JSON: {} ***", e);
+        log::error!(
+            "rename_project: *** FAILED SERIALIZE project JSON: {} ***",
+            e
+        );
         CommandError::from(format!("Failed to serialize project manifest: {}", e))
     })?;
 
-    log::info!("rename_project: === Manifest content updated ({} bytes). Writing back to {:?} ===", updated_json_bytes.len(), new_xml_path);
+    log::info!(
+        "rename_project: === Manifest content updated ({} bytes). Writing back to {:?} ===",
+        updated_json_bytes.len(),
+        new_xml_path
+    );
     fs::write(&new_xml_path, updated_json_bytes).map_err(|e| {
-        log::error!("rename_project: *** FAILED WRITE updated manifest to {:?}: {} ***", new_xml_path, e);
+        log::error!(
+            "rename_project: *** FAILED WRITE updated manifest to {:?}: {} ***",
+            new_xml_path,
+            e
+        );
         CommandError::from(format!("Failed write updated manifest: {}", e))
     })?;
     log::info!("rename_project: Successfully wrote updated XML content.");
-    
+
     // --- DATABASE SYNC: Update SQLite record with NEW path and NEW name ---
     // This must happen BEFORE we update the memory config and call write_config,
     // as write_config will use the new path and fail to find the old record if we don't handle it here.
-    if let Err(e) = crate::welcome::config::rename_project_in_db(&project_xml_path, &new_xml_path_str, trimmed_new_name) {
+    if let Err(e) = crate::welcome::config::rename_project_in_db(
+        &project_xml_path,
+        &new_xml_path_str,
+        trimmed_new_name,
+    ) {
         log::error!("rename_project: *** DATABASE SYNC FAILED: {} ***", e);
         // We log and continue, as the files ARE renamed, but this is a serious data integrity concern.
     }
@@ -1054,17 +1580,25 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
         log::error!("rename_project: *** FAILED READ config.xml: {} ***", e);
         e
     })?;
-    log::info!("rename_project: Config read. Searching for project path '{}'.", project_xml_path);
+    log::info!(
+        "rename_project: Config read. Searching for project path '{}'.",
+        project_xml_path
+    );
     let now = Utc::now();
     let mut project_updated_in_config = false;
-    if let Some(project) = config.projects.iter_mut().find(|p| p.path == project_xml_path) {
+    if let Some(project) = config
+        .projects
+        .iter_mut()
+        .find(|p| p.path == project_xml_path)
+    {
         log::info!("rename_project: Found project by original path. Updating name and path.");
         project.name = trimmed_new_name.to_string();
         project.path = new_xml_path_str.clone();
         project.last_opened_ts = now;
         project_updated_in_config = true;
     } else {
-        log::error!("rename_project: Error - Could not find project in config to update using path '{}'. Config might be out of sync.", project_xml_path); /* Consider recovery or just warning */
+        log::error!("rename_project: Error - Could not find project in config to update using path '{}'. Config might be out of sync.", project_xml_path);
+        /* Consider recovery or just warning */
     }
     if project_updated_in_config {
         log::info!("rename_project: Project updated in config struct. Writing config.xml...");
@@ -1078,48 +1612,277 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
     }
     Ok(new_xml_path_str)
 }
-#[command] pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> { /* ... */ log::info!("---- remove_project_from_list: Start Command. Path='{}' ----", project_xml_path); let result = remove_project_from_config_internal(&project_xml_path); log::info!("---- remove_project_from_list: End Command ----"); result }
+
+#[command]
+pub async fn suggest_project_name(parent_dir: String) -> Result<String, CommandError> {
+    log::info!(
+        "---- suggest_project_name: Start. ParentDir='{}' ----",
+        parent_dir
+    );
+    let parent_path = PathBuf::from(&parent_dir);
+
+    // 1. Get all project names from the database
+    let db_path = db_handler::get_db_path()?;
+    let conn =
+        Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    let mut stmt = conn
+        .prepare("SELECT name FROM projects")
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+
+    // Using a HashSet for efficient name lookup
+    let existing_names: HashSet<String> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| CommandError::RusqliteError(e.to_string()))?
+        .flatten()
+        .collect();
+
+    let mut i = 0;
+    loop {
+        let candidate = if i == 0 {
+            "Untitled".to_string()
+        } else {
+            format!("Untitled_{}", i)
+        };
+
+        // Rule 1: Name must not already exist in the database
+        let in_db = existing_names.contains(&candidate);
+
+        // Rule 2: Folder must not already exist on disk at the target location
+        let project_dir = parent_path.join(&candidate);
+        let on_disk = project_dir.exists();
+
+        // If neither exists, this is a safe recommendation
+        if !in_db && !on_disk {
+            log::info!("suggest_project_name: Suggesting: {}", candidate);
+            return Ok(candidate);
+        }
+
+        i += 1;
+        // Safety limit to prevent infinite loops in pathological environments
+        if i > 5000 {
+            return Ok(format!("Untitled_{}", i));
+        }
+    }
+}
+
+#[command]
+pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), CommandError> {
+    /* ... */
+    log::info!(
+        "---- remove_project_from_list: Start Command. Path='{}' ----",
+        project_xml_path
+    );
+    let result = remove_project_from_config_internal(&project_xml_path);
+    log::info!("---- remove_project_from_list: End Command ----");
+    result
+}
 fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> {
-    log::info!("---- remove_project_from_config_internal: Start. Path='{}' ----", project_xml_path);
+    log::info!(
+        "---- remove_project_from_config_internal: Start. Path='{}' ----",
+        project_xml_path
+    );
     let mut config = read_config()?;
-    let initial_len = config.projects.len();
     config.projects.retain(|p| p.path != project_xml_path);
+    write_config(&config)?; // Persist the removal from config.xml
 
-    use rusqlite::{Connection, params};
-    use crate::projectview::db_handler::{get_db_path};
+    use crate::projectview::db_handler::get_db_path;
+    use rusqlite::{params, Connection};
     let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
-    let _ = conn.execute("DELETE FROM projects WHERE xml_path = ?1", params![project_xml_path]);
+    let conn =
+        Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
+    let _ = conn.execute(
+        "UPDATE projects SET is_recent = 0 WHERE xml_path = ?1",
+        params![project_xml_path],
+    );
 
-    log::info!("remove_project_from_config_internal: Removed project path {} from harvey.sqlite.", project_xml_path);
+    log::info!(
+        "remove_project_from_config_internal: Removed project path {} from config.xml and marked as is_recent=0 in DB.",
+        project_xml_path
+    );
     Ok(())
 }
-#[command] pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- open_project: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(&project_xml_path); if !path_buf.exists() || !path_buf.is_file() { log::error!("open_project: Error - XML file not found: {}", project_xml_path); return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path))); } log::info!("open_project: File exists."); let mut config = read_config()?; log::info!("open_project: Config read."); let project_index = config.projects.iter().position(|p| p.path == project_xml_path); log::info!("open_project: Project index in config: {:?}", project_index); let final_project_info: ProjectInfo; let mut config_needs_write = false; if let Some(index) = project_index { log::info!("open_project: Found project in config ('{}'). Updating timestamp.", config.projects[index].name); let now = Utc::now(); if config.projects[index].last_opened_ts != now { config.projects[index].last_opened_ts = now; config_needs_write = true; log::info!("open_project: Updated last_opened_ts for '{}'.", config.projects[index].name); } else { log::info!("open_project: Timestamp current for '{}'.", config.projects[index].name); } final_project_info = config.projects[index].clone(); } else { log::info!("open_project: Project not in config, importing..."); match import_project_internal(&project_xml_path) { Ok(imported_info) => { log::info!("open_project: Import successful."); final_project_info = imported_info; config_needs_write = true; /* Config was updated by import */ }, Err(e) => { log::error!("open_project: Import failed: {}", e); return Err(e); } } } if config_needs_write { log::info!("open_project: Config needs write. Writing..."); config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); write_config(&config)?; log::info!("open_project: Config.xml written."); } else { log::info!("open_project: Config up-to-date."); } log::info!("---- open_project: End Successfully ----"); Ok(final_project_info) }
-fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = canonicalize_path(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read JSON ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = serde_json::from_str(&xml_content).map_err(|e| CommandError::from(format!("JSON deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
-#[command] pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project: Start Command Wrapper. Path='{}' ----", project_xml_path); let result = import_project_internal(&project_xml_path); log::info!("---- import_project: End Command Wrapper ----"); result }
+#[command]
+pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> {
+    /* ... */
+    log::info!("---- open_project: Start. Path='{}' ----", project_xml_path);
+    let path_buf = PathBuf::from(&project_xml_path);
+    if !path_buf.exists() || !path_buf.is_file() {
+        log::error!(
+            "open_project: Error - XML file not found: {}",
+            project_xml_path
+        );
+        return Err(CommandError::from(format!(
+            "Project XML file not found: {}",
+            project_xml_path
+        )));
+    }
+    log::info!("open_project: File exists.");
+    let mut config = read_config()?;
+    log::info!("open_project: Config read.");
+    let project_index = config
+        .projects
+        .iter()
+        .position(|p| p.path == project_xml_path);
+    log::info!("open_project: Project index in config: {:?}", project_index);
+    let final_project_info: ProjectInfo;
+    let mut config_needs_write = false;
+    if let Some(index) = project_index {
+        log::info!(
+            "open_project: Found project in config ('{}'). Updating timestamp.",
+            config.projects[index].name
+        );
+        let now = Utc::now();
+        if config.projects[index].last_opened_ts != now {
+            config.projects[index].last_opened_ts = now;
+            config_needs_write = true;
+            log::info!(
+                "open_project: Updated last_opened_ts for '{}'.",
+                config.projects[index].name
+            );
+        } else {
+            log::info!(
+                "open_project: Timestamp current for '{}'.",
+                config.projects[index].name
+            );
+        }
+        final_project_info = config.projects[index].clone();
+    } else {
+        log::info!("open_project: Project not in config, importing...");
+        match import_project_internal(&project_xml_path) {
+            Ok(imported_info) => {
+                log::info!("open_project: Import successful.");
+                final_project_info = imported_info;
+                config_needs_write = true; /* Config was updated by import */
+            }
+            Err(e) => {
+                log::error!("open_project: Import failed: {}", e);
+                return Err(e);
+            }
+        }
+    }
+    if config_needs_write {
+        log::info!("open_project: Config needs write. Writing...");
+        config
+            .projects
+            .sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts));
+        write_config(&config)?;
+        log::info!("open_project: Config.xml written.");
+    } else {
+        log::info!("open_project: Config up-to-date.");
+    }
+    log::info!("---- open_project: End Successfully ----");
+    Ok(final_project_info)
+}
+fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> {
+    /* ... */
+    log::info!(
+        "---- import_project_internal: Start. Path='{}' ----",
+        project_xml_path
+    );
+    let path_buf = PathBuf::from(project_xml_path);
+    if !path_buf.exists() || !path_buf.is_file() {
+        return Err(CommandError::from(format!(
+            "Import failed: File not found: {}",
+            project_xml_path
+        )));
+    }
+    let canonical_path = canonicalize_path(&path_buf)?;
+    log::info!(
+        "import_project_internal: Canonical path: {:?}",
+        canonical_path
+    );
+    let canonical_path_str = canonical_path
+        .to_str()
+        .ok_or("Failed to convert path to string")?
+        .to_string();
+    let xml_content = fs::read_to_string(&canonical_path)?;
+    log::info!(
+        "import_project_internal: Read JSON ({} bytes).",
+        xml_content.len()
+    );
+    #[derive(Deserialize, Debug)]
+    struct MinimalProject {
+        name: String,
+        #[serde(default)]
+        project_uuid: String,
+    }
+    let imported: MinimalProject = serde_json::from_str(&xml_content).map_err(|e| {
+        CommandError::from(format!(
+            "JSON deserialize error for '{}': {}. Content: '{}'",
+            project_xml_path,
+            e,
+            xml_content.chars().take(100).collect::<String>()
+        ))
+    })?;
+    log::info!(
+        "import_project_internal: Deserialized name: {}, UUID: {}",
+        imported.name,
+        imported.project_uuid
+    );
+    let now = Utc::now();
+    let created_time = fs::metadata(project_xml_path)?
+        .created()
+        .map(DateTime::<Utc>::from)
+        .unwrap_or(now);
+    log::info!(
+        "import_project_internal: Metadata (created: {:?}).",
+        created_time
+    );
+    let project_info = ProjectInfo {
+        name: imported.name,
+        path: canonical_path_str,
+        id: if imported.project_uuid.is_empty() {
+            None
+        } else {
+            Some(imported.project_uuid)
+        },
+        created_ts: created_time,
+        last_opened_ts: now,
+    };
+    log::info!("import_project_internal: Created ProjectInfo.");
+    add_or_update_project_in_config(project_info.clone())?;
+    log::info!("import_project_internal: Added/Updated project in config.");
+    log::info!("---- import_project_internal: End ----");
+    Ok(project_info)
+}
+#[command]
+pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> {
+    /* ... */
+    log::info!(
+        "---- import_project: Start Command Wrapper. Path='{}' ----",
+        project_xml_path
+    );
+    let result = import_project_internal(&project_xml_path);
+    log::info!("---- import_project: End Command Wrapper ----");
+    result
+}
 #[command]
 pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError> {
-    log::info!("---- delete_project: Start Command. Path='{}' ----", project_xml_path);
+    log::info!(
+        "---- delete_project: Start Command. Path='{}' ----",
+        project_xml_path
+    );
     let xml_path = PathBuf::from(&project_xml_path);
 
     let mut project_uuid_for_db_deletion: Option<String> = None;
     if xml_path.exists() && xml_path.is_file() {
         match fs::read_to_string(&xml_path) {
-            Ok(xml_content) => {
-                match serde_json::from_str::<ProjectXml>(&xml_content) {
-                    Ok(project_data) => {
-                        if !project_data.project_uuid.is_empty() {
-                            project_uuid_for_db_deletion = Some(project_data.project_uuid);
-                            log::info!("delete_project: Extracted project_uuid {} for DB deletion.", project_uuid_for_db_deletion.as_ref().unwrap());
-                        } else {
-                            log::warn!("delete_project: project_uuid is empty in XML file {}. Cannot delete from DB by UUID.", project_xml_path);
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!("delete_project: Failed to parse ProjectXml from {} to get UUID: {}. DB record might not be deleted by UUID.", project_xml_path, e);
+            Ok(xml_content) => match serde_json::from_str::<ProjectXml>(&xml_content) {
+                Ok(project_data) => {
+                    if !project_data.project_uuid.is_empty() {
+                        project_uuid_for_db_deletion = Some(project_data.project_uuid);
+                        log::info!(
+                            "delete_project: Extracted project_uuid {} for DB deletion.",
+                            project_uuid_for_db_deletion.as_ref().unwrap()
+                        );
+                    } else {
+                        log::warn!("delete_project: project_uuid is empty in XML file {}. Cannot delete from DB by UUID.", project_xml_path);
                     }
                 }
-            }
+                Err(e) => {
+                    log::warn!("delete_project: Failed to parse ProjectXml from {} to get UUID: {}. DB record might not be deleted by UUID.", project_xml_path, e);
+                }
+            },
             Err(e) => {
                 log::warn!("delete_project: Failed to read XML file {} to get UUID: {}. DB record might not be deleted by UUID.", project_xml_path, e);
             }
@@ -1137,7 +1900,10 @@ pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError
             log::error!("delete_project: Could not determine parent directory from project_xml_path: {}. Skipping folder deletion.", project_xml_path);
             // We might still want to proceed with DB and config removal if UUID was found.
             // For now, let's return an error as folder deletion is a key part.
-            return Err(CommandError::from(format!("Could not determine project directory for {}.", project_xml_path)));
+            return Err(CommandError::from(format!(
+                "Could not determine project directory for {}.",
+                project_xml_path
+            )));
         }
     };
 
@@ -1162,18 +1928,115 @@ pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError
     // Remove from legacy config.xml
     // This function also logs if the project is not found, which is fine.
     if let Err(e) = remove_project_from_config_internal(&project_xml_path) {
-         log::error!("delete_project: Failed to remove project from config.xml for {}: {}. The project might reappear in recent projects if config wasn't cleaned.", project_xml_path, e);
+        log::error!("delete_project: Failed to remove project from config.xml for {}: {}. The project might reappear in recent projects if config wasn't cleaned.", project_xml_path, e);
     }
 
     log::info!("---- delete_project: End Command ----");
     Ok(())
 }
-fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), CommandError> { /* ... */ log::info!("---- delete_project_folder_internal: Start. Path='{:?}' ----", project_dir_path); if project_dir_path.exists() { if project_dir_path.is_dir() { log::info!("delete_project_folder_internal: === Attempting FOLDER delete: {:?} ===", project_dir_path); fs::remove_dir_all(project_dir_path).map_err(|e| { log::error!("delete_project_folder_internal: *** FOLDER delete FAILED: {} ***", e); CommandError::from(format!("Failed delete folder '{:?}': {}", project_dir_path.display(), e)) })?; log::info!("delete_project_folder_internal: Folder deleted successfully."); } else { log::error!("delete_project_folder_internal: Path is not a directory: {:?}", project_dir_path); return Err(CommandError::from(format!("Path '{}' is not a directory.", project_dir_path.display()))); } } else { log::warn!("delete_project_folder_internal: Directory {:?} already missing.", project_dir_path); } log::info!("---- delete_project_folder_internal: End ----"); Ok(()) }
+fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), CommandError> {
+    /* ... */
+    log::info!(
+        "---- delete_project_folder_internal: Start. Path='{:?}' ----",
+        project_dir_path
+    );
+    if project_dir_path.exists() {
+        if project_dir_path.is_dir() {
+            log::info!(
+                "delete_project_folder_internal: === Attempting FOLDER delete: {:?} ===",
+                project_dir_path
+            );
+            fs::remove_dir_all(project_dir_path).map_err(|e| {
+                log::error!(
+                    "delete_project_folder_internal: *** FOLDER delete FAILED: {} ***",
+                    e
+                );
+                CommandError::from(format!(
+                    "Failed delete folder '{:?}': {}",
+                    project_dir_path.display(),
+                    e
+                ))
+            })?;
+            log::info!("delete_project_folder_internal: Folder deleted successfully.");
+        } else {
+            log::error!(
+                "delete_project_folder_internal: Path is not a directory: {:?}",
+                project_dir_path
+            );
+            return Err(CommandError::from(format!(
+                "Path '{}' is not a directory.",
+                project_dir_path.display()
+            )));
+        }
+    } else {
+        log::warn!(
+            "delete_project_folder_internal: Directory {:?} already missing.",
+            project_dir_path
+        );
+    }
+    log::info!("---- delete_project_folder_internal: End ----");
+    Ok(())
+}
 
 // --- Configuration Commands (Unchanged - Omitted for brevity) ---
-#[command] pub async fn ensure_directory(path: String) -> Result<(), CommandError> { /* ... */ log::info!("Backend: Ensuring directory: {}", path); fs::create_dir_all(&path)?; Ok(()) }
-#[command] pub async fn save_download_location(new_location: String) -> Result<(), CommandError> { /* ... */ log::info!("Backend: save_download_location: {}", new_location); let mut config = read_config()?; let trimmed = new_location.trim(); if trimmed.is_empty() { return Err("Download location empty.".into()); } config.download_location = trimmed.to_string(); write_config(&config)?; log::info!("Config: Saved download location: {}", trimmed); Ok(()) }
-#[command] pub async fn get_download_location() -> Result<String, CommandError> { /* ... */ let mut config = read_config()?; let mut needs_save = false; let mut final_location = config.download_location.clone(); if final_location.trim().is_empty() { log::info!("Config: Download location empty, computing default."); final_location = get_default_download_location()?; config.download_location = final_location.clone(); needs_save = true; } let dir_path = PathBuf::from(&final_location); if !dir_path.exists() { log::info!("Config: Download directory '{}' missing. Creating...", final_location); fs::create_dir_all(&dir_path)?; } else if !dir_path.is_dir() { return Err(format!("Config Error: Download path '{}' is not a directory.", final_location).into()); } if needs_save { write_config(&config)?; log::info!("Config: Saved default download location: {}", final_location); } else { log::info!("Config: Using download location: {}", final_location); } Ok(final_location) }
+#[command]
+pub async fn ensure_directory(path: String) -> Result<(), CommandError> {
+    /* ... */
+    log::info!("Backend: Ensuring directory: {}", path);
+    fs::create_dir_all(&path)?;
+    Ok(())
+}
+#[command]
+pub async fn save_download_location(new_location: String) -> Result<(), CommandError> {
+    /* ... */
+    log::info!("Backend: save_download_location: {}", new_location);
+    let mut config = read_config()?;
+    let trimmed = new_location.trim();
+    if trimmed.is_empty() {
+        return Err("Download location empty.".into());
+    }
+    config.download_location = trimmed.to_string();
+    write_config(&config)?;
+    log::info!("Config: Saved download location: {}", trimmed);
+    Ok(())
+}
+#[command]
+pub async fn get_download_location() -> Result<String, CommandError> {
+    /* ... */
+    let mut config = read_config()?;
+    let mut needs_save = false;
+    let mut final_location = config.download_location.clone();
+    if final_location.trim().is_empty() {
+        log::info!("Config: Download location empty, computing default.");
+        final_location = get_default_download_location()?;
+        config.download_location = final_location.clone();
+        needs_save = true;
+    }
+    let dir_path = PathBuf::from(&final_location);
+    if !dir_path.exists() {
+        log::info!(
+            "Config: Download directory '{}' missing. Creating...",
+            final_location
+        );
+        fs::create_dir_all(&dir_path)?;
+    } else if !dir_path.is_dir() {
+        return Err(format!(
+            "Config Error: Download path '{}' is not a directory.",
+            final_location
+        )
+        .into());
+    }
+    if needs_save {
+        write_config(&config)?;
+        log::info!(
+            "Config: Saved default download location: {}",
+            final_location
+        );
+    } else {
+        log::info!("Config: Using download location: {}", final_location);
+    }
+    Ok(final_location)
+}
 #[command]
 pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
     let mut config = read_config()?;
@@ -1183,7 +2046,7 @@ pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
     } else {
         get_default_download_location()?
     };
-    
+
     // Automatically clean up paraphrase models AND models that don't exist on disk
     config.downloaded_models.retain(|m| {
         if m.name.contains("paraphrase") {
@@ -1191,7 +2054,9 @@ pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
         }
 
         // Use model-specific download location if available, otherwise use global default
-        let model_base_loc = m.download_location.as_ref()
+        let model_base_loc = m
+            .download_location
+            .as_ref()
             .filter(|l| !l.trim().is_empty())
             .unwrap_or(&download_location);
 
@@ -1206,23 +2071,37 @@ pub async fn get_downloaded_models() -> Result<Vec<ModelInfo>, CommandError> {
                     return true;
                 }
             }
-            log::warn!("Model '{}' not found on disk at {:?}. Removing from config.", m.name, path);
+            log::warn!(
+                "Model '{}' not found on disk at {:?}. Removing from config.",
+                m.name,
+                path
+            );
             false
         }
     });
-    
+
     if config.downloaded_models.len() < initial_len {
-        log::info!("Cleaned up {} missing/legacy model(s) from config.", initial_len - config.downloaded_models.len());
+        log::info!(
+            "Cleaned up {} missing/legacy model(s) from config.",
+            initial_len - config.downloaded_models.len()
+        );
         write_config(&config)?;
     }
 
-    log::info!("Config: Returning {} downloaded models.", config.downloaded_models.len());
+    log::info!(
+        "Config: Returning {} downloaded models.",
+        config.downloaded_models.len()
+    );
     Ok(config.downloaded_models)
 }
 
 #[command]
 pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError> {
-    log::info!("CMD: delete_model: Attempting to delete '{}' (family: {:?})", model_to_delete.name, model_to_delete.family);
+    log::info!(
+        "CMD: delete_model: Attempting to delete '{}' (family: {:?})",
+        model_to_delete.name,
+        model_to_delete.family
+    );
     let mut config = read_config()?;
     let initial_len = config.downloaded_models.len();
 
@@ -1233,17 +2112,26 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     };
 
     // Use model-specific location if available, else global
-    let base_location = model_to_delete.download_location.as_ref()
+    let base_location = model_to_delete
+        .download_location
+        .as_ref()
         .filter(|l| !l.trim().is_empty())
         .unwrap_or(&global_location);
 
     if base_location.trim().is_empty() {
-        return Err(CommandError::from(format!("Cannot determine download location to delete model '{}'.", model_to_delete.name)));
+        return Err(CommandError::from(format!(
+            "Cannot determine download location to delete model '{}'.",
+            model_to_delete.name
+        )));
     }
 
     let (model_path, is_dir_based) = resolve_model_path(base_location, &model_to_delete);
-    
-    log::info!("CMD: delete_model: Resolved path: {:?} (is_dir_based: {})", model_path, is_dir_based);
+
+    log::info!(
+        "CMD: delete_model: Resolved path: {:?} (is_dir_based: {})",
+        model_path,
+        is_dir_based
+    );
 
     if model_path.exists() {
         log::info!("Deleting model from filesystem at path: {:?}", model_path);
@@ -1257,25 +2145,37 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     } else {
         // Fallback for whisper-cpp: check if .bin extension is needed
         if !is_dir_based && model_path.extension().and_then(|s| s.to_str()) != Some("bin") {
-             let bin_path = model_path.with_extension("bin");
-             if bin_path.exists() && bin_path.is_file() {
-                log::info!("Found binary file at fallback path: {:?}. Deleting.", bin_path);
+            let bin_path = model_path.with_extension("bin");
+            if bin_path.exists() && bin_path.is_file() {
+                log::info!(
+                    "Found binary file at fallback path: {:?}. Deleting.",
+                    bin_path
+                );
                 fs::remove_file(&bin_path)?;
-             } else {
-                 log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, bin_path);
-             }
+            } else {
+                log::warn!("Model path {:?} (and fallback {:?}) not found on disk. Skipping filesystem delete.", model_path, bin_path);
+            }
         } else {
-             log::warn!("Model path {:?} not found on disk. Skipping filesystem delete.", model_path);
+            log::warn!(
+                "Model path {:?} not found on disk. Skipping filesystem delete.",
+                model_path
+            );
         }
     }
 
     // Remove from config using the original name
-    config.downloaded_models.retain(|m| m.name != model_to_delete.name);
+    config
+        .downloaded_models
+        .retain(|m| m.name != model_to_delete.name);
 
     if config.downloaded_models.len() < initial_len {
         let remaining_models = &config.downloaded_models;
-        let has_transcription_models = remaining_models.iter().any(|m| m.family.is_none() && !m.name.contains('/'));
-        let has_translation_models = remaining_models.iter().any(|m| m.family.is_some() || m.name.contains('/'));
+        let has_transcription_models = remaining_models
+            .iter()
+            .any(|m| m.family.is_none() && !m.name.contains('/'));
+        let has_translation_models = remaining_models
+            .iter()
+            .any(|m| m.family.is_some() || m.name.contains('/'));
 
         if !has_transcription_models {
             config.verification_status.transcription_models_verified = false;
@@ -1287,14 +2187,19 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
         write_config(&config)?;
         log::info!("Removed entry '{}' from config.", model_to_delete.name);
     } else {
-        log::warn!("Model '{}' not found in config list. Config not updated.", model_to_delete.name);
+        log::warn!(
+            "Model '{}' not found in config list. Config not updated.",
+            model_to_delete.name
+        );
     }
 
     Ok(())
 }
 
 #[command]
-pub async fn change_download_location_and_move_models(new_location: String) -> Result<(), CommandError> {
+pub async fn change_download_location_and_move_models(
+    new_location: String,
+) -> Result<(), CommandError> {
     log::info!("CMD: change_dl_loc_move: {}", new_location);
     let trimmed = new_location.trim();
     if trimmed.is_empty() {
@@ -1331,22 +2236,27 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
 
     let models_in_config = config.downloaded_models.clone();
     log::info!("Found {} models in config to move.", models_in_config.len());
-    let mut move_errors : Vec<String> = Vec::new();
+    let mut move_errors: Vec<String> = Vec::new();
 
     for model in &models_in_config {
         // Determine subdirectory based on model type and family
         let family = model.family.as_deref().unwrap_or("");
         let is_faster_whisper = family == "faster-whisper";
-        let is_translation = (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper;
+        let is_translation =
+            (model.name.contains('/') || model.family.is_some()) && !is_faster_whisper;
 
         let sub_dir = if is_faster_whisper {
             PathBuf::from("transcription").join("faster-whisper")
         } else if is_translation {
-             let family = model.family.as_deref().unwrap_or("helsinki");
-             let org_dir = if family == "nllb" { "facebook" } else { "helsinki-nlp" };
-             PathBuf::from("translation").join(org_dir)
+            let family = model.family.as_deref().unwrap_or("helsinki");
+            let org_dir = if family == "nllb" {
+                "facebook"
+            } else {
+                "helsinki-nlp"
+            };
+            PathBuf::from("translation").join(org_dir)
         } else {
-             PathBuf::from("transcription").join("whisper-cpp")
+            PathBuf::from("transcription").join("whisper-cpp")
         };
 
         // Handle the case where the model name in the config (e.g., "Helsinki-NLP/opus-mt-ja-en")
@@ -1360,30 +2270,41 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
         let old_model_dir = old_path.join(&sub_dir).join(&folder_name);
         let new_model_dir = new_path.join(&sub_dir).join(&folder_name);
 
-        log::info!("Check model '{}': Old {:?}, New {:?}", model.name, old_model_dir, new_model_dir);
+        log::info!(
+            "Check model '{}': Old {:?}, New {:?}",
+            model.name,
+            old_model_dir,
+            new_model_dir
+        );
 
         if old_model_dir.exists() {
             if old_model_dir.is_dir() {
                 log::info!("Attempt move {:?} -> {:?}", old_model_dir, new_model_dir);
 
-                 // Ensure parent dir exists
-                 if let Some(parent) = new_model_dir.parent() {
-                     if !parent.exists() {
-                         let _ = fs::create_dir_all(parent);
-                     }
-                 }
+                // Ensure parent dir exists
+                if let Some(parent) = new_model_dir.parent() {
+                    if !parent.exists() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                }
 
                 if new_model_dir.exists() {
                     log::warn!("Target {:?} exists. Removing before move.", new_model_dir);
                     if let Err(e) = fs::remove_dir_all(&new_model_dir) {
-                        let m = format!("Failed remove target {:?} for '{}': {}", new_model_dir, model.name, e);
+                        let m = format!(
+                            "Failed remove target {:?} for '{}': {}",
+                            new_model_dir, model.name, e
+                        );
                         log::error!("{}", m);
                         move_errors.push(m);
                         continue;
                     }
                 }
                 if let Err(e) = fs::rename(&old_model_dir, &new_model_dir) {
-                    let m = format!("Failed move '{}' {:?}->{:?}: {}", model.name, old_model_dir, new_model_dir, e);
+                    let m = format!(
+                        "Failed move '{}' {:?}->{:?}: {}",
+                        model.name, old_model_dir, new_model_dir, e
+                    );
                     log::error!("{}", m);
                     move_errors.push(m);
                 } else {
@@ -1393,27 +2314,55 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
                 log::warn!("Source path {:?} not dir. Skip.", old_model_dir);
             }
         } else {
-             // Fallback check for legacy structure (Root/ModelName)
-             let legacy_old_model_dir = old_path.join(&folder_name);
-             if legacy_old_model_dir.exists() && legacy_old_model_dir.is_dir() {
-                 log::info!("Found model at legacy path {:?}. Moving to new structure {:?}.", legacy_old_model_dir, new_model_dir);
-                  // Ensure parent dir exists
-                 if let Some(parent) = new_model_dir.parent() {
-                     if !parent.exists() {
-                         let _ = fs::create_dir_all(parent);
-                     }
-                 }
-                  if new_model_dir.exists() {
-                     log::warn!("Target {:?} exists. Removing before move.", new_model_dir);
-                     if let Err(e)=fs::remove_dir_all(&new_model_dir){let m=format!("Failed remove target {:?} for '{}': {}", new_model_dir,model.name,e); log::error!("{}", m); move_errors.push(m); continue;}
-                 }
-                 if let Err(e)=fs::rename(&legacy_old_model_dir,&new_model_dir){let m=format!("Failed move '{}' {:?}->{:?}: {}", model.name,legacy_old_model_dir,new_model_dir,e); log::error!("{}", m); move_errors.push(m);} else { log::info!("Moved '{}' (from legacy).", model.name); }
-             } else {
-                 log::info!("Old path {:?} missing (and legacy check failed). Skip.", old_model_dir);
-                 if new_model_dir.exists() && new_model_dir.is_dir() {
-                     log::info!("Model '{}' already at new loc {:?}.", model.name, new_model_dir);
-                 }
-             }
+            // Fallback check for legacy structure (Root/ModelName)
+            let legacy_old_model_dir = old_path.join(&folder_name);
+            if legacy_old_model_dir.exists() && legacy_old_model_dir.is_dir() {
+                log::info!(
+                    "Found model at legacy path {:?}. Moving to new structure {:?}.",
+                    legacy_old_model_dir,
+                    new_model_dir
+                );
+                // Ensure parent dir exists
+                if let Some(parent) = new_model_dir.parent() {
+                    if !parent.exists() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                }
+                if new_model_dir.exists() {
+                    log::warn!("Target {:?} exists. Removing before move.", new_model_dir);
+                    if let Err(e) = fs::remove_dir_all(&new_model_dir) {
+                        let m = format!(
+                            "Failed remove target {:?} for '{}': {}",
+                            new_model_dir, model.name, e
+                        );
+                        log::error!("{}", m);
+                        move_errors.push(m);
+                        continue;
+                    }
+                }
+                if let Err(e) = fs::rename(&legacy_old_model_dir, &new_model_dir) {
+                    let m = format!(
+                        "Failed move '{}' {:?}->{:?}: {}",
+                        model.name, legacy_old_model_dir, new_model_dir, e
+                    );
+                    log::error!("{}", m);
+                    move_errors.push(m);
+                } else {
+                    log::info!("Moved '{}' (from legacy).", model.name);
+                }
+            } else {
+                log::info!(
+                    "Old path {:?} missing (and legacy check failed). Skip.",
+                    old_model_dir
+                );
+                if new_model_dir.exists() && new_model_dir.is_dir() {
+                    log::info!(
+                        "Model '{}' already at new loc {:?}.",
+                        model.name,
+                        new_model_dir
+                    );
+                }
+            }
         }
     }
 
@@ -1433,17 +2382,41 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
     log::info!("Config updated.");
     Ok(())
 }
-#[command] pub async fn download_model_command( app: AppHandle, cancellation_state: State<'_, DownloadCancellationState>, model_info: ModelInfo, download_location: String ) -> Result<(), CommandError> {
-    log::info!("CMD: download_model: {} -> {}", model_info.name, download_location);
+#[command]
+pub async fn download_model_command(
+    app: AppHandle,
+    cancellation_state: State<'_, DownloadCancellationState>,
+    model_info: ModelInfo,
+    download_location: String,
+) -> Result<(), CommandError> {
+    log::info!(
+        "CMD: download_model: {} -> {}",
+        model_info.name,
+        download_location
+    );
     let model_name = model_info.name.clone();
     let target_dir = PathBuf::from(&download_location);
 
-    if download_location.trim().is_empty() { return Err(CommandError::from(format!("Download location empty for '{}'.", model_name))); }
-    if !target_dir.exists() { log::info!("Target dir {:?} missing. Creating...", target_dir); fs::create_dir_all(&target_dir)?; } else if !target_dir.is_dir() { return Err(CommandError::from(format!("Target path {:?} not dir.", target_dir))); }
+    if download_location.trim().is_empty() {
+        return Err(CommandError::from(format!(
+            "Download location empty for '{}'.",
+            model_name
+        )));
+    }
+    if !target_dir.exists() {
+        log::info!("Target dir {:?} missing. Creating...", target_dir);
+        fs::create_dir_all(&target_dir)?;
+    } else if !target_dir.is_dir() {
+        return Err(CommandError::from(format!(
+            "Target path {:?} not dir.",
+            target_dir
+        )));
+    }
 
     // Check if this model is a whisper.cpp model by looking at its family or name
     let family = model_info.family.as_deref().unwrap_or("");
-    let is_whisper_cpp_model = family == "whisper-cpp" || (family.is_empty() && model_name.starts_with("ggml-"));
+    let is_whisper_cpp_model =
+        family == "whisper-cpp" || (family.is_empty() && model_name.starts_with("ggml-"));
 
     if is_whisper_cpp_model {
         // Ensure whisper.cpp binary is installed via micromamba first
@@ -1451,37 +2424,74 @@ pub async fn change_download_location_and_move_models(new_location: String) -> R
         if !is_installed {
             log::info!("whisper.cpp not found in conda environment. Installing...");
             let window = app.get_webview_window("main").unwrap();
-            window.emit("transcription-download-log", serde_json::json!({
-                "model_name": model_name.clone(),
-                "log_line": "Installing whisper.cpp dependencies via micromamba..."
-            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            window
+                .emit(
+                    "transcription-download-log",
+                    serde_json::json!({
+                        "model_name": model_name.clone(),
+                        "log_line": "Installing whisper.cpp dependencies via micromamba..."
+                    }),
+                )
+                .map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
 
-            python_env::install_whisper_cpp_dependencies(&app, &app.shell(), "transcription-download-log", Some(&model_name)).await?;
+            python_env::install_whisper_cpp_dependencies(
+                &app,
+                app.shell(),
+                "transcription-download-log",
+                Some(&model_name),
+            )
+            .await?;
 
-            window.emit("transcription-download-log", serde_json::json!({
-                "model_name": model_name.clone(),
-                "log_line": "whisper.cpp installed successfully. Starting model download..."
-            })).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            window
+                .emit(
+                    "transcription-download-log",
+                    serde_json::json!({
+                        "model_name": model_name.clone(),
+                        "log_line": "whisper.cpp installed successfully. Starting model download..."
+                    }),
+                )
+                .map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
         }
     }
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag));
+    cancellation_state
+        .0
+        .insert(model_name.clone(), Arc::clone(&cancel_flag));
     log::info!("Cancel token stored for {}", model_name);
 
-    let download_result = download_and_save_bin(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await;
+    let download_result = download_and_save_bin(
+        app.clone(),
+        cancel_flag.clone(),
+        model_info.clone(),
+        download_location.clone(),
+    )
+    .await;
 
-    if cancellation_state.0.remove(&model_name).is_some() { log::info!("Removed cancel token for {}", model_name); } else { log::warn!("Cancel token {} already removed.", model_name); }
+    if cancellation_state.0.remove(&model_name).is_some() {
+        log::info!("Removed cancel token for {}", model_name);
+    } else {
+        log::warn!("Cancel token {} already removed.", model_name);
+    }
 
     match download_result {
         Ok(_) => {
             log::info!("Download success for {}", model_name);
-            app.emit("download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+            app.emit("download-complete", &model_name)
+                .map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
             Ok(())
         }
         Err(e) => {
             log::error!("Download error for {}: {}", model_name, e);
-            let _=app.emit("download-error", &ErrorPayload { model_name: model_name.clone(), error_message: format!("{}", e), }).map_err(|emit_err| log::error!("Emit error fail: {}", emit_err));
+            let _ = app
+                .emit(
+                    "download-error",
+                    &ErrorPayload {
+                        model_name: model_name.clone(),
+                        error_message: format!("{}", e),
+                    },
+                )
+                .map_err(|emit_err| log::error!("Emit error fail: {}", emit_err));
             Err(e)
         }
     }
@@ -1492,20 +2502,29 @@ async fn download_and_save_bin(
     model_info: ModelInfo,
     download_base_location: String,
 ) -> Result<(), CommandError> {
-    log::info!("CMD: download_and_save_bin: {} -> {}", model_info.name, download_base_location);
+    log::info!(
+        "CMD: download_and_save_bin: {} -> {}",
+        model_info.name,
+        download_base_location
+    );
     let model_name = model_info.name.clone();
-    let model_url = model_info.download_url.as_ref()
+    let model_url = model_info
+        .download_url
+        .as_ref()
         .filter(|url| !url.trim().is_empty())
         .ok_or_else(|| CommandError::from(format!("Model '{}' missing URL.", model_name)))?;
 
-    let bin_filename = Path::new(model_url).file_name()
+    let bin_filename = Path::new(model_url)
+        .file_name()
         .and_then(|n| n.to_str())
         .ok_or_else(|| CommandError::from(format!("Bad URL filename: {}", model_url)))?
         .to_string();
 
     // Updated logic: Save to transcription/whisper-cpp subdirectory
     let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
-    let model_dest_dir = PathBuf::from(&download_base_location).join(sub_dir).join(&model_name);
+    let model_dest_dir = PathBuf::from(&download_base_location)
+        .join(sub_dir)
+        .join(&model_name);
 
     let bin_filepath = model_dest_dir.join(&bin_filename);
     let temp_bin_filepath = model_dest_dir.join(format!("{}.part", bin_filename));
@@ -1538,7 +2557,13 @@ async fn download_and_save_bin(
     let client = reqwest::Client::new();
     let response = client.get(model_url).send().await?;
     if !response.status().is_success() {
-        return Err(format!("Download fail '{}': Status {} URL {}", model_name, response.status(), model_url).into());
+        return Err(format!(
+            "Download fail '{}': Status {} URL {}",
+            model_name,
+            response.status(),
+            model_url
+        )
+        .into());
     }
 
     let total_size = response.content_length();
@@ -1553,37 +2578,51 @@ async fn download_and_save_bin(
     let mut stream = response.bytes_stream();
     let mut downloaded: u64 = 0;
     let mut last_percent = 0;
-    let _ = app.emit("download-progress", &DownloadProgress {
-        model_name: model_name.clone(),
-        downloaded_bytes: 0,
-        total_bytes: total_size
-    });
+    let _ = app.emit(
+        "download-progress",
+        &DownloadProgress {
+            model_name: model_name.clone(),
+            downloaded_bytes: 0,
+            total_bytes: total_size,
+        },
+    );
 
     while let Some(item_result) = stream.next().await {
         if cancel_flag.load(Ordering::Relaxed) {
             log::warn!("Cancel {}. Abort download.", model_name);
             drop(dest_file);
             let _ = fs::remove_file(&temp_bin_filepath);
-            return Err(CommandError::from(format!("Download cancelled for '{}'.", model_name)));
+            return Err(CommandError::from(format!(
+                "Download cancelled for '{}'.",
+                model_name
+            )));
         }
         match item_result {
             Ok(chunk) => {
-                dest_file.write_all(&chunk).map_err(|e| format!("Failed write chunk: {}", e))?;
+                dest_file
+                    .write_all(&chunk)
+                    .map_err(|e| format!("Failed write chunk: {}", e))?;
                 downloaded += chunk.len() as u64;
-                let _ = app.emit("download-progress", &DownloadProgress {
-                    model_name: model_name.clone(),
-                    downloaded_bytes: downloaded,
-                    total_bytes: total_size
-                });
+                let _ = app.emit(
+                    "download-progress",
+                    &DownloadProgress {
+                        model_name: model_name.clone(),
+                        downloaded_bytes: downloaded,
+                        total_bytes: total_size,
+                    },
+                );
 
                 if let Some(total) = total_size {
                     let percent = (downloaded * 100 / total) as u32;
                     if percent >= last_percent + 5 || percent == 100 {
                         last_percent = percent;
-                        let _ = app.emit("transcription-download-log", serde_json::json!({
-                            "model_name": model_name.clone(),
-                            "log_line": format!("Downloading: {}%", percent)
-                        }));
+                        let _ = app.emit(
+                            "transcription-download-log",
+                            serde_json::json!({
+                                "model_name": model_name.clone(),
+                                "log_line": format!("Downloading: {}%", percent)
+                            }),
+                        );
                     }
                 }
             }
@@ -1595,25 +2634,40 @@ async fn download_and_save_bin(
         }
     }
     drop(dest_file);
-    log::info!("Download stream finished '{}'. Bytes: {}", model_name, downloaded);
+    log::info!(
+        "Download stream finished '{}'. Bytes: {}",
+        model_name,
+        downloaded
+    );
 
     if cancel_flag.load(Ordering::Relaxed) {
         log::warn!("Cancel {} after download. Abort.", model_name);
         let _ = fs::remove_file(&temp_bin_filepath);
-        return Err(CommandError::from(format!("Download cancelled post-dl '{}'.", model_name)));
+        return Err(CommandError::from(format!(
+            "Download cancelled post-dl '{}'.",
+            model_name
+        )));
     }
 
     if let Some(total) = total_size {
         if downloaded != total {
             let _ = fs::remove_file(&temp_bin_filepath);
-            return Err(format!("Incomplete '{}': Expected {}, got {}.", model_name, total, downloaded).into());
+            return Err(format!(
+                "Incomplete '{}': Expected {}, got {}.",
+                model_name, total, downloaded
+            )
+            .into());
         }
         log::info!("Size matches Content-Length '{}'.", model_name);
     }
 
     log::info!("Rename temp {:?} -> {:?}", temp_bin_filepath, bin_filepath);
-    fs::rename(&temp_bin_filepath, &bin_filepath)
-        .map_err(|e| format!("Failed rename {:?}->{:?}: {}", temp_bin_filepath, bin_filepath, e))?;
+    fs::rename(&temp_bin_filepath, &bin_filepath).map_err(|e| {
+        format!(
+            "Failed rename {:?}->{:?}: {}",
+            temp_bin_filepath, bin_filepath, e
+        )
+    })?;
 
     log::info!("Update config for '{}'...", model_name);
     let mut config = read_config()?;
@@ -1621,7 +2675,11 @@ async fn download_and_save_bin(
     // Keep storing the ROOT location in config for consistency
     downloaded_model_info.download_location = Some(download_base_location.clone());
 
-    if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+    if let Some(idx) = config
+        .downloaded_models
+        .iter()
+        .position(|m| m.name == downloaded_model_info.name)
+    {
         log::info!("Model '{}' already in config. Updating.", model_info.name);
         config.downloaded_models[idx] = downloaded_model_info;
     } else {
@@ -1633,33 +2691,49 @@ async fn download_and_save_bin(
 
     // Emit completion event AFTER config update to avoid race conditions in frontend
     log::info!("Download success for {}", model_name);
-    app.emit("transcription-download-complete", &model_name).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
-    app.emit("transcription-download-finished", ()).map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-complete", &model_name)
+        .map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
+    app.emit("transcription-download-finished", ())
+        .map_err(|e| CommandError::from(format!("Emit fail: {}", e)))?;
 
     Ok(())
 }
-#[command] pub async fn cancel_download_command( cancellation_state: State<'_, DownloadCancellationState>, model_name: String, ) -> Result<(), CommandError> { /* ... */ log::info!("CMD: cancel_download: {}", model_name); if let Some(flag_entry)=cancellation_state.0.get(&model_name){let flag=flag_entry.value(); flag.store(true,Ordering::Relaxed); log::info!("Cancel flag set for {}",model_name);} else {log::warn!("No active download token for '{}'.",model_name);} Ok(()) }
-
- 
-
-
+#[command]
+pub async fn cancel_download_command(
+    cancellation_state: State<'_, DownloadCancellationState>,
+    model_name: String,
+) -> Result<(), CommandError> {
+    /* ... */
+    log::info!("CMD: cancel_download: {}", model_name);
+    if let Some(flag_entry) = cancellation_state.0.get(&model_name) {
+        let flag = flag_entry.value();
+        flag.store(true, Ordering::Relaxed);
+        log::info!("Cancel flag set for {}", model_name);
+    } else {
+        log::warn!("No active download token for '{}'.", model_name);
+    }
+    Ok(())
+}
 
 /// Gets the saved theme preference ("light", "dark", "system", or None).
- #[command]
- pub async fn get_theme_preference() -> Result<Option<String>, CommandError> {
+#[command]
+pub async fn get_theme_preference() -> Result<Option<String>, CommandError> {
     log::info!("Config: get_theme_preference called.");
     let config = read_config()?;
     log::info!("Config: Returning theme preference: {:?}", config.theme);
     Ok(config.theme) // Return the Option<String> directly
- }
+}
 
- /// Saves the theme preference ("light", "dark", "system").
- #[command]
- pub async fn set_theme_preference(theme: String) -> Result<(), CommandError> {
+/// Saves the theme preference ("light", "dark", "system").
+#[command]
+pub async fn set_theme_preference(theme: String) -> Result<(), CommandError> {
     log::info!("Config: set_theme_preference called with theme: {}", theme);
     // Validate input theme value
     if !["light", "dark", "system"].contains(&theme.as_str()) {
-        let error_msg = format!("Invalid theme value provided: '{}'. Must be 'light', 'dark', or 'system'.", theme);
+        let error_msg = format!(
+            "Invalid theme value provided: '{}'. Must be 'light', 'dark', or 'system'.",
+            theme
+        );
         log::error!("Config: {}", error_msg);
         return Err(CommandError::from(error_msg));
     }
@@ -1669,46 +2743,60 @@ async fn download_and_save_bin(
     write_config(&config)?;
     log::info!("Config: Theme preference '{}' saved.", theme);
     Ok(())
- }
- // --- End Theme Preference Commands ---
+}
+// --- End Theme Preference Commands ---
 
- #[command]
-pub async fn check_python_libraries_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+#[command]
+pub async fn check_python_libraries_installed<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<bool, CommandError> {
     let shell = app.shell();
-    python_env::check_python_libraries_installed(&app, &shell).await
+    python_env::check_python_libraries_installed(&app, shell).await
 }
 
 #[command]
 pub async fn install_python_libraries<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
     let shell = app.shell();
-    python_env::install_python_libraries(&app, &shell).await
+    python_env::install_python_libraries(&app, shell).await
 }
 
 #[command]
-pub async fn fetch_available_models_command(app: AppHandle) -> Result<serde_json::Value, CommandError> {
+pub async fn fetch_available_models_command(
+    app: AppHandle,
+) -> Result<serde_json::Value, CommandError> {
     log::info!("CMD: fetch_available_models_command");
 
-    let script_path = app.path().resource_dir().unwrap().join("scripts/fetch_available_models.py");
-    
+    let script_path = app
+        .path()
+        .resource_dir()
+        .unwrap()
+        .join("scripts/fetch_available_models.py");
+
     // Check if script exists
     if !script_path.exists() {
-         return Err(CommandError::from(format!("Script not found at: {:?}", script_path)));
+        return Err(CommandError::from(format!(
+            "Script not found at: {:?}",
+            script_path
+        )));
     }
 
     let python_path = python_env::get_python_path()?;
-    
+
     // Try internal python first, fall back to system if not exists (likely during wizard)
     let cmd_binary = if python_path.exists() {
         python_path.to_str().unwrap().to_string()
+    } else if cfg!(windows) {
+        "python".to_string()
     } else {
-        if cfg!(windows) { "python".to_string() } else { "python3".to_string() }
+        "python3".to_string()
     };
 
     log::info!("Using python binary: {}", cmd_binary);
 
-    let output = app.shell()
+    let output = app
+        .shell()
         .command(cmd_binary)
-        .args(&[script_path.to_str().unwrap()])
+        .args([script_path.to_str().unwrap()])
         .output()
         .await
         .map_err(|e| CommandError::from(format!("Failed to execute python script: {}", e)))?;
@@ -1722,6 +2810,16 @@ pub async fn fetch_available_models_command(app: AppHandle) -> Result<serde_json
     } else {
         let stderr_str = String::from_utf8_lossy(&output.stderr);
         log::error!("Python script failed: {}", stderr_str);
-        Err(CommandError::from(format!("Python script failed: {}", stderr_str)))
+        Err(CommandError::from(format!(
+            "Python script failed: {}",
+            stderr_str
+        )))
     }
+}
+
+#[command]
+pub async fn get_logs_dir_path() -> Result<String, CommandError> {
+    let config_dir = get_config_dir()?;
+    let logs_dir = config_dir.join("logs");
+    Ok(logs_dir.to_string_lossy().into_owned())
 }

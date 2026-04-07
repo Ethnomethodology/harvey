@@ -46,10 +46,10 @@
       isInstalling = false;
       isChecking = true;
       try {
-          await updateConfigStatus(true);
-          await checkStatus();
+        await updateConfigStatus(true);
+        await checkStatus();
       } finally {
-          isChecking = false;
+        isChecking = false;
       }
     } catch (e) {
       console.error('Error installing Whisper model:', e);
@@ -90,7 +90,9 @@
         <span class="text-sm font-medium text-red-600">Required</span>
       {/if}
       <svg
-        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''}"
+        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen
+          ? 'rotate-180'
+          : ''}"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -106,7 +108,8 @@
 {#if isPanelOpen}
   <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
     <p class="mb-4">
-      Harvey uses a Whisper model for audio transcription. The model will be downloaded and stored locally.
+      Harvey uses a Whisper model for audio transcription. The model will be downloaded and stored
+      locally.
     </p>
 
     {#if isModelInstalled}
@@ -126,7 +129,15 @@
   </div>
 {/if}
 
-<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} isChecking={isChecking} title="Whisper Model Installation" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
+<InstallLogModal
+  bind:showModal={showInstallModal}
+  logs={installLogs}
+  {isInstalling}
+  {isChecking}
+  title="Whisper Model Installation"
+  inProgressText="Installation in progress..."
+  buttonInProgressText="Installing..."
+/>
 
 <style lang="postcss">
   .btn-blue-small {

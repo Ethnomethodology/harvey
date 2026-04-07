@@ -1,6 +1,6 @@
 // src-tauri/src/projectview/shared_types.rs
-use serde::{Deserialize, Serialize};
-use chrono::Utc; // DateTime removed
+use chrono::Utc;
+use serde::{Deserialize, Serialize}; // DateTime removed
 
 // --- Constants ---
 pub const HARVEY_FILES_DIR: &str = "harvey_files";
@@ -15,7 +15,6 @@ pub const MEDIA_SUBDIR: &str = "media";
 pub const TRANSCRIPTS_SUBDIR: &str = "transcripts";
 pub const TEMP_SUBDIR_DOCS: &str = ".tmp";
 pub const METADATA_FILE_SUFFIX: &str = "metadata.json";
-
 
 // --- Struct Definitions ---
 
@@ -63,13 +62,12 @@ pub struct FileMetadata {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct StandardAssetMetadata {
     pub metadata: FileMetadata,
     #[serde(default)]
     pub highlights: Vec<String>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SpeakersXml {
@@ -123,12 +121,11 @@ pub struct HighlightInfo {
     pub other_tags: Vec<String>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::from_str;
     use quick_xml::se::to_string;
+    use serde_json::from_str;
 
     // Helper function to wrap SpeakersXml for top-level element serialization/deserialization
     // quick_xml requires a root element.
@@ -199,7 +196,11 @@ mod tests {
                 <translated_names/>
             </speakers>
         "#;
-        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let wrapper: SpeakersWrapper = from_str(&format!(
+            "<wrapper>{}</wrapper>",
+            xml_input.replace("<speakers", "<speakers xmlns=\"\"")
+        ))
+        .unwrap();
         let expected_speakers = SpeakersXml {
             count: 1,
             names: vec!["Speaker 1".to_string()],
@@ -216,7 +217,11 @@ mod tests {
                 <translated_names></translated_names>
             </speakers>
         "#;
-        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let wrapper: SpeakersWrapper = from_str(&format!(
+            "<wrapper>{}</wrapper>",
+            xml_input.replace("<speakers", "<speakers xmlns=\"\"")
+        ))
+        .unwrap();
         let expected_speakers = SpeakersXml {
             count: 1,
             names: vec!["Speaker 1".to_string()],
@@ -232,7 +237,11 @@ mod tests {
                 <name>Speaker 1</name>
             </speakers>
         "#;
-        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let wrapper: SpeakersWrapper = from_str(&format!(
+            "<wrapper>{}</wrapper>",
+            xml_input.replace("<speakers", "<speakers xmlns=\"\"")
+        ))
+        .unwrap();
         let expected_speakers = SpeakersXml {
             count: 1,
             names: vec!["Speaker 1".to_string()],
@@ -261,7 +270,11 @@ mod tests {
                 <name>Speaker 1</name>
             </speakers>
         "#;
-        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let wrapper: SpeakersWrapper = from_str(&format!(
+            "<wrapper>{}</wrapper>",
+            xml_input.replace("<speakers", "<speakers xmlns=\"\"")
+        ))
+        .unwrap();
         let expected_speakers = SpeakersXml {
             count: 0, // Defaults to 0 because of #[serde(default)] on count field
             names: vec!["Speaker 1".to_string()],
@@ -277,7 +290,11 @@ mod tests {
             <speakers count="0">
             </speakers>
         "#;
-         let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let wrapper: SpeakersWrapper = from_str(&format!(
+            "<wrapper>{}</wrapper>",
+            xml_input.replace("<speakers", "<speakers xmlns=\"\"")
+        ))
+        .unwrap();
         let expected_speakers = SpeakersXml {
             count: 0,
             names: Vec::new(), // Defaults to empty vec
@@ -287,12 +304,24 @@ mod tests {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Word {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    #[serde(default)]
+    pub speaker: Option<String>,
+    pub probability: f64,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TranscriptSegment {
     pub start_time: f64,
     pub end_time: f64,
     pub speaker: String,
     pub text: String,
+    #[serde(default)]
+    pub words: Option<Vec<Word>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -441,38 +470,45 @@ pub struct ProjectXml {
 }
 
 impl ProjectXml {
-    pub fn find_media_mut(&mut self, name: &str) -> Option<&mut MediaFileEntryXml> {
-        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.name == name) {
+    pub fn find_media_by_relative_path_mut(
+        &mut self,
+        relative_path: &str,
+    ) -> Option<&mut MediaFileEntryXml> {
+        if let Some(f) = self
+            .audio_files
+            .files
+            .iter_mut()
+            .find(|f| f.relative_path == relative_path)
+        {
             return Some(f);
         }
-        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.name == name) {
+        if let Some(f) = self
+            .video_files
+            .files
+            .iter_mut()
+            .find(|f| f.relative_path == relative_path)
+        {
             return Some(f);
         }
-        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.name == name) {
+        if let Some(f) = self
+            .media_files
+            .files
+            .iter_mut()
+            .find(|f| f.relative_path == relative_path)
+        {
             return Some(f);
         }
         None
     }
 
-    pub fn find_media_by_relative_path_mut(&mut self, relative_path: &str) -> Option<&mut MediaFileEntryXml> {
-        if let Some(f) = self.audio_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
-            return Some(f);
-        }
-        if let Some(f) = self.video_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
-            return Some(f);
-        }
-        if let Some(f) = self.media_files.files.iter_mut().find(|f| f.relative_path == relative_path) {
-            return Some(f);
-        }
-        None
-    }
-
-    pub fn find_media_by_stem_dir_mut(&mut self, stem_rel_path: &str) -> Option<&mut MediaFileEntryXml> {
+    pub fn find_media_by_stem_dir_mut(
+        &mut self,
+        stem_rel_path: &str,
+    ) -> Option<&mut MediaFileEntryXml> {
         // Media relative path usually looks like `harvey_files/Audios/input_videos/media/input_videos.mp3`
         // We want to match `harvey_files/Audios/input_videos` part
-        let matcher = |f: &&mut MediaFileEntryXml| -> bool {
-            f.relative_path.starts_with(stem_rel_path)
-        };
+        let matcher =
+            |f: &&mut MediaFileEntryXml| -> bool { f.relative_path.starts_with(stem_rel_path) };
         if let Some(f) = self.audio_files.files.iter_mut().find(&matcher) {
             return Some(f);
         }
@@ -499,30 +535,37 @@ impl ProjectXml {
     }
 
     pub fn remove_media(&mut self, name: &str) -> bool {
-        let old_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        let old_len = self.audio_files.files.len()
+            + self.video_files.files.len()
+            + self.media_files.files.len();
         self.audio_files.files.retain(|f| f.name != name);
         self.video_files.files.retain(|f| f.name != name);
         self.media_files.files.retain(|f| f.name != name);
-        let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        let new_len = self.audio_files.files.len()
+            + self.video_files.files.len()
+            + self.media_files.files.len();
         new_len < old_len
     }
 
     pub fn remove_media_by_stem_dir(&mut self, stem_rel_path: &str) -> bool {
-        let old_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
-        let matcher = |f: &MediaFileEntryXml| -> bool {
-            f.relative_path.starts_with(stem_rel_path)
-        };
+        let old_len = self.audio_files.files.len()
+            + self.video_files.files.len()
+            + self.media_files.files.len();
+        let matcher =
+            |f: &MediaFileEntryXml| -> bool { f.relative_path.starts_with(stem_rel_path) };
         self.audio_files.files.retain(|f| !matcher(f));
         self.video_files.files.retain(|f| !matcher(f));
         self.media_files.files.retain(|f| !matcher(f));
-        let new_len = self.audio_files.files.len() + self.video_files.files.len() + self.media_files.files.len();
+        let new_len = self.audio_files.files.len()
+            + self.video_files.files.len()
+            + self.media_files.files.len();
         new_len < old_len
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GroupData {
-    pub id: String, // UUID
+    pub id: String,         // UUID
     pub project_id: String, // UUID of the project it belongs to
     pub name: String,
     pub description: Option<String>,
@@ -549,7 +592,6 @@ pub struct FileEntry {
     pub children: Vec<FileEntry>,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProjectViewData {
     pub project_name: String,
@@ -564,14 +606,12 @@ pub struct ProjectViewData {
     pub document_metadata_files: Vec<DocumentMetadataEntryXml>,
 }
 
-
 #[derive(Clone, Serialize, Debug)]
 pub struct ProgressPayload {
     pub job_id: String,
     pub percent: f32,
     pub message: String,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TranscriptionResult {
@@ -606,19 +646,10 @@ pub struct FileLevelMetadata {
 }
 
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DocumentHighlightData {
     pub metadata: FileMetadata, // Changed type here
     pub highlights: Vec<HighlightMetadata>,
-}
-
-impl Default for DocumentHighlightData {
-    fn default() -> Self {
-        DocumentHighlightData {
-            metadata: FileMetadata::default(), // Use FileMetadata's default
-            highlights: Vec::new(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -686,7 +717,7 @@ impl Default for FileMetadata {
             bit_rate: None,
             audio_codec: None,
             video_codec: None,
-            created_at: None, // Renamed from creation_time
+            created_at: None,           // Renamed from creation_time
             original_import_path: None, // New field
             speaker_names: None,        // New field
             waveform_data: None,
@@ -703,12 +734,12 @@ pub struct AssociatedFile {
     pub name: String,
     pub relative_path: String, // Relative to project base_directory
     pub full_path: String,     // Absolute path
-    pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "standalone_transcript", "other"
+    pub file_type: String, // e.g., "audio", "video", "document", "image", "table", "standalone_transcript", "other"
     pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
     pub last_modified: Option<String>, // Last modified date from file metadata
-    pub created_at: Option<String>,    // Created at date from file metadata
-    pub title: Option<String>,         // Title from file metadata
-    pub description: Option<String>,   // Description from file metadata
+    pub created_at: Option<String>, // Created at date from file metadata
+    pub title: Option<String>, // Title from file metadata
+    pub description: Option<String>, // Description from file metadata
     pub waveform_data: Option<Vec<u8>>,
     pub duration_seconds: Option<f64>,
     pub thumbnail_data: Option<Vec<u8>>,
@@ -719,18 +750,9 @@ pub struct AssociatedFile {
 #[derive(Debug)]
 pub struct FileGroupAssociationFromDb {
     pub file_asset_path: String, // This is the key (relative_path)
-    // Potentially add other direct fields from asset_metadata if a JOIN is simple enough
-    // pub original_filename: String,
-    // pub asset_type_from_db: String,
+                                 // Potentially add other direct fields from asset_metadata if a JOIN is simple enough
+                                 // pub original_filename: String,
+                                 // pub asset_type_from_db: String,
 }
-
 
 // Default implementation for StandardAssetMetadata
-impl Default for StandardAssetMetadata {
-    fn default() -> Self {
-        StandardAssetMetadata {
-            metadata: FileMetadata::default(),
-            highlights: Vec::new(),
-        }
-    }
-}
