@@ -125,6 +125,9 @@
     }
   }
 
+  const isMac =
+    typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
   // --- Load Configuration ---
   async function loadConfiguration() {
     isLoadingModels = true;
@@ -426,7 +429,9 @@
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
   <!-- Traffic light spacer (macOS titleBarStyle Overlay) -->
-  <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {#if isMac}
+    <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {/if}
 
   <!-- Sections 2 & 3 Combined: Middle Panel (flex-grow) -->
   <div class="flex-grow flex items-center min-w-0 z-10 px-2 justify-between">

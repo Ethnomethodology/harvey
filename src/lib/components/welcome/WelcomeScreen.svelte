@@ -60,6 +60,9 @@
   let unlistenOpenProject;
   let unlistenHelpCenter;
 
+  const isMac =
+    typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
   onMount(async () => {
     // Resize window for welcome screen
     try {
@@ -188,12 +191,14 @@
 
 <div class="flex flex-col h-screen bg-gray-100 dark:bg-gray-950 font-sans text-sm">
   <!-- macOS traffic-light drag region (titleBarStyle: Overlay) -->
-  <div
-    class="h-10 flex-shrink-0 relative flex items-center justify-center bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700"
-    data-tauri-drag-region
-  >
-    <span class="text-sm font-semibold text-gray-600 dark:text-gray-300 select-none pointer-events-none">Harvey</span>
-  </div>
+  {#if isMac}
+    <div
+      class="h-10 flex-shrink-0 relative flex items-center justify-center bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700"
+      data-tauri-drag-region
+    >
+      <span class="text-sm font-semibold text-gray-600 dark:text-gray-300 select-none pointer-events-none">Harvey</span>
+    </div>
+  {/if}
 
   <div class="flex flex-1 min-h-0 bg-gray-100 dark:bg-gray-950">
   <!-- Sidebar -->
