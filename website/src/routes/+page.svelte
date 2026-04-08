@@ -131,9 +131,13 @@
           version = data.tag_name.replace('v', '');
 
           const assets = data.assets || [];
-          const winAsset = assets.find((a) => a.name.endsWith('.zip') || a.name.endsWith('.exe'));
+          const winAsset =
+            assets.find((a) => a.name.includes('x64-setup.zip')) ||
+            assets.find((a) => a.name.endsWith('.exe'));
           const macArmAsset = assets.find(
-            (a) => a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg')
+            (a) =>
+              (a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg')) &&
+              !a.name.includes('x64')
           );
           const macIntelAsset = assets.find((a) => a.name.includes('x64.dmg'));
 
