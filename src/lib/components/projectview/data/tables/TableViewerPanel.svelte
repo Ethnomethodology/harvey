@@ -3627,9 +3627,8 @@
   }
 
   async function returnToBaseTable() {
-    if (!tabulatorInstance && !isViewingDocument) return;
     currentActiveView = null;
-    currentActiveViewType = null;
+    currentActiveViewType = 'table';
     pivotDerivedSchema = {};
     isViewingDocument = false;
     currentActiveDocumentPath = null;
@@ -3637,6 +3636,10 @@
     activeSubItemType = null;
 
     dispatch('requestviewchange', { type: 'reset_base' });
+
+    // CRITICAL: We must wait for Svelte to re-render the table container into the DOM
+    // if we were in a view that hid it (like isViewingDocument or Pivot view).
+    await tick();
 
     // The safest and most robust way to return to the base table and avoid Tabulator
     // duplicating rowHeader columns (or other formatter issues) is to re-initialize it.
@@ -3821,7 +3824,7 @@
 
   async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
     if (newHasHeaders !== null) hasHeaders = newHasHeaders;
-    if (!pathForTable || !tableContainer) return;
+    if (!pathForTable) return;
 
     // Safety check: Don't reload if already loading this path, OR if already loaded (unless forced)
     if (isLoading) return;
