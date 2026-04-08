@@ -21,9 +21,7 @@
     <p>
         Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run <strong>100% locally</strong> on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.
     </p>
-    <blockquote>
-        It's an application built <em>by researchers, for researchers</em>, using Vibe Coding to assess the viability of AI-assisted programming in research software development.
-    </blockquote>
+
 
     <h2>Developed with AI</h2>
     <p>
