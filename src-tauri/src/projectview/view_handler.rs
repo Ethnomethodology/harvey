@@ -1,5 +1,6 @@
 use crate::projectview::db_handler::{self, get_db_path};
 use crate::projectview::shared_types::FileMetadata;
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::projectview::table_handler;
 use crate::projectview::transcription_commands::create_lexical_paragraph_json_value;
 use crate::welcome::config::CommandError;
@@ -8,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ViewConfig {
@@ -29,12 +30,16 @@ pub fn save_table_view(
     view_type: &str,
     config_json: &str,
 ) -> Result<ViewConfig, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Saving table view '{}' for table '{}' in project '{}'",
-        view_name, table_path, project_id
+        "[DB] Saving table view '{}' for table '{}' [Normalized: '{}'] in project '{}'",
+        view_name, table_path, normalized_table_path, project_id
     );
 
     conn.execute(
@@ -44,7 +49,7 @@ pub fn save_table_view(
          view_type = excluded.view_type,
          config_json = excluded.config_json,
          updated_at = CURRENT_TIMESTAMP",
-        params![project_id, table_path, view_name, view_type, config_json],
+        params![project_id, normalized_table_path, view_name, view_type, config_json],
     )?;
 
     let mut stmt = conn.prepare(
@@ -53,7 +58,7 @@ pub fn save_table_view(
          WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3"
     )?;
 
-    let view = stmt.query_row(params![project_id, table_path, view_name], |row| {
+    let view = stmt.query_row(params![project_id, normalized_table_path, view_name], |row| {
         Ok(ViewConfig {
             id: row.get(0)?,
             project_id: row.get(1)?,
@@ -583,12 +588,16 @@ pub fn load_table_views(
     project_id: &str,
     table_path: &str,
 ) -> Result<Vec<ViewConfig>, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     debug!(
-        "[DB] Loading table views for table '{}' in project '{}'",
-        table_path, project_id
+        "[DB] Loading table views for table '{}' [Normalized: '{}'] in project '{}'",
+        table_path, normalized_table_path, project_id
     );
 
     let mut stmt = conn.prepare(
@@ -598,7 +607,7 @@ pub fn load_table_views(
          ORDER BY updated_at DESC"
     )?;
 
-    let view_iter = stmt.query_map(params![project_id, table_path], |row| {
+    let view_iter = stmt.query_map(params![project_id, normalized_table_path], |row| {
         Ok(ViewConfig {
             id: row.get(0)?,
             project_id: row.get(1)?,
@@ -625,18 +634,22 @@ pub fn delete_table_view(
     view_name: &str,
     project_xml_path_str: &str,
 ) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Deleting table view '{}' for table '{}' in project '{}'",
-        view_name, table_path, project_id
+        "[DB] Deleting table view '{}' for table '{}' [Normalized: '{}'] in project '{}'",
+        view_name, table_path, normalized_table_path, project_id
     );
 
     // Fetch the view to see if it's a survey view that needs file cleanup
     let mut stmt = conn.prepare("SELECT view_type, config_json FROM table_views WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3")?;
     let view_data = stmt
-        .query_row(params![project_id, table_path, view_name], |row| {
+        .query_row(params![project_id, normalized_table_path, view_name], |row| {
             let view_type: String = row.get(0)?;
             let config_json: String = row.get(1)?;
             Ok((view_type, config_json))
@@ -741,7 +754,7 @@ pub fn delete_table_view(
                         // We must manually execute the update here to avoid borrowing issues or just update the field
                         let _ = conn.execute(
                             "UPDATE asset_metadata SET custom_fields_json = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
-                            params![updated_custom_fields_json_str, project_id, table_path],
+                            params![updated_custom_fields_json_str, project_id, normalized_table_path],
                         );
                     }
                 }
@@ -751,7 +764,7 @@ pub fn delete_table_view(
 
     conn.execute(
         "DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2 AND view_name = ?3",
-        params![project_id, table_path, view_name],
+        params![project_id, normalized_table_path, view_name],
     )?;
 
     Ok(())
@@ -764,12 +777,16 @@ pub fn rename_table_view(
     new_view_name: &str,
     project_xml_path_str: &str,
 ) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Renaming table view from '{}' to '{}' for table '{}' in project '{}'",
-        old_view_name, new_view_name, table_path, project_id
+        "[DB] Renaming table view from '{}' to '{}' for table '{}' [Normalized: '{}'] in project '{}'",
+        old_view_name, new_view_name, table_path, normalized_table_path, project_id
     );
 
     // Get the view type and config
@@ -780,14 +797,14 @@ pub fn rename_table_view(
     )?;
 
     let (view_type, config_json_str): (String, String) = stmt
-        .query_row(params![project_id, table_path, old_view_name], |row| {
+        .query_row(params![project_id, normalized_table_path, old_view_name], |row| {
             Ok((row.get(0)?, row.get(1)?))
         })
         .map_err(|e| CommandError::from(format!("Failed to find view to rename: {}", e)))?;
 
     conn.execute(
         "UPDATE table_views SET view_name = ?1, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?2 AND table_path = ?3 AND view_name = ?4",
-        params![new_view_name, project_id, table_path, old_view_name],
+        params![new_view_name, project_id, normalized_table_path, old_view_name],
     )?;
 
     if view_type == "survey" {
@@ -823,7 +840,7 @@ pub fn rename_table_view(
                     } else {
                         // Update asset metadata
                         if let Ok(Some(metadata_from_db)) =
-                            db_handler::load_asset_metadata(project_id, table_path)
+                            db_handler::load_asset_metadata(project_id, &normalized_table_path)
                         {
                             if let Some(custom_fields_json_str) =
                                 metadata_from_db.custom_fields_json

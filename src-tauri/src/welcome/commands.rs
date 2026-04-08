@@ -2,6 +2,7 @@
 
 use crate::projectview::db_handler; // Added for DB operations
 use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::utils::canonicalize_path;
 use crate::welcome::config::{
     add_or_update_project_in_config,
@@ -1177,8 +1178,9 @@ pub async fn create_project(
     }
 
     let parent_path = PathBuf::from(&parent_location);
-    let project_dir_path = parent_path.join(trimmed_name);
-    log::info!("create_project: Target project dir: {:?}", project_dir_path);
+    let raw_project_dir_path = parent_path.join(trimmed_name);
+    let project_dir_path = normalize_path_for_comparison(&raw_project_dir_path);
+    log::info!("create_project: Target project dir: {:?} [Normalized: {:?}]", raw_project_dir_path, project_dir_path);
 
     if project_dir_path.exists() {
         if should_overwrite {
@@ -1677,12 +1679,17 @@ pub async fn remove_project_from_list(project_xml_path: String) -> Result<(), Co
     result
 }
 fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), CommandError> {
+    let normalized_path = normalize_path_for_comparison(Path::new(project_xml_path))
+        .to_string_lossy()
+        .to_string();
+
     log::info!(
-        "---- remove_project_from_config_internal: Start. Path='{}' ----",
-        project_xml_path
+        "---- remove_project_from_config_internal: Start. Path='{}' [Normalized: '{}'] ----",
+        project_xml_path,
+        normalized_path
     );
     let mut config = read_config()?;
-    config.projects.retain(|p| p.path != project_xml_path);
+    config.projects.retain(|p| p.path != normalized_path && p.path != project_xml_path);
     write_config(&config)?; // Persist the removal from config.xml
 
     use crate::projectview::db_handler::get_db_path;
@@ -1691,8 +1698,8 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
     let conn =
         Connection::open(&db_path).map_err(|e| CommandError::RusqliteError(e.to_string()))?;
     let _ = conn.execute(
-        "UPDATE projects SET is_recent = 0 WHERE xml_path = ?1",
-        params![project_xml_path],
+        "UPDATE projects SET is_recent = 0 WHERE xml_path = ?1 OR xml_path = ?2",
+        params![normalized_path, project_xml_path],
     );
 
     log::info!(
@@ -1703,9 +1710,12 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
 }
 #[command]
 pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> {
+    let normalized_xml_path = normalize_path_for_comparison(Path::new(&project_xml_path))
+        .to_string_lossy()
+        .to_string();
     /* ... */
-    log::info!("---- open_project: Start. Path='{}' ----", project_xml_path);
-    let path_buf = PathBuf::from(&project_xml_path);
+    log::info!("---- open_project: Start. Path='{}' [Normalized: '{}'] ----", project_xml_path, normalized_xml_path);
+    let path_buf = PathBuf::from(&normalized_xml_path);
     if !path_buf.exists() || !path_buf.is_file() {
         log::error!(
             "open_project: Error - XML file not found: {}",
@@ -1722,7 +1732,7 @@ pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, Comma
     let project_index = config
         .projects
         .iter()
-        .position(|p| p.path == project_xml_path);
+        .position(|p| p.path == normalized_xml_path);
     log::info!("open_project: Project index in config: {:?}", project_index);
     let final_project_info: ProjectInfo;
     let mut config_needs_write = false;
@@ -1747,8 +1757,8 @@ pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, Comma
         }
         final_project_info = config.projects[index].clone();
     } else {
-        log::info!("open_project: Project not in config, importing...");
-        match import_project_internal(&project_xml_path) {
+        log::info!("open_project: Project not in config, importing using normalized path...");
+        match import_project_internal(&normalized_xml_path) {
             Ok(imported_info) => {
                 log::info!("open_project: Import successful.");
                 final_project_info = imported_info;

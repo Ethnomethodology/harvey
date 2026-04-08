@@ -1,11 +1,12 @@
 // src-tauri/src/projectview/db_handler.rs
 use crate::projectview::shared_types::{FileGroupAssociationFromDb, FileMetadata, Highlight};
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
 use log::{debug, error, info, warn};
 use rusqlite::{params, Connection, OptionalExtension, Result, ToSql};
 use serde::{Deserialize, Serialize}; // Added for the new struct
 use std::fs;
-use std::path::PathBuf; // For function signatures
+use std::path::{Path, PathBuf}; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
@@ -1859,9 +1860,13 @@ pub fn save_table_styles(
     table_path: &str,
     styles: &str,
 ) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Saving table styles for project_id {}: {}",
-        project_id, table_path
+        "[DB] Saving table styles for project_id {}: {} [Normalized: {}]",
+        project_id, table_path, normalized_table_path
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -1872,7 +1877,7 @@ pub fn save_table_styles(
          ON CONFLICT(project_id, table_path) DO UPDATE SET
              styles = excluded.styles,
              updated_at = CURRENT_TIMESTAMP",
-        params![project_id, table_path, styles],
+        params![project_id, normalized_table_path, styles],
     )?;
     info!(
         "[DB] Table styles saved successfully for project_id {}: {}",
@@ -1885,9 +1890,13 @@ pub fn load_table_styles(
     project_id: &str,
     table_path: &str,
 ) -> Result<Option<String>, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Loading table styles for project_id {}: {}",
-        project_id, table_path
+        "[DB] Loading table styles for project_id {}: {} [Normalized: {}]",
+        project_id, table_path, normalized_table_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -1904,7 +1913,7 @@ pub fn load_table_styles(
     )?;
 
     let result = stmt
-        .query_row(params![project_id, table_path], |row| row.get(0))
+        .query_row(params![project_id, normalized_table_path], |row| row.get(0))
         .optional()?;
 
     debug!(
@@ -1921,9 +1930,13 @@ pub fn load_table_styles(
 }
 
 pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Deleting table styles for project_id {}: {}",
-        project_id, table_path
+        "[DB] Deleting table styles for project_id {}: {} [Normalized: {}]",
+        project_id, table_path, normalized_table_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -1938,7 +1951,7 @@ pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), Com
     let conn = Connection::open(&db_path)?;
     let changes = conn.execute(
         "DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, table_path],
+        params![project_id, normalized_table_path],
     )?;
 
     if changes > 0 {
@@ -1985,9 +1998,13 @@ pub fn save_asset_metadata(
     asset_type: &str,
     custom_fields_json: Option<&str>,
 ) -> Result<(), CommandError> {
+    let normalized_asset_path = normalize_path_for_comparison(Path::new(asset_relative_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Saving asset metadata for project_id {}: {} (type: {}, file_type: {})",
-        project_id, asset_relative_path, asset_type, metadata.file_type
+        "[DB] Saving asset metadata for project_id {}: {} (type: {}, file_type: {}) [Normalized: {}]",
+        project_id, asset_relative_path, asset_type, metadata.file_type, normalized_asset_path
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -2043,7 +2060,7 @@ pub fn save_asset_metadata(
         sql,
         params![
             project_id,
-            asset_relative_path,
+            normalized_asset_path,
             metadata.file_name,
             metadata.file_path,
             metadata.last_modified,
@@ -2081,9 +2098,13 @@ pub fn load_asset_metadata(
     project_id: &str,
     asset_relative_path: &str,
 ) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
+    let normalized_asset_path = normalize_path_for_comparison(Path::new(asset_relative_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Loading asset metadata for project_id {}: {}",
-        project_id, asset_relative_path
+        "[DB] Loading asset metadata for project_id {}: {} [Normalized: {}]",
+        project_id, asset_relative_path, normalized_asset_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -2106,7 +2127,7 @@ pub fn load_asset_metadata(
     ")?;
 
     let result = stmt
-        .query_row(params![project_id, asset_relative_path], |row| {
+        .query_row(params![project_id, normalized_asset_path], |row| {
             Ok(FileMetadataWithCustomFieldsFromDb {
                 file_name: row.get(0)?,
                 file_path: row.get(1)?,
@@ -2152,9 +2173,13 @@ pub fn delete_asset_metadata(
     project_id: &str,
     asset_relative_path: &str,
 ) -> Result<(), CommandError> {
+    let normalized_asset_path = normalize_path_for_comparison(Path::new(asset_relative_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Deleting asset metadata and associated items for project_id {}: {}",
-        project_id, asset_relative_path
+        "[DB] Deleting asset metadata and associated items for project_id {}: {} [Normalized: {}]",
+        project_id, asset_relative_path, normalized_asset_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -2171,58 +2196,58 @@ pub fn delete_asset_metadata(
     // Check if table schema/chart configs/styles exist and drop them
     let _ = conn.execute(
         "DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
     let _ = conn.execute(
         "DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
     let _ = conn.execute(
         "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Delete associated table views
     let _ = conn.execute(
         "DELETE FROM table_views WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Highlights reference 'asset_id' based on the schema, but could be 'document_path' in old logic. Delete from both to be safe.
     let _ = conn.execute(
         "DELETE FROM highlights WHERE project_id = ?1 AND asset_id = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
     let _ = conn.execute(
         "DELETE FROM highlights WHERE project_id = ?1 AND document_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Delete PDF annotations (they use 'pdf_document_path')
     let _ = conn.execute(
         "DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Delete Layout Preferences
-    let _ = conn.execute("DELETE FROM table_layout_preferences WHERE project_id = ?1 AND table_asset_relative_path = ?2", params![project_id, asset_relative_path]);
+    let _ = conn.execute("DELETE FROM table_layout_preferences WHERE project_id = ?1 AND table_asset_relative_path = ?2", params![project_id, normalized_asset_path]);
 
     // Delete File Group mappings
     let _ = conn.execute(
         "DELETE FROM file_groups WHERE project_id = ?1 AND file_asset_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Delete Media Transcript Data
     let _ = conn.execute(
         "DELETE FROM media_transcript_data WHERE project_id = ?1 AND asset_relative_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     );
 
     // Finally Delete Metadata (since other tables might rely on FKs pointing to it, though PRAGMA foreign_keys = ON should cascade natively, executing it explicitly ensures full cleanup across all DB versions)
     let changes = conn.execute(
         "DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2",
-        params![project_id, asset_relative_path],
+        params![project_id, normalized_asset_path],
     )?;
     if changes > 0 {
         info!("[DB] Asset metadata and relations deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
@@ -2260,18 +2285,29 @@ pub fn rename_asset_metadata_key(
     new_file_path: &str, // This is the new absolute file path
     new_file_name: &str, // This is the new file name (e.g., "new_stem.ext")
 ) -> Result<(), CommandError> {
+    let normalized_old_path = normalize_path_for_comparison(Path::new(old_relative_path))
+        .to_string_lossy()
+        .to_string();
+    let normalized_new_path = normalize_path_for_comparison(Path::new(new_relative_path))
+        .to_string_lossy()
+        .to_string();
+    let normalized_new_file_path = normalize_path_for_comparison(Path::new(new_file_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Attempting to rename asset metadata key for project_id {}: from '{}' to '{}', new_abs_path: '{}', new_name: '{}'",
-        project_id, old_relative_path, new_relative_path, new_file_path, new_file_name
+        "[DB] Attempting to rename asset metadata key for project_id {}: from '{}' to '{}' [Normalized: '{}' -> '{}'], new_abs_path: '{}' [Normalized: '{}'], new_name: '{}'",
+        project_id, old_relative_path, new_relative_path, normalized_old_path, normalized_new_path, new_file_path, normalized_new_file_path, new_file_name
     );
 
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!(
-            "[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {}",
+            "[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {} [Normalized: {}]",
             db_path.display(),
             project_id,
-            old_relative_path
+            old_relative_path,
+            normalized_old_path
         );
         return Ok(());
     }
@@ -2283,8 +2319,8 @@ pub fn rename_asset_metadata_key(
 
     // 1. Disable foreign key constraints
     debug!(
-        "[DB TX] Disabling foreign keys for rename operation on project_id {}: from {} to {}",
-        project_id, old_relative_path, new_relative_path
+        "[DB TX] Disabling foreign keys for rename operation on project_id {}: from {} to {} [Normalized: {} -> {}]",
+        project_id, old_relative_path, new_relative_path, normalized_old_path, normalized_new_path
     );
     tx.execute("PRAGMA foreign_keys = OFF;", params![])
         .map_err(|e| {
@@ -2305,7 +2341,7 @@ pub fn rename_asset_metadata_key(
         "UPDATE asset_metadata
          SET asset_relative_path = ?1, file_path = ?2, file_name = ?3, last_modified = CURRENT_TIMESTAMP
          WHERE project_id = ?4 AND asset_relative_path = ?5",
-        params![new_relative_path, new_file_path, new_file_name, project_id, old_relative_path],
+        params![normalized_new_path, normalized_new_file_path, new_file_name, project_id, normalized_old_path],
     ).map_err(|e| {
         error!("[DB TX] Error updating asset_metadata for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
         if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
@@ -2361,16 +2397,16 @@ pub fn rename_asset_metadata_key(
         );
         match tx.execute(
             &sql,
-            params![new_relative_path, project_id, old_relative_path],
+            params![normalized_new_path, project_id, normalized_old_path],
         ) {
             Ok(changes) if changes > 0 => {
-                info!("[DB TX] Updated child table {} for project_id {} from {} to {} ({} rows affected)", table, project_id, old_relative_path, new_relative_path, changes);
+                info!("[DB TX] Updated child table {} for project_id {} from {} to {} [Normalized: {} -> {}] ({} rows affected)", table, project_id, old_relative_path, new_relative_path, normalized_old_path, normalized_new_path, changes);
             }
             Ok(_) => {
-                debug!("[DB TX] No entries in child table {} needed update for project_id {} and old path {}", table, project_id, old_relative_path);
+                debug!("[DB TX] No entries in child table {} needed update for project_id {} and old path {} [Normalized: {}]", table, project_id, old_relative_path, normalized_old_path);
             }
             Err(e) => {
-                error!("[DB TX] Error updating child table {} for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", table, project_id, old_relative_path, new_relative_path, e);
+                error!("[DB TX] Error updating child table {} for project_id {} from {} to {} [Normalized: {} -> {}]: {}. Attempting to re-enable FKs and rolling back.", table, project_id, old_relative_path, new_relative_path, normalized_old_path, normalized_new_path, e);
                 if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
                     error!(
                         "[DB TX] Failed to re-enable foreign keys during error handling: {}",
@@ -2518,9 +2554,16 @@ pub fn add_project_to_db(
     root_path: &str,
     xml_path: &str,
 ) -> Result<(), CommandError> {
+    let normalized_root_path = normalize_path_for_comparison(Path::new(root_path))
+        .to_string_lossy()
+        .to_string();
+    let normalized_xml_path = normalize_path_for_comparison(Path::new(xml_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Adding project to db: id={}, name={}, root_path={}, xml_path={}",
-        id, name, root_path, xml_path
+        "[DB] Adding project to db: id={}, name={}, root_path={} [Normalized: {}], xml_path={} [Normalized: {}]",
+        id, name, root_path, normalized_root_path, xml_path, normalized_xml_path
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -2533,7 +2576,7 @@ pub fn add_project_to_db(
              root_path = excluded.root_path,
              xml_path = excluded.xml_path,
              updated_at = CURRENT_TIMESTAMP",
-        params![id, name, root_path, xml_path],
+        params![id, name, normalized_root_path, normalized_xml_path],
     )?;
     info!("[DB] Project added/updated successfully: id={}", id);
     Ok(())
@@ -2571,9 +2614,13 @@ pub fn load_annotations_from_db(
     document_path: &str,
     doc_type: &str,
 ) -> Result<Option<String>, CommandError> {
+    let normalized_document_path = normalize_path_for_comparison(Path::new(document_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Loading annotations for project_id {}: {} (type: {})",
-        project_id, document_path, doc_type
+        "[DB] Loading annotations for project_id {}: {} (type: {}) [Normalized: {}]",
+        project_id, document_path, doc_type, normalized_document_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -2586,7 +2633,7 @@ pub fn load_annotations_from_db(
     let conn = Connection::open(&db_path)?;
     let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3")?;
     let result = stmt
-        .query_row(params![project_id, document_path, doc_type], |row| {
+        .query_row(params![project_id, normalized_document_path, doc_type], |row| {
             row.get(0)
         })
         .optional()?;
@@ -2610,9 +2657,13 @@ pub fn save_annotations_to_db(
     annotations_json: &str,
     doc_type: &str,
 ) -> Result<(), CommandError> {
+    let normalized_document_path = normalize_path_for_comparison(Path::new(document_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Saving annotations for project_id {}: {} (type: {})",
-        project_id, document_path, doc_type
+        "[DB] Saving annotations for project_id {}: {} (type: {}) [Normalized: {}]",
+        project_id, document_path, doc_type, normalized_document_path
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -2632,7 +2683,7 @@ pub fn save_annotations_to_db(
                        -- document_type = excluded.document_type, -- document_type is part of the key, should not change on conflict
                        -- project_id = excluded.project_id, -- project_id is part of the key, should not change on conflict
                        updated_at = CURRENT_TIMESTAMP",
-        params![project_id, document_path, annotations_json, doc_type],
+        params![project_id, normalized_document_path, annotations_json, doc_type],
     )?;
     info!(
         "[DB] Annotations saved successfully for project_id {}: {} (type: {})",
@@ -2646,9 +2697,13 @@ pub fn delete_annotations_from_db(
     document_path: &str,
     doc_type: &str,
 ) -> Result<(), CommandError> {
+    let normalized_document_path = normalize_path_for_comparison(Path::new(document_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Deleting annotations for project_id {}: {} (type: {})",
-        project_id, document_path, doc_type
+        "[DB] Deleting annotations for project_id {}: {} (type: {}) [Normalized: {}]",
+        project_id, document_path, doc_type, normalized_document_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -2656,7 +2711,7 @@ pub fn delete_annotations_from_db(
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    let changes = conn.execute("DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3", params![project_id, document_path, doc_type])?;
+    let changes = conn.execute("DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3", params![project_id, normalized_document_path, doc_type])?;
     if changes > 0 {
         info!("[DB] Annotations deleted successfully for project_id {}: {} (type: {}) ({} rows affected)", project_id, document_path, doc_type, changes);
     } else {
@@ -3924,9 +3979,13 @@ pub fn load_table_schema(
     project_id: &str,
     table_path: &str,
 ) -> Result<Option<String>, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Loading table schema for project_id {}: {}",
-        project_id, table_path
+        "[DB] Loading table schema for project_id {}: {} [Normalized: {}]",
+        project_id, table_path, normalized_table_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -3942,16 +4001,20 @@ pub fn load_table_schema(
     )?;
 
     let result = stmt
-        .query_row(params![project_id, table_path], |row| row.get(0))
+        .query_row(params![project_id, normalized_table_path], |row| row.get(0))
         .optional()?;
 
     Ok(result)
 }
 
 pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     debug!(
-        "[DB] Deleting table schema for project_id {}: {}",
-        project_id, table_path
+        "[DB] Deleting table schema for project_id {}: {} [Normalized: {}]",
+        project_id, table_path, normalized_table_path
     );
     let db_path = get_db_path()?;
     if !db_path.exists() {
@@ -3960,7 +4023,7 @@ pub fn delete_table_schema(project_id: &str, table_path: &str) -> Result<(), Com
     let conn = Connection::open(&db_path)?;
     conn.execute(
         "DELETE FROM table_schemas WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, table_path],
+        params![project_id, normalized_table_path],
     )?;
     Ok(())
 }
