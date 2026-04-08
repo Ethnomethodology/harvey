@@ -20,7 +20,8 @@
     FileText,
     FileSpreadsheet,
     Video,
-    Table
+    Table,
+    Tag
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
   import { fade, fly } from 'svelte/transition';
@@ -44,8 +45,6 @@
   // Carousel logic
   let currentSlide = 0;
   let previousSlide = 0;
-  let progress = 0;
-  let lastUpdate = Date.now();
   const SLIDE_DURATION = 6000;
 
   const slides = [
@@ -53,69 +52,47 @@
       title: 'Transcription',
       description: 'Convert audio and video into text automatically using state-of-the-art local AI models. Perfect for interviews and focus groups.',
       icon: Mic,
-      color: 'blue',
-      gradient: 'from-blue-500/20 to-blue-600/5',
       accent: 'bg-blue-500'
     },
     {
       title: 'Translation',
       description: 'Break language barriers effortlessly. Translate your qualitative data into English, maintaining nuanced meaning across languages.',
       icon: Languages,
-      color: 'purple',
-      gradient: 'from-purple-500/20 to-purple-600/5',
       accent: 'bg-purple-500'
     },
     {
       title: 'Model Management',
       description: 'Choose from a variety of Whisper and translation models tailored to your hardware and accuracy needs.',
       icon: Settings,
-      color: 'green',
-      gradient: 'from-green-500/20 to-green-600/5',
       accent: 'bg-green-500'
     },
     {
-      title: 'Rich Text Editor',
-      description: 'Draft reports, edit transcripts, and keep your notes organized in a professional, integrated markdown workspace.',
-      icon: Edit3,
-      color: 'amber',
-      gradient: 'from-amber-500/20 to-amber-600/5',
-      accent: 'bg-amber-500'
+      title: 'Qualitative Coding',
+      description: 'Systematically analyze your data with highlighting and tagging features designed for rigorous qualitative methodology.',
+      icon: Tag,
+      accent: 'bg-indigo-500'
     },
     {
       title: 'Image Annotation',
       description: 'Work with visual data seamlessly. Annotate images and PDFs directly within the app to support your findings.',
       icon: Image,
-      color: 'rose',
-      gradient: 'from-rose-500/20 to-rose-600/5',
       accent: 'bg-rose-500'
     },
     {
       title: 'Table Management',
       description: 'Manipulate structured data with ease. View and edit CSV and XLSX files without leaving your research environment.',
       icon: FileSpreadsheet,
-      color: 'emerald',
-      gradient: 'from-emerald-500/20 to-emerald-600/5',
       accent: 'bg-emerald-500'
     },
     {
-      title: 'Media Sync',
-      description: 'Navigate your transcripts instantly. Media playback stays perfectly synchronized with your text for effortless verification.',
-      icon: Video,
-      color: 'indigo',
-      gradient: 'from-indigo-500/20 to-indigo-600/5',
-      accent: 'bg-indigo-500'
-    },
-    {
-      title: 'Flexible Export',
-      description: 'Export your completed work to high-quality DOCX, CSV, or pure text formats, ready for publication or sharing.',
-      icon: Share2,
-      color: 'slate',
-      gradient: 'from-slate-500/20 to-slate-600/5',
-      accent: 'bg-slate-500'
+      title: 'Rich Text Editor',
+      description: 'Draft reports, edit transcripts, and synchronize media navigation in a professional, integrated markdown workspace.',
+      icon: Edit3,
+      accent: 'bg-amber-500'
     }
   ];
 
-  let rafHandle;
+  let interval;
   onMount(async () => {
     if (typeof navigator !== 'undefined') {
       const platform = navigator.platform.toLowerCase();
@@ -160,42 +137,38 @@
       console.error('Failed to fetch latest release from GitHub:', error);
     }
 
-    // Smooth auto-rotate loop
-    const update = () => {
-      const now = Date.now();
-      const delta = now - lastUpdate;
-      lastUpdate = now;
-      
-      progress += (delta / SLIDE_DURATION) * 100;
-      if (progress >= 100) {
-        nextSlide();
-      }
-      rafHandle = requestAnimationFrame(update);
-    };
-    rafHandle = requestAnimationFrame(update);
+    // Simple interval for auto-rotation
+    interval = setInterval(nextSlide, SLIDE_DURATION);
   });
 
   onDestroy(() => {
-    if (rafHandle) cancelAnimationFrame(rafHandle);
+    if (interval) clearInterval(interval);
   });
 
   function nextSlide() {
     previousSlide = currentSlide;
     currentSlide = (currentSlide + 1) % slides.length;
-    progress = 0;
+    resetInterval();
   }
 
   function prevSlide() {
     previousSlide = currentSlide;
     currentSlide = (currentSlide - 1 + slides.length) % slides.length;
-    progress = 0;
+    resetInterval();
   }
 
   function goToSlide(index) {
     if (index === currentSlide) return;
     previousSlide = currentSlide;
     currentSlide = index;
-    progress = 0;
+    resetInterval();
+  }
+
+  function resetInterval() {
+    if (interval) {
+      clearInterval(interval);
+      interval = setInterval(nextSlide, SLIDE_DURATION);
+    }
   }
 
   function setActiveTab(tab) {
@@ -341,30 +314,26 @@
         </div>
 
         <div class="flex-1 relative">
-          <!-- Sliding Indicator Pill -->
+          <!-- Indicator Pill -->
           <div 
-            class="absolute left-0 right-0 h-[72px] bg-white border border-slate-200 rounded-3xl shadow-sm transition-all duration-500 ease-out pointer-events-none hidden lg:block"
-            style="transform: translateY({currentSlide * 80}px);"
+            class="absolute left-0 right-0 h-[72px] bg-white border border-slate-200 rounded-3xl shadow-sm transition-all duration-300 ease-out pointer-events-none hidden lg:block"
+            style="transform: translateY({(currentSlide * 80) + 4}px);"
           >
-            <!-- Progress Line: Positioned absolutely at the very bottom edge -->
-            <div class="absolute inset-x-6 bottom-0 h-[3px] bg-slate-100 rounded-full overflow-hidden">
-               <div class="h-full bg-green-500 transition-none" style="width: {progress}%"></div>
-            </div>
           </div>
 
           {#each slides as slide, i}
             <div class="h-[80px] flex items-center">
               <button
                 on:click={() => goToSlide(i)}
-                class="relative w-full text-left px-6 h-[72px] rounded-3xl transition-all duration-300 flex items-center gap-4 group z-10 {currentSlide === i ? 'text-slate-950 antialiased pb-1' : 'text-slate-400 hover:text-slate-600'}"
+                class="relative w-full text-left px-6 h-[72px] rounded-3xl transition-all duration-300 flex items-center gap-4 group z-10 {currentSlide === i ? 'text-slate-950 antialiased' : 'text-slate-400 hover:text-slate-600'}"
               >
                 <div
                   class="h-11 w-11 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all duration-500 {currentSlide === i ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-slate-200/50 text-slate-400 group-hover:bg-slate-200'}"
                 >
-                  <svelte:component this={slide.icon} class="w-6 h-6 {currentSlide === i ? 'scale-110' : 'scale-100'} transition-transform" />
+                  <svelte:component this={slide.icon} class="w-6 h-6" />
                 </div>
-                <div class="flex flex-col min-w-0">
-                  <span class="font-bold text-base lg:text-[18px] leading-none truncate">{slide.title}</span>
+                <div class="flex flex-col justify-center min-w-0 h-full">
+                  <span class="font-bold text-base lg:text-[18px] leading-tight truncate">{slide.title}</span>
                   {#if currentSlide === i}
                      <span class="text-[10px] text-green-600 font-bold lg:hidden uppercase tracking-wider mt-1">Active Now</span>
                   {/if}
@@ -386,8 +355,7 @@
         {#each [slides[currentSlide]] as slide (currentSlide)}
           <div
             class="flex flex-col h-full space-y-8"
-            in:fly={{ y: 20, duration: 600, delay: 100 }}
-            out:fade={{ duration: 300 }}
+            in:fade={{ duration: 400 }}
           >
             <!-- Feature Title & Description -->
             <div class="max-w-2xl">
@@ -406,8 +374,7 @@
 
             <!-- Feature Visual Area - Uniform Black Frame (Bezel) -->
             <div class="flex-1 relative mt-12 flex items-center justify-center">
-              <!-- Backdrop Glow -->
-              <div class="absolute -inset-10 bg-gradient-to-br {slide.gradient} rounded-[3rem] blur-3xl opacity-30 transition-all duration-1000"></div>
+              <!-- Remove heavy backdrop glow for performance -->
               
               <!-- The Uniform Frame: Slightly more compact with consistent p-4 bezel -->
               <div
@@ -418,41 +385,45 @@
                   {#if currentSlide === 0}
                     <img
                       src="{base}/transcription-preview.png" 
-                      alt="Harvey Transcription Interface"
+                      alt="Harvey Transcription"
                       class="w-full h-full object-contain"
                     />
                   {:else if currentSlide === 1}
                     <img
                       src="{base}/translation-preview.png" 
-                      alt="Harvey Translation Interface"
+                      alt="Harvey Translation"
                       class="w-full h-full object-contain"
                     />
                   {:else if currentSlide === 2}
                     <img
                       src="{base}/model-management.png" 
-                      alt="Harvey Model Management Interface"
+                      alt="Harvey Model Management"
                       class="w-full h-full object-contain"
                     />
-                  {:else}
-                    <div class="flex flex-col items-center justify-center h-full text-center p-12 bg-gradient-to-br from-slate-900 to-slate-950">
-                      <div class="relative mb-8">
-                         <div class="absolute inset-0 bg-white/5 blur-3xl rounded-full scale-150 opacity-50"></div>
-                         <div class="relative h-32 w-32 rounded-[2.5rem] bg-white/5 backdrop-blur-xl flex items-center justify-center text-white border border-white/10 shadow-2xl">
-                            <svelte:component this={slide.icon} class="w-16 h-16" />
-                         </div>
-                      </div>
-                      <h4 class="text-3xl font-black text-white mb-4 tracking-tight">{slide.title}</h4>
-                      <p class="text-slate-400 text-lg max-w-sm mx-auto leading-relaxed font-medium">{slide.description}</p>
-                      
-                      <!-- Decorative UI elements for premium feel -->
-                      <div class="mt-12 flex gap-3">
-                         {#each Array(3) as _}
-                            <div class="h-2 w-16 bg-white/5 rounded-full overflow-hidden">
-                               <div class="h-full bg-white/20 w-1/3"></div>
-                            </div>
-                         {/each}
-                      </div>
-                    </div>
+                  {:else if currentSlide === 3}
+                    <img
+                      src="{base}/qualitative-coding.png" 
+                      alt="Harvey Qualitative Coding"
+                      class="w-full h-full object-contain"
+                    />
+                  {:else if currentSlide === 4}
+                    <img
+                      src="{base}/image-annotation.png" 
+                      alt="Harvey Image Annotation"
+                      class="w-full h-full object-contain"
+                    />
+                  {:else if currentSlide === 5}
+                    <img
+                      src="{base}/table-management.png" 
+                      alt="Harvey Table Management"
+                      class="w-full h-full object-contain"
+                    />
+                  {:else if currentSlide === 6}
+                    <img
+                      src="{base}/richtext-editing.png" 
+                      alt="Harvey Rich Text Editor"
+                      class="w-full h-full object-contain"
+                    />
                   {/if}
                 </div>
               </div>
