@@ -34,6 +34,12 @@
   let description = initialDescription;
   let text = initialText || '';
   let html = initialHtml || '';
+
+  // Store the genuinely initial JSON locally to prevent feedback loops where Svelte
+  // reactivity passes the user's keystrokes back into the LexicalEditor as a brand new prop,
+  // causing it to completely wipe and recreate its DOM state (and thereby destroying dropdowns).
+  const startingJsonForLexical = text.startsWith('{') ? text : null;
+  const startingPlaceholderForLexical = !text.startsWith('{') ? text : 'Enter text...';
   let selectedColor = initialColor;
   let selectedTextColor = initialTextColor;
   let selectedFontSize = initialFontSize;
@@ -201,26 +207,61 @@
 
   function handleClickOutside(event) {
     if (dialogElement && !dialogElement.contains(event.target)) {
-      // Don't close if clicking a dropdown menu or Lexical modal
-      if (
-        event.target.closest('.ui-dropdown-menu') ||
-        event.target.closest('.lexical-modal') ||
-        event.target.closest('.multi-select-dropdown') ||
-        event.target.closest('.group-multi-select-dropdown')
-      )
+      // If the target element has been removed from the DOM (e.g. a Lexical dropdown
+      // option that was synchronously unmounted during the click), do not close the dialog.
+      if (!document.body.contains(event.target)) {
         return;
+      }
+
+      // Use composedPath to reliably check for portaled elements even if they're unmounted
+      // or clicked via a deeply nested SVG element.
+      const path = event.composedPath ? event.composedPath() : [];
+      let isInsideDropdown = false;
+
+      for (const el of path) {
+        if (el && el.classList) {
+          if (
+            el.classList.contains('ui-dropdown-menu') ||
+            el.classList.contains('lexical-modal') ||
+            el.classList.contains('lexical-dropdown-menu') ||
+            el.classList.contains('multi-select-dropdown') ||
+            el.classList.contains('group-multi-select-dropdown')
+          ) {
+            isInsideDropdown = true;
+            break;
+          }
+        }
+      }
+
+      // Fallback to .closest if composedPath didn't catch it
+      if (
+        !isInsideDropdown &&
+        event.target &&
+        event.target.closest &&
+        (event.target.closest('.ui-dropdown-menu') ||
+          event.target.closest('.lexical-modal') ||
+          event.target.closest('.lexical-dropdown-menu') ||
+          event.target.closest('.multi-select-dropdown') ||
+          event.target.closest('.group-multi-select-dropdown'))
+      ) {
+        isInsideDropdown = true;
+      }
+
+      if (isInsideDropdown) {
+        return;
+      }
       handleDone();
     }
   }
 
   onMount(() => {
     setTimeout(() => {
-      window.addEventListener('pointerdown', handleClickOutside, true);
+      window.addEventListener('mousedown', handleClickOutside, true);
     }, 100);
   });
 
   onDestroy(() => {
-    window.removeEventListener('pointerdown', handleClickOutside, true);
+    window.removeEventListener('mousedown', handleClickOutside, true);
   });
 
   const lexicalToolbarConfig = {
@@ -262,8 +303,8 @@
           class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-visible bg-white dark:bg-gray-900"
         >
           <LexicalEditor
-            initialJson={text.startsWith('{') ? text : null}
-            placeholder={!text.startsWith('{') ? text : 'Enter text...'}
+            initialJson={startingJsonForLexical}
+            placeholder={startingPlaceholderForLexical}
             editable={true}
             toolbarConfig={lexicalToolbarConfig}
             on:change={handleLexicalChange}

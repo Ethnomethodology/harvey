@@ -4035,6 +4035,12 @@ export async function requestTranslation(
     return;
   }
 
+  // Ensure any unsaved edits are saved before translating the file on disk
+  const canProceed = await checkUnsavedChangesThenProceed(null, 'starting translation');
+  if (!canProceed) {
+    return;
+  }
+
   setTranslationStatus(true, null, { status: 'initiating', sourcePath: transcriptPath });
 
   try {
@@ -4080,6 +4086,12 @@ export async function requestDocumentTranslation(
     return;
   }
 
+  // Ensure any unsaved edits are saved before translating the file on disk
+  const canProceed = await checkUnsavedChangesThenProceed(null, 'starting translation');
+  if (!canProceed) {
+    return;
+  }
+
   setTranslationStatus(true, null, { status: 'initiating', sourcePath: documentPath });
 
   try {
@@ -4122,6 +4134,12 @@ export async function requestStandaloneTranscriptTranslation(
       title: 'Translation Error',
       type: 'error'
     });
+    return;
+  }
+
+  // Ensure any unsaved edits are saved before translating the file on disk
+  const canProceed = await checkUnsavedChangesThenProceed(null, 'starting translation');
+  if (!canProceed) {
     return;
   }
 
