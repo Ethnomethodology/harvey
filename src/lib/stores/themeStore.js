@@ -7,7 +7,7 @@ const THEME_STORAGE_KEY = 'harvey_theme_preference'; // Key for localStorage
 
 // Possible values: 'light', 'dark', 'system'
 // Read from localStorage first as a fallback or initial value before backend loads
-const initialPreference = localStorage.getItem(THEME_STORAGE_KEY) || 'system';
+const initialPreference = localStorage.getItem(THEME_STORAGE_KEY) || 'light';
 
 export const themePreference = writable(initialPreference); // Stores 'light', 'dark', or 'system'
 export const currentTheme = writable('light'); // Stores the resolved 'light' or 'dark'
