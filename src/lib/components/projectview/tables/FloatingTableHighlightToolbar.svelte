@@ -20,9 +20,9 @@
   // Derive current tags for this specific highlight from the project store
   let currentHighlight = $derived((() => {
     let highlights = [];
-    if (docType === 'pdf') highlights = project.currentPdfAnnotations;
-    else if (docType === 'table') highlights = project.currentTableHighlights;
-    else highlights = project.currentDocumentHighlights;
+    if (docType === 'pdf') highlights = $project.currentPdfAnnotations || [];
+    else if (docType === 'table') highlights = $project.currentTableHighlights || [];
+    else highlights = $project.currentDocumentHighlights || [];
     return highlights.find((h) => h.id === highlightId);
   })());
 

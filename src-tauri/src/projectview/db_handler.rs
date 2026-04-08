@@ -151,28 +151,81 @@ pub fn init_db() -> Result<(), CommandError> {
         .query_map([], |row| row.get::<_, String>(1))?
         .any(|col_name_result| col_name_result.is_ok_and(|name| name == "document_type"));
 
-    if !doc_type_column_exists {
-        info!("[DB] Adding document_type column to pdf_annotations table.");
-        conn.execute(
-            "ALTER TABLE pdf_annotations ADD COLUMN document_type TEXT NOT NULL DEFAULT 'pdf'",
-            [],
-        )?;
-    }
-
-    // Check and add project_id column if missing (for older schemas)
-    // This is a simplified migration: it adds the column but doesn't backfill or add FK for existing rows via ALTER.
-    // New tables get the FK from CREATE TABLE.
     let mut stmt_check_project_id = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
     let project_id_column_exists = stmt_check_project_id
         .query_map([], |row| row.get::<_, String>(1))?
         .any(|col_name_result| col_name_result.is_ok_and(|name| name == "project_id"));
 
-    if !project_id_column_exists {
-        info!("[DB] Adding project_id column to pdf_annotations table.");
-        conn.execute("ALTER TABLE pdf_annotations ADD COLUMN project_id TEXT", [])?;
-        // For existing rows, project_id will be NULL. This needs to be handled by application logic
-        // or a more comprehensive data migration strategy if strict FK enforcement on old data is required.
-        info!("[DB] Added project_id column to pdf_annotations. Existing rows will have NULL project_id if not manually updated.");
+    // Check if the unique constraint/index exists
+    let has_unique_index = {
+        let mut stmt = conn.prepare("PRAGMA index_list(pdf_annotations)")?;
+        let index_iter = stmt.query_map([], |row| {
+            let name: String = row.get(1)?;
+            let unique: bool = row.get(2)?;
+            Ok((name, unique))
+        })?;
+        let mut found = false;
+        for idx in index_iter {
+            if let Ok((name, unique)) = idx {
+                if unique {
+                    let mut stmt_info = conn.prepare(&format!("PRAGMA index_info({})", name))?;
+                    let cols: Vec<String> = stmt_info.query_map([], |r| r.get::<_, String>(2))?.collect::<Result<Vec<_>, _>>()?;
+                    if cols.contains(&"project_id".to_string()) && cols.contains(&"pdf_document_path".to_string()) && cols.contains(&"document_type".to_string()) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+        found
+    };
+
+    if !doc_type_column_exists || !project_id_column_exists || !has_unique_index {
+        info!("[DB] pdf_annotations schema is outdated or missing constraints. Migrating via recreation...");
+
+        // 1. Rename old table
+        conn.execute("ALTER TABLE pdf_annotations RENAME TO pdf_annotations_legacy", [])?;
+
+        // 2. Create new table (Constraint is included in the definition at the start of init_db, but we re-verify here)
+        conn.execute(
+            "CREATE TABLE pdf_annotations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                pdf_document_path TEXT NOT NULL,
+                annotations_json TEXT NOT NULL,
+                document_type TEXT NOT NULL DEFAULT 'pdf',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE (project_id, pdf_document_path, document_type)
+            )",
+            [],
+        )?;
+
+        // 3. Migrate data
+        if !project_id_column_exists && !doc_type_column_exists {
+             // Very old schema: no project_id, no document_type
+             // This case is tricky because we don't know the project_id.
+             // For now, we omit it or it will fail NOT NULL.
+             // Actually, if it's that old, we might have to allow NULL temporarily or skip.
+             // But usually, project_id was added early.
+        } else if project_id_column_exists && doc_type_column_exists {
+            conn.execute(
+                "INSERT INTO pdf_annotations (id, project_id, pdf_document_path, annotations_json, document_type, created_at, updated_at)
+                 SELECT id, project_id, pdf_document_path, annotations_json, document_type, created_at, updated_at FROM pdf_annotations_legacy",
+                []
+            )?;
+        } else if project_id_column_exists && !doc_type_column_exists {
+             conn.execute(
+                "INSERT INTO pdf_annotations (id, project_id, pdf_document_path, annotations_json, document_type, created_at, updated_at)
+                 SELECT id, project_id, pdf_document_path, annotations_json, 'pdf', created_at, updated_at FROM pdf_annotations_legacy",
+                []
+            )?;
+        }
+
+        // 4. Drop legacy
+        conn.execute("DROP TABLE pdf_annotations_legacy", [])?;
+        info!("[DB] pdf_annotations migration complete.");
     }
 
     // Trigger for pdf_annotations updated_at
@@ -222,119 +275,95 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized asset_metadata table definition with composite PK.");
 
-    // Check and add file_type column to asset_metadata if missing (for older schemas)
-    let mut stmt_check_file_type = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let file_type_column_exists = stmt_check_file_type
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "file_type"));
-    if !file_type_column_exists {
-        info!("[DB] Adding file_type column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN file_type TEXT", [])?;
-    }
+    // Comprehensive check for asset_metadata schema
+    let (has_composite_pk, missing_cols) = {
+        let mut stmt = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+        let col_info: Vec<(String, i32)> = stmt.query_map([], |row| Ok((row.get(1)?, row.get(5)?)))?.collect::<Result<Vec<_>, _>>()?;
+        
+        let pk_cols: Vec<String> = col_info.iter().filter(|(_, pk)| *pk > 0).map(|(name, _)| name.clone()).collect();
+        let current_col_names: Vec<String> = col_info.iter().map(|(name, _)| name.clone()).collect();
+        
+        let is_composite = pk_cols.contains(&"project_id".to_string()) && pk_cols.contains(&"asset_relative_path".to_string());
+        
+        let required_cols = ["project_id", "file_type", "thumbnail", "original_import_path", "speaker_names_json", "waveform_data", "language_code", "properties"];
+        let missing: Vec<String> = required_cols.iter().filter(|&&c| !current_col_names.contains(&c.to_string())).map(|&c| c.to_string()).collect();
+        
+        (is_composite, missing)
+    };
 
-    // Check and add thumbnail column to asset_metadata if missing
-    let mut stmt_check_thumbnail = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let thumbnail_column_exists = stmt_check_thumbnail
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "thumbnail"));
-    if !thumbnail_column_exists {
-        info!("[DB] Adding thumbnail column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN thumbnail BLOB", [])?;
-    }
+    if !has_composite_pk || !missing_cols.is_empty() {
+        info!("[DB] asset_metadata schema is outdated (missing composite PK or columns: {:?}). Migrating via recreation...", missing_cols);
 
-    // Always run backfill/correction to normalize legacy underscore types and hyphenated types
-    info!("[DB] Running file_type normalization and backfill...");
-    if let Err(e) = backfill_file_type(&conn) {
-        error!("[DB] Failed to backfill/normalize file_type: {}", e);
-    }
+        // 1. Rename old table
+        conn.execute("ALTER TABLE asset_metadata RENAME TO asset_metadata_legacy", [])?;
 
-    // Always check for and prune ghost assets (records in DB but file missing on disk)
-    info!("[DB] Checking for ghost assets to prune...");
-    if let Err(e) = prune_ghost_assets(&conn) {
-        error!("[DB] Failed to prune ghost assets: {}", e);
-    }
-
-
-    // Check and add project_id column to asset_metadata if missing (for older schemas)
-    // This simplified migration adds the column if it doesn't exist. It does not change PK for existing tables.
-    // The PRIMARY KEY change in CREATE TABLE applies to new DBs or if the table is dropped and recreated.
-    // Handling PK change for existing populated tables is a complex migration not covered here.
-    let mut stmt_check_asset_project_id = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let asset_project_id_exists = stmt_check_asset_project_id
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "project_id"));
-
-    if !asset_project_id_exists {
-        info!("[DB] Adding project_id column to asset_metadata table (for older schema).");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN project_id TEXT", [])?;
-        info!("[DB] Added project_id column to asset_metadata. Existing rows will have NULL. PK not changed for existing tables by this ALTER.");
-    }
-
-    // Migration for original_import_path
-    let mut stmt_check_orig_import_path = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let orig_import_path_exists = stmt_check_orig_import_path
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "original_import_path"));
-
-    if !orig_import_path_exists {
-        info!("[DB] Adding original_import_path column to asset_metadata table.");
+        // 2. Create new table with full modern schema
         conn.execute(
-            "ALTER TABLE asset_metadata ADD COLUMN original_import_path TEXT",
+            "CREATE TABLE asset_metadata (
+                asset_relative_path TEXT NOT NULL,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                last_modified TEXT NOT NULL,
+                title TEXT,
+                description TEXT,
+                summary TEXT,
+                duration_seconds REAL,
+                width INTEGER,
+                height INTEGER,
+                frame_rate REAL,
+                bit_rate INTEGER,
+                audio_codec TEXT,
+                video_codec TEXT,
+                creation_time TEXT,
+                asset_type TEXT NOT NULL,
+                custom_fields_json TEXT,
+                original_import_path TEXT,
+                speaker_names_json TEXT,
+                waveform_data BLOB,
+                language_code TEXT,
+                properties TEXT,
+                file_type TEXT,
+                thumbnail BLOB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (project_id, asset_relative_path)
+            )",
             [],
         )?;
-    }
 
-    // Migration for speaker_names_json
-    let mut stmt_check_speaker_json = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let speaker_json_exists = stmt_check_speaker_json
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "speaker_names_json"));
+        // 3. Migrate data dynamically based on what exists in legacy
+        let mut stmt = conn.prepare("PRAGMA table_info(asset_metadata_legacy)")?;
+        let legacy_cols: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+        
+        let target_cols = [
+            "asset_relative_path", "project_id", "file_name", "file_path", "last_modified", "title", "description", 
+            "summary", "duration_seconds", "width", "height", "frame_rate", "bit_rate", "audio_codec", "video_codec", 
+            "creation_time", "asset_type", "custom_fields_json", "original_import_path", "speaker_names_json", 
+            "waveform_data", "language_code", "properties", "file_type", "thumbnail", "created_at", "updated_at"
+        ];
+        
+        let mut select_parts = Vec::new();
+        let mut insert_parts = Vec::new();
+        
+        for &col in &target_cols {
+            insert_parts.push(col);
+            if legacy_cols.contains(&col.to_string()) {
+                select_parts.push(col.to_string());
+            } else {
+                select_parts.push(format!("NULL as {}", col));
+            }
+        }
+        
+        let insert_sql = format!(
+            "INSERT INTO asset_metadata ({}) SELECT {} FROM asset_metadata_legacy",
+            insert_parts.join(", "), select_parts.join(", ")
+        );
+        conn.execute(&insert_sql, [])?;
 
-    if !speaker_json_exists {
-        info!("[DB] Adding speaker_names_json column to asset_metadata table.");
-        conn.execute(
-            "ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT",
-            [],
-        )?;
-    }
-
-    // Migration for waveform_data
-    let mut stmt_check_waveform_data = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let waveform_data_exists = stmt_check_waveform_data
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "waveform_data"));
-
-    if !waveform_data_exists {
-        info!("[DB] Adding waveform_data column to asset_metadata table.");
-        conn.execute(
-            "ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB",
-            [],
-        )?;
-    }
-
-    // Migration for language_code
-    let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let lang_code_exists = stmt_check_lang_code
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "language_code"));
-
-    if !lang_code_exists {
-        info!("[DB] Adding language_code column to asset_metadata table.");
-        conn.execute(
-            "ALTER TABLE asset_metadata ADD COLUMN language_code TEXT",
-            [],
-        )?;
-    }
-
-    // Migration for properties
-    let mut stmt_check_properties = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let properties_exists = stmt_check_properties
-        .query_map([], |row| row.get::<_, String>(1))?
-        .any(|name_res| name_res.is_ok_and(|name| name == "properties"));
-
-    if !properties_exists {
-        info!("[DB] Adding properties column to asset_metadata table.");
-        conn.execute("ALTER TABLE asset_metadata ADD COLUMN properties TEXT", [])?;
+        // 4. Drop legacy
+        conn.execute("DROP TABLE asset_metadata_legacy", [])?;
+        info!("[DB] asset_metadata migration complete.");
     }
 
     // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
@@ -959,23 +988,61 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized highlights table.");
 
-    // Migration for adding columns to highlights table
-    let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
-    let columns: Vec<String> = stmt
-        .query_map([], |row| row.get(1))?
-        .collect::<Result<Vec<_>, _>>()?;
+    // Comprehensive check for highlights schema
+    let missing_highlight_cols = {
+        let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
+        let current_cols: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+        let required = ["asset_id", "project_id", "annotation_id"];
+        required.iter().filter(|&&c| !current_cols.contains(&c.to_string())).map(|&c| c.to_string()).collect::<Vec<_>>()
+    };
 
-    if !columns.contains(&"asset_id".to_string()) {
-        info!("[DB] Adding asset_id column to highlights table.");
-        conn.execute("ALTER TABLE highlights ADD COLUMN asset_id TEXT", [])?;
-    }
-    if !columns.contains(&"project_id".to_string()) {
-        info!("[DB] Adding project_id column to highlights table.");
-        conn.execute("ALTER TABLE highlights ADD COLUMN project_id TEXT", [])?;
-    }
-    if !columns.contains(&"annotation_id".to_string()) {
-        info!("[DB] Adding annotation_id column to highlights table.");
-        conn.execute("ALTER TABLE highlights ADD COLUMN annotation_id TEXT", [])?;
+    if !missing_highlight_cols.is_empty() {
+        info!("[DB] highlights schema is outdated (missing columns: {:?}). Migrating via recreation...", missing_highlight_cols);
+
+        // 1. Rename old table
+        conn.execute("ALTER TABLE highlights RENAME TO highlights_legacy", [])?;
+
+        // 2. Create new table with modern schema and FK
+        conn.execute(
+            "CREATE TABLE highlights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                start_offset INTEGER,
+                end_offset INTEGER,
+                text TEXT,
+                annotation_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id, asset_id) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // 3. Migrate data
+        let mut stmt = conn.prepare("PRAGMA table_info(highlights_legacy)")?;
+        let legacy_cols: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+        
+        let target_cols = ["id", "asset_id", "project_id", "start_offset", "end_offset", "text", "annotation_id", "created_at"];
+        let mut select_parts = Vec::new();
+        let mut insert_parts = Vec::new();
+        for &col in &target_cols {
+            insert_parts.push(col);
+            if legacy_cols.contains(&col.to_string()) {
+                select_parts.push(col.to_string());
+            } else {
+                select_parts.push(format!("NULL as {}", col));
+            }
+        }
+        
+        let insert_sql = format!(
+            "INSERT INTO highlights ({}) SELECT {} FROM highlights_legacy",
+            insert_parts.join(", "), select_parts.join(", ")
+        );
+        conn.execute(&insert_sql, [])?;
+
+        // 4. Drop legacy
+        conn.execute("DROP TABLE highlights_legacy", [])?;
+        info!("[DB] highlights migration complete.");
     }
 
     // highlight_tags table
@@ -993,7 +1060,10 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized highlight_tags table.");
 
-    // Migration for broken paths in multiple tables after Media -> Audios/Videos refactor
+    // --- FINAL INITIALIZATION STEPS (Reordered) ---
+
+    // 1. Run correction for multiple tables' paths BEFORE pruning.
+    // This handles the Media -> Audios/Videos refactor for all dependent tables.
     info!("[DB] Running correction for multiple tables' paths...");
     let tables_and_cols = [
         ("pdf_annotations", "pdf_document_path"),
@@ -1002,6 +1072,7 @@ pub fn init_db() -> Result<(), CommandError> {
         ("table_layout_preferences", "table_asset_relative_path"),
         ("file_groups", "file_asset_path"),
         ("media_transcript_data", "asset_relative_path"),
+        ("highlights", "asset_id"),
     ];
 
     for (table, col) in tables_and_cols {
@@ -1013,7 +1084,8 @@ pub fn init_db() -> Result<(), CommandError> {
                  SELECT 1 FROM asset_metadata m
                  WHERE m.project_id = {}.project_id
                  AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Audios/')
-             );", table, col, col, col, table, table, col
+             );",
+            table, col, col, col, table, table, col
         );
         let sql_videos = format!(
             "UPDATE {}
@@ -1023,7 +1095,8 @@ pub fn init_db() -> Result<(), CommandError> {
                  SELECT 1 FROM asset_metadata m
                  WHERE m.project_id = {}.project_id
                  AND m.asset_relative_path = REPLACE({}.{}, 'harvey_files/Media/', 'harvey_files/Videos/')
-             );", table, col, col, col, table, table, col
+             );",
+            table, col, col, col, table, table, col
         );
 
         if let Err(e) = conn.execute(&sql_audios, []) {
@@ -1034,9 +1107,21 @@ pub fn init_db() -> Result<(), CommandError> {
         }
     }
 
-    // Cleanup legacy tables if they exist
-    conn.execute("DROP TABLE IF EXISTS tag_groups_legacy", [])?;
-    conn.execute("DROP TABLE IF EXISTS tags_legacy", [])?;
+    // 2. Always run backfill/correction to normalize legacy underscore types and hyphenated types
+    info!("[DB] Running file_type normalization and backfill...");
+    if let Err(e) = backfill_file_type(&conn) {
+        error!("[DB] Failed to backfill/normalize file_type: {}", e);
+    }
+
+    // 3. Always check for and prune ghost assets (records in DB but file missing on disk)
+    info!("[DB] Checking for ghost assets to prune...");
+    if let Err(e) = prune_ghost_assets(&conn) {
+        error!("[DB] Failed to prune ghost assets: {}", e);
+    }
+
+    // 4. Cleanup legacy tables if they exist
+    let _ = conn.execute("DROP TABLE IF EXISTS tag_groups_legacy", []);
+    let _ = conn.execute("DROP TABLE IF EXISTS tags_legacy", []);
 
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())

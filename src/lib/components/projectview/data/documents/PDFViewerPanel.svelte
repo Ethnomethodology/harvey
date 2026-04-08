@@ -6,7 +6,7 @@
   import { v4 as uuidv4 } from 'uuid';
   import { project, toggleTagInHighlightLocal } from '$lib/stores/projectStore.js';
   import { tagStore, addTag } from '$lib/stores/tagStore.svelte.js';
-  import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
+  import { saveCurrentPdfAnnotations, loadPdfAnnotationsFromFile } from '$lib/services/projectService.js';
   import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
   import { get } from 'svelte/store';
   import {
@@ -2166,6 +2166,11 @@
     initialHighlightsApplied = false;
     undoStack = [];
     redoStack = [];
+
+    // Ensure PDF annotations are loaded immediately so they aren't lost if the HighlightsPanel is unmounted
+    if (pdfPath) {
+      await loadPdfAnnotationsFromFile(pdfPath);
+    }
 
     // Ensure old viewer and doc are cleaned up if they exist BEFORE nulling them
     if (pdfViewer) {

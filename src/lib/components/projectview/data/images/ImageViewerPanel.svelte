@@ -5,7 +5,7 @@
   import { writeFile } from '@tauri-apps/plugin-fs';
   import { get, derived } from 'svelte/store';
   import { project, updateImageAnnotations } from '$lib/stores/projectStore.js';
-  import { saveImageAnnotations } from '$lib/services/projectService.js';
+  import { saveImageAnnotations, loadImageAnnotations } from '$lib/services/projectService.js';
   import OpenSeadragon from 'openseadragon';
   import { v4 as uuidv4 } from 'uuid';
   import ImageExportModal from '$lib/components/projectview/modals/ImageExportModal.svelte';
@@ -1006,6 +1006,10 @@
     currentLoadedPath = pathForImage;
     isLoading = true;
     error = null;
+
+    // Ensure annotations are loaded from the database whenever a new image is mounted.
+    // This prevents edits from disappearing if the HighlightsPanel is unmounted or inactive.
+    await loadImageAnnotations(pathForImage);
 
     if (osdViewer) {
       try {

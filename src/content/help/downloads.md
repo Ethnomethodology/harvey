@@ -23,7 +23,7 @@ Download the file ending in `x64-setup.zip`. Extract the content and run the set
     sudo xattr -dr com.apple.quarantine harvey.app
     ```
 
-## Build from Source
+## Build Harvey from Source
 If you are using Linux or prefer to build the application yourself, we provide a bootstrap script that automates the environment setup and compilation.
 
 ### Quick Build (macOS & Linux)

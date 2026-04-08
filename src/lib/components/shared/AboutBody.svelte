@@ -45,11 +45,18 @@
     </p>
   </div>
 
-  <blockquote
-    class="border-l-4 border-blue-500 dark:border-blue-600 pl-4 italic text-gray-600 dark:text-gray-400 mt-8 text-lg"
-  >
-    It's an application built <em>by researchers, for researchers</em>.
-  </blockquote>
+  <div class="pt-4 mt-4 border-t border-gray-100 dark:border-gray-800">
+    <h4 class="text-xl font-bold mb-2 text-gray-900 dark:text-white">Developed with AI</h4>
+    <p class="text-gray-700 dark:text-gray-300 leading-relaxed text-base">
+      Project Harvey has been developed entirely using Vibe Coding to assess the viability of
+      AI-assisted programming in research software development. From its inception, we have
+      developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules.
+      We believe this AI-assisted approach can make development more accessible and efficient, and
+      we encourage contributors to explore and adopt similar methods.
+    </p>
+  </div>
+
+
 
   <div class="pt-8 mt-8 border-t border-gray-100 dark:border-gray-800 flex items-center space-x-4">
     <a

@@ -19,4 +19,7 @@ Harvey is named in honor of Sociologist [**Harvey Sacks**](https://en.wikipedia.
 
 Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run **100% locally** on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.
 
-> It's an application built *by researchers, for researchers*.
+## Developed with AI
+
+Project Harvey has been developed entirely using Vibe Coding to assess the viability of AI-assisted programming in research software development. From its inception, we have developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+

@@ -18,14 +18,14 @@
   let currentHighlight = $derived((() => {
     let highlights = [];
     if (docType === 'pdf') {
-      highlights = project.currentPdfAnnotations || [];
+      highlights = $project.currentPdfAnnotations || [];
     } else if (docType === 'table') {
-      highlights = project.currentTableHighlights || [];
+      highlights = $project.currentTableHighlights || [];
     } else if (docType === 'standalone_transcript') {
-      highlights = project.currentStandaloneTranscriptHighlights || [];
+      highlights = $project.currentStandaloneTranscriptHighlights || [];
     } else {
       // For 'doc', 'audio_transcript', 'video_transcript'
-      highlights = project.currentDocumentHighlights || [];
+      highlights = $project.currentDocumentHighlights || [];
     }
 
     return (highlights || []).find((h) => h.id === highlightId);

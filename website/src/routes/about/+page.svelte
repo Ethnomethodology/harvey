@@ -21,13 +21,11 @@
     <p>
         Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run <strong>100% locally</strong> on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.
     </p>
-    <blockquote>
-        It's an application built <em>by researchers, for researchers</em>.
-    </blockquote>
 
-    <h2>Developed with AI</h2>
+
+    <h2 id="ai-development">Developed with AI</h2>
     <p>
-        From its inception, Project Harvey has been significantly developed using AI tools, including Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+        Project Harvey has been developed entirely using Vibe Coding to assess the viability of AI-assisted programming in research software development. From its inception, we have developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
     </p>
 
     <h2>Open Source</h2>
