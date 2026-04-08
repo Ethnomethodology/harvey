@@ -17,6 +17,10 @@ Visit the [Harvey Website](https://ethnomethodology.github.io/harvey/).
 
 Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run **100% locally** on your computer. You download the AI models once via the in-app Setup Wizard and can use them forever offline. Your data never leaves your device.
 
+### Developed with AI
+
+From its inception, Project Harvey has been significantly developed using AI tools. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+
 
 ## Key Features
 
@@ -82,7 +86,6 @@ We warmly welcome contributions to Project Harvey from everyone in the open-sour
 
 Project Harvey is particularly interested in fostering a collaborative environment that embraces innovative coding paradigms. We encourage contributions from users of "vibe coding" and "agentic coding" platforms (such as those being explored with Google Jules or GitHub Copilot).
 
-From its inception, Project Harvey has been significantly developed using AI tools. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
 
 ### Getting Started for Developers & AI Agents
 Harvey employs a strict **"Visual First" documentation standard**.
