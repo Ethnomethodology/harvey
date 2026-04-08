@@ -2,7 +2,7 @@
     import "../app.css";
     import { base } from '$app/paths';
     import { page } from '$app/stores';
-    import { Github, Menu, X } from '@lucide/svelte';
+    import { Github, Menu, X, Bot } from '@lucide/svelte';
 
     let isMenuOpen = false;
 
@@ -88,10 +88,10 @@
             <p class="text-sm text-slate-500">
                 &copy; {new Date().getFullYear()} <a href="https://github.com/Ethnomethodology/harvey/blob/main/LICENSE.md" target="_blank" rel="noreferrer" class="hover:text-slate-900">The Project Harvey Authors</a>.
             </p>
-             <div class="flex gap-4 text-sm text-slate-500">
-                <a href="{base}/about" class="hover:text-slate-900">About</a>
-                <a href="{base}/help" class="hover:text-slate-900">Help</a>
-            </div>
+            <a href="{base}/about#ai-development" class="text-xs font-medium text-green-600 hover:text-green-700 flex items-center gap-1.5 transition-colors">
+                <Bot class="w-4 h-4" />
+                Developed with AI
+            </a>
         </div>
     </footer>
 </div>

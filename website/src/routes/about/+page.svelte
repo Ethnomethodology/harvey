@@ -23,7 +23,7 @@
     </p>
 
 
-    <h2>Developed with AI</h2>
+    <h2 id="ai-development">Developed with AI</h2>
     <p>
         Project Harvey has been developed entirely using Vibe Coding to assess the viability of AI-assisted programming in research software development. From its inception, we have developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
     </p>
