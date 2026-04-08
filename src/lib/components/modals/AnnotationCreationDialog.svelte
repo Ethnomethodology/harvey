@@ -201,6 +201,12 @@
 
   function handleClickOutside(event) {
     if (dialogElement && !dialogElement.contains(event.target)) {
+      // If the target element has been removed from the DOM (e.g. a Lexical dropdown
+      // option that was synchronously unmounted during the click), do not close the dialog.
+      if (!document.body.contains(event.target)) {
+        return;
+      }
+
       // Use composedPath to reliably check for portaled elements even if they're unmounted
       // or clicked via a deeply nested SVG element.
       const path = event.composedPath ? event.composedPath() : [];
