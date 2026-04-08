@@ -34,6 +34,12 @@
   let description = initialDescription;
   let text = initialText || '';
   let html = initialHtml || '';
+
+  // Store the genuinely initial JSON locally to prevent feedback loops where Svelte
+  // reactivity passes the user's keystrokes back into the LexicalEditor as a brand new prop,
+  // causing it to completely wipe and recreate its DOM state (and thereby destroying dropdowns).
+  const startingJsonForLexical = text.startsWith('{') ? text : null;
+  const startingPlaceholderForLexical = !text.startsWith('{') ? text : 'Enter text...';
   let selectedColor = initialColor;
   let selectedTextColor = initialTextColor;
   let selectedFontSize = initialFontSize;
@@ -297,8 +303,8 @@
           class="lexical-container border border-gray-300 dark:border-gray-700 rounded-md overflow-visible bg-white dark:bg-gray-900"
         >
           <LexicalEditor
-            initialJson={text.startsWith('{') ? text : null}
-            placeholder={!text.startsWith('{') ? text : 'Enter text...'}
+            initialJson={startingJsonForLexical}
+            placeholder={startingPlaceholderForLexical}
             editable={true}
             toolbarConfig={lexicalToolbarConfig}
             on:change={handleLexicalChange}
