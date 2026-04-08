@@ -363,35 +363,43 @@
       </div>
 
       <!-- Content Area (25%) -->
-      <div class="lg:w-1/4 flex flex-col justify-center py-8">
-        {#key currentSlide}
-          <div in:fade={{ duration: 400 }}>
-            <div class="flex items-center gap-3 mb-6">
-              <div class="h-10 w-10 rounded-xl {slides[currentSlide].accent} bg-opacity-10 flex items-center justify-center text-slate-900 shadow-sm border border-slate-100">
-                <svelte:component this={slides[currentSlide].icon} class="w-5 h-5" />
+      <div class="lg:w-1/4 flex flex-col justify-start pt-12 lg:pt-20 pb-8">
+        <div class="grid grid-cols-1 place-items-stretch relative min-h-[320px]">
+          {#each slides as slide, i}
+            <div 
+              class="col-start-1 row-start-1 transition-opacity duration-500 ease-in-out"
+              class:opacity-100={currentSlide === i}
+              class:opacity-0={currentSlide !== i}
+              class:pointer-events-none={currentSlide !== i}
+            >
+              <div class="flex items-center gap-3 mb-6">
+                <div class="h-10 w-10 rounded-xl {slide.accent} bg-opacity-10 flex items-center justify-center text-slate-900 shadow-sm border border-slate-100">
+                  <svelte:component this={slide.icon} class="w-5 h-5" />
+                </div>
+                <span class="text-xs font-bold text-green-600 uppercase tracking-widest leading-none">Feature</span>
               </div>
-              <span class="text-xs font-bold text-green-600 uppercase tracking-widest leading-none">Feature</span>
+              
+              <h3 class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight mb-6 leading-tight">
+                {slide.title}
+              </h3>
+              
+              <p class="text-lg text-slate-600 leading-relaxed font-medium mb-8">
+                {slide.description}
+              </p>
             </div>
-            
-            <h3 class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight mb-6 leading-tight">
-              {slides[currentSlide].title}
-            </h3>
-            
-            <p class="text-lg text-slate-600 leading-relaxed font-medium mb-8">
-              {slides[currentSlide].description}
-            </p>
+          {/each}
+        </div>
 
-            <div class="flex gap-2">
-              {#each slides as _, i}
-                <button 
-                  on:click={() => goToSlide(i)}
-                  class="h-1.5 rounded-full transition-all duration-500 {currentSlide === i ? 'bg-green-500 w-8' : 'bg-slate-200 w-4 hover:bg-slate-300'}"
-                  aria-label="Go to slide {i + 1}"
-                ></button>
-              {/each}
-            </div>
-          </div>
-        {/key}
+        <!-- Stable Indicators (Outside the loop) -->
+        <div class="flex gap-2 mt-8">
+          {#each slides as _, dotIndex}
+            <button 
+              on:click={() => goToSlide(dotIndex)}
+              class="h-1.5 rounded-full transition-all duration-500 {currentSlide === dotIndex ? 'bg-green-500 w-8' : 'bg-slate-200 w-4 hover:bg-slate-300'}"
+              aria-label="Go to slide {dotIndex + 1}"
+            ></button>
+          {/each}
+        </div>
       </div>
     </div>
   </div>
