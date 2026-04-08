@@ -21,6 +21,7 @@
     FileSpreadsheet,
     Video,
     Table,
+    Sheet,
     Tag
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -51,7 +52,7 @@
   const slides = [
     {
       title: 'Transcription',
-      description: 'Automatically transcribe audio and video files entirely offline using state-of-the-art models. Harvey also uses open-source diarization model to identify different speakers and keeps your transcript perfectly in sync with the recording.',
+      description: 'Automatically transcribe audio and video files entirely offline using state-of-the-art models. Record live interviews and view real-time transcriptions as they happen.',
       icon: Mic,
       accent: 'bg-blue-500',
       image: 'transcription-preview.png'
@@ -87,7 +88,7 @@
     {
       title: 'Table Management',
       description: 'Import CSV and XLSX datasets, such as survey responses, and edit them directly within your project. Harvey provides advanced tools to create specialized data views and generate visualizations tailored to your research needs.',
-      icon: FileSpreadsheet,
+      icon: Sheet,
       accent: 'bg-emerald-500',
       image: 'table-management.png'
     },
@@ -308,7 +309,7 @@
 
     <!-- Redesigned 75/25 Split Carousel -->
     <div
-      class="bg-white border border-slate-200 rounded-[2.5rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col lg:flex-row p-6 lg:p-12 gap-8 lg:gap-16"
+      class="bg-white border border-slate-200 rounded-[2.5rem] shadow-2xl overflow-hidden min-h-[600px] flex flex-col lg:flex-row px-6 py-4 lg:px-12 lg:py-6 gap-8 lg:gap-16"
     >
       <!-- Carousel Area (75%) -->
       <div class="lg:w-3/4 flex flex-col justify-center">
@@ -363,7 +364,7 @@
       </div>
 
       <!-- Content Area (25%) -->
-      <div class="lg:w-1/4 flex flex-col justify-start pt-12 lg:pt-20 pb-8">
+      <div class="lg:w-1/4 flex flex-col justify-start pt-6 lg:pt-10 pb-8">
         <div class="grid grid-cols-1 place-items-stretch relative min-h-[320px]">
           {#each slides as slide, i}
             <div 
