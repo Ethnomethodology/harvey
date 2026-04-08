@@ -51,49 +51,49 @@
   const slides = [
     {
       title: 'Transcription',
-      description: 'Convert audio and video into text automatically using state-of-the-art local AI models. Perfect for interviews and focus groups.',
+      description: 'Automatically transcribe audio and video files entirely offline using state-of-the-art models. Harvey also uses open-source diarization model to identify different speakers and keeps your transcript perfectly in sync with the recording.',
       icon: Mic,
       accent: 'bg-blue-500',
       image: 'transcription-preview.png'
     },
     {
       title: 'Translation',
-      description: 'Break language barriers effortlessly. Translate your qualitative data into English, maintaining nuanced meaning across languages.',
+      description: 'Translate your transcripts and documents from one language to another using state-of-the-art models. Harvey uses open-source machine translation to run your project entirely offline.',
       icon: Languages,
       accent: 'bg-purple-500',
       image: 'translation-preview.png'
     },
     {
       title: 'Model Management',
-      description: 'Choose from a variety of Whisper and translation models tailored to your hardware and accuracy needs.',
+      description: 'Take full control of your AI environment. Harvey lets you download and manage various open-source models for transcription and translation, optimized for your computer\'s hardware and specific research needs.',
       icon: Settings,
       accent: 'bg-green-500',
       image: 'model-management.png'
     },
     {
       title: 'Qualitative Coding',
-      description: 'Systematically analyze your data with highlighting and tagging features designed for rigorous qualitative methodology.',
+      description: 'Apply highlights and tags across transcripts, documents, images, and tables to support your qualitative coding process. Harvey provides a unified workspace for rigorous analysis while keeping all of your research data strictly private.',
       icon: Tag,
       accent: 'bg-indigo-500',
       image: 'qualitative-coding.png'
     },
     {
       title: 'Image Annotation',
-      description: 'Work with visual data seamlessly. Annotate images and PDFs directly within the app to support your findings.',
+      description: 'Add detailed annotations to high-resolution images in addition to tagging them. Harvey includes built-in tools to censor confidential information and mark up visual evidence for your research files.',
       icon: Image,
       accent: 'bg-rose-500',
       image: 'image-annotation.png'
     },
     {
       title: 'Table Management',
-      description: 'Manipulate structured data with ease. View and edit CSV and XLSX files without leaving your research environment.',
+      description: 'Import CSV and XLSX datasets, such as survey responses, and edit them directly within your project. Harvey provides advanced tools to create specialized data views and generate visualizations tailored to your research needs.',
       icon: FileSpreadsheet,
       accent: 'bg-emerald-500',
       image: 'table-management.png'
     },
     {
       title: 'Rich Text Editor',
-      description: 'Draft reports, edit transcripts, and synchronize media navigation in a professional, integrated markdown workspace.',
+      description: 'Edit transcripts and imported documents, and draft reports in a professional, integrated Lexical editor. Export your final research products to your preferred formats, including DOCX and Markdown.',
       icon: Edit3,
       accent: 'bg-amber-500',
       image: 'richtext-editing.png'
