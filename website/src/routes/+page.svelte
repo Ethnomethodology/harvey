@@ -220,7 +220,7 @@
         class="inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white transition-all bg-green-500 rounded-xl hover:bg-green-600 shadow-xl shadow-green-200 hover:shadow-green-300 gap-2"
       >
         <Download class="w-6 h-6" />
-        Download for Free
+        Download
       </a>
       <a
         href="{base}/about"
@@ -407,7 +407,7 @@
 </section>
 
 <!-- Download Section -->
-<section id="download" class="py-24 border-t border-slate-100 scroll-mt-24">
+<section id="download" class="pt-12 pb-24 border-t border-slate-100 scroll-mt-16">
   <div class="max-w-4xl mx-auto text-center">
     <h2 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">Get Harvey</h2>
     <p class="text-lg text-slate-700 mb-10">Choose your platform to start your research journey.</p>
