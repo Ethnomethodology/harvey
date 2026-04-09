@@ -5,8 +5,7 @@
   import { invoke } from '@tauri-apps/api/core'; // Added
   import { listen } from '@tauri-apps/api/event'; // Added
   import { getVersion } from '@tauri-apps/api/app';
-  import { getCurrentWindow, LogicalSize, currentMonitor } from '@tauri-apps/api/window';
-  import { WELCOME_WIDTH, DEFAULT_MIN_HEIGHT } from '$lib/constants/windowSize.js';
+  import { resizeToSafeWelcomeSize } from '$lib/utils/windowUtils.js';
   import {
     loadProjects,
     handleCreateProject,
@@ -64,15 +63,8 @@
     typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
   onMount(async () => {
-    // Resize window for welcome screen
-    try {
-      const appWindow = getCurrentWindow();
-      await appWindow.setMinSize(new LogicalSize(WELCOME_WIDTH, DEFAULT_MIN_HEIGHT));
-      await appWindow.setSize(new LogicalSize(WELCOME_WIDTH, WELCOME_HEIGHT));
-      await appWindow.center();
-    } catch (err) {
-      console.warn('Failed to resize welcome window:', err);
-    }
+    // Resize window for welcome screen with safe monitor-aware dimensions
+    await resizeToSafeWelcomeSize();
 
     // Load projects first so the UI isn't blocked by other initialization
     console.log('[WelcomeScreen] onMount: Loading projects...');
