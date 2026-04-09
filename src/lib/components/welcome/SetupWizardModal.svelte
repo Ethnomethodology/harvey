@@ -788,7 +788,12 @@
                   : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
               >
                 <div class="flex justify-between items-start">
-                  <span class="font-bold text-gray-900 dark:text-gray-100">whisper.cpp</span>
+                  <div class="flex items-center">
+                    <span class="font-bold text-gray-900 dark:text-gray-100">whisper.cpp</span>
+                    {#if recommendWhisperCpp}
+                      <span class="ml-2 text-[10px] text-green-600 font-bold whitespace-nowrap">(Recommended)</span>
+                    {/if}
+                  </div>
                   <button
                     class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600"
                     on:click|stopPropagation={() =>
@@ -798,7 +803,7 @@
                   </button>
                 </div>
                 <p class="text-xs text-gray-600">
-                  Lightweight, fast on Mac (Metal) and Windows (CPU).
+                  Lightweight, fast on Mac (Metal).
                 </p>
               </div>
               <div
@@ -814,7 +819,12 @@
                   : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
               >
                 <div class="flex justify-between items-start">
-                  <span class="font-bold text-gray-900 dark:text-gray-100">faster-whisper</span>
+                  <div class="flex items-center">
+                    <span class="font-bold text-gray-900 dark:text-gray-100">faster-whisper</span>
+                    {#if recommendFasterWhisper}
+                      <span class="ml-2 text-[10px] text-green-600 font-bold whitespace-nowrap">(Recommended)</span>
+                    {/if}
+                  </div>
                   <button
                     class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600"
                     on:click|stopPropagation={() =>
@@ -823,7 +833,7 @@
                     <ExternalLink class="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p class="text-xs text-gray-600">Fast, optimized for NVIDIA GPUs.</p>
+                <p class="text-xs text-gray-600">Fast, optimized for Windows (CPU) and NVIDIA GPUs.</p>
               </div>
             </div>
           </div>

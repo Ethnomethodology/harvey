@@ -48,6 +48,7 @@
   let isInstallingDependencies = false;
   let isChecking = false;
   let dependencyErrors = [];
+  let platform = '';
 
   $: selectedEngine = $configStatus.selected_transcription_engine;
 
@@ -69,6 +70,10 @@
 
   $: hasDownloadedFasterWhisper = fasterWhisperDownloadedCount > 0;
   $: hasDownloadedWhisperCpp = whisperCppDownloadedCount > 0;
+  $: isMac = (platform || '').startsWith('macos');
+  $: isWindows = (platform || '').startsWith('windows');
+  $: recommendWhisperCpp = isMac;
+  $: recommendFasterWhisper = isWindows;
   let unlistenStart = null;
   let unlistenStartFW = null;
   let unlistenLog = null;
@@ -186,6 +191,11 @@
 
   onMount(async () => {
     configError = '';
+    try {
+      platform = await invoke('get_platform_info');
+    } catch (e) {
+      console.error('Failed to get platform info:', e);
+    }
 
     try {
       const persistedEngine = await getSelectedTranscriptionEngine();
@@ -685,10 +695,12 @@
           on:click={() => openExternal('https://github.com/ggerganov/whisper.cpp')}
           >whisper.cpp</button
         >
+        {#if recommendWhisperCpp}
+          <span class="text-green-600 font-bold ml-1">(Recommended)</span>
+        {/if}
       </p>
       <p>
-        <strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, fast on Mac (Metal)
-        and Windows (CPU).
+        <strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Lightweight, fast on Mac (Metal).
       </p>
       <p>
         <strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Less optimized for NVIDIA GPUs
@@ -704,9 +716,12 @@
           on:click={() => openExternal('https://github.com/SYSTRAN/faster-whisper')}
           >faster-whisper</button
         >
+        {#if recommendFasterWhisper}
+          <span class="text-green-600 font-bold ml-1">(Recommended)</span>
+        {/if}
       </p>
       <p>
-        <strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Faster on NVIDIA GPUs.
+        <strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Faster on Windows (CPU) and NVIDIA GPUs.
       </p>
       <p>
         <strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Mac (Metal) compared
