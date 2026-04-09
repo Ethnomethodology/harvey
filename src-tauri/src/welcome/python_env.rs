@@ -651,11 +651,17 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let env_path = get_env_path()?;
     let config_dir = get_config_dir()?;
 
+    let package_name = if cfg!(target_os = "windows") {
+        "whisper.cpp=*=*mkl*"
+    } else {
+        "whisper.cpp"
+    };
+
     let conda_args = vec![
         "install",
         "-p",
         env_path.to_str().unwrap(),
-        "whisper.cpp",
+        package_name,
         "-c",
         "conda-forge",
         "-y",

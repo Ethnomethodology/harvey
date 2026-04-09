@@ -2,7 +2,7 @@
 
 [package]
 name = "harvey"
-version = "0.1.0"
+version = "0.1.2"
 description = "A Desktop App for Audio/Video Transcription"
 authors = ["Dipanjan Saha, Gemma Lough, Tatsuya Akutsu"]
 edition = "2021"
