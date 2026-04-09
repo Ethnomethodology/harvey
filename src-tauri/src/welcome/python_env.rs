@@ -651,7 +651,7 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let env_path = get_env_path()?;
     let config_dir = get_config_dir()?;
 
-    let package_name = if cfg!(target_os = "windows") {
+    let package_name = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         "whisper.cpp=*=*mkl*"
     } else {
         "whisper.cpp"
