@@ -536,6 +536,7 @@
 
   let unlisten = null;
   let unlistenReady = null;
+  let unlistenError = null;
 
   onMount(async () => {
     unlistenReady = await listen('live_transcription_ready', () => {
@@ -566,6 +567,18 @@
         );
       }
     });
+
+    // Handle errors emitted by the Python live-transcription script
+    // (e.g. microphone access denied in production builds).
+    unlistenError = await listen('live_transcription_error', (event) => {
+      const errorMsg = event.payload;
+      console.error('[DataTopBar] live_transcription_error:', errorMsg);
+      isLiveTranscriptionActive = false;
+      isLiveTranscriptionReady = false;
+      liveTranscriptionError = errorMsg;
+      stopDotAnimation();
+      message(`Live transcription failed: ${errorMsg}`, { title: 'Microphone Error', type: 'error' });
+    });
   });
 
   onDestroy(async () => {
@@ -577,6 +590,9 @@
     }
     if (unlistenReady) {
       unlistenReady();
+    }
+    if (unlistenError) {
+      unlistenError();
     }
     stopDotAnimation();
   });

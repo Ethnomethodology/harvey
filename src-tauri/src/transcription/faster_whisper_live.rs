@@ -1,6 +1,6 @@
 use crate::projectview::transcription_commands::{LiveTranscriptionResult, LiveTranscriptionState};
 use crate::welcome::python_env::get_python_path;
-use log::{error, info};
+use log::{error, info, warn};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -39,28 +39,27 @@ pub async fn start_faster_whisper_live<R: Runtime>(
         "5000".to_string(),
     ];
 
-    let mut command = app_handle
-        .shell()
-        .command(python_path.to_string_lossy().to_string());
-
     if save_audio {
         let active_doc_path = std::path::PathBuf::from(&active_document_path);
         let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
         std::fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
-
+        let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
+        let wav_path = attachments_dir.join(format!("{}.wav", timestamp));
         args.push("--save-audio".to_string());
-        command = command.current_dir(attachments_dir);
+        args.push(wav_path.to_string_lossy().to_string());
     }
-
-    // Additional configuration from read_config could be added here (threads, device)
-    // For now, we use defaults in the script.
 
     info!(
         "[Faster-Whisper Live] Spawning Python script: {:?} {:?}",
         python_path, args
     );
 
-    let (mut rx, child) = command.args(args).spawn().map_err(|e| e.to_string())?;
+    let (mut rx, child) = app_handle
+        .shell()
+        .command(python_path.to_string_lossy().to_string())
+        .args(args)
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
     *state.whisper_child.lock().await = Some(child);
     state.is_running.store(true, Ordering::SeqCst);
@@ -85,12 +84,27 @@ pub async fn start_faster_whisper_live<R: Runtime>(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
+                    let trimmed = text.trim();
 
-                    if text.contains("[Start speaking]") {
+                    // Detect JSON error objects emitted by the Python script
+                    // (e.g. microphone permission denied, model load failure).
+                    if trimmed.starts_with('{') {
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                            if let Some(err_msg) = v.get("error").and_then(|e| e.as_str()) {
+                                error!("[Faster-Whisper Live] Script error: {}", err_msg);
+                                let _ = app_handle_clone
+                                    .emit("live_transcription_error", err_msg.to_string());
+                                is_running_clone.store(false, Ordering::SeqCst);
+                                break;
+                            }
+                        }
+                    }
+
+                    if trimmed.contains("[Start speaking]") {
                         let _ = app_handle_clone.emit("live_transcription_ready", ());
                     }
 
-                    let cleaned_text = text.replace("[Start speaking]", "").trim().to_string();
+                    let cleaned_text = trimmed.replace("[Start speaking]", "").trim().to_string();
 
                     if !cleaned_text.is_empty() && cleaned_text != last_text {
                         let is_final = !cleaned_text.ends_with("...");
@@ -115,16 +129,20 @@ pub async fn start_faster_whisper_live<R: Runtime>(
                     }
                 }
                 CommandEvent::Stderr(line) => {
-                    error!(
-                        "[Faster-Whisper Live][stderr]: {}",
-                        String::from_utf8_lossy(&line)
-                    );
+                    let msg = String::from_utf8_lossy(&line).to_string();
+                    // faster-whisper logs progress to stderr — only surface real errors
+                    if msg.to_lowercase().contains("error") || msg.to_lowercase().contains("failed") {
+                        error!("[Faster-Whisper Live][stderr]: {}", msg.trim());
+                    } else {
+                        warn!("[Faster-Whisper Live][stderr]: {}", msg.trim());
+                    }
                 }
                 CommandEvent::Error(err) => {
                     error!("[Faster-Whisper Live][error]: {}", err);
                 }
                 CommandEvent::Terminated(payload) => {
                     info!("[Faster-Whisper Live] Process terminated: {:?}", payload);
+                    is_running_clone.store(false, Ordering::SeqCst);
                 }
                 _ => {}
             }

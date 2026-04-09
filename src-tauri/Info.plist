@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required by macOS TCC so the system shows the microphone permission prompt.
+         Without this key, macOS silently denies microphone access to the app and all
+         of its child processes (e.g. the Python live-transcription subprocess). -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Harvey needs access to your microphone for live transcription.</string>
+</dict>
+</plist>
