@@ -17,6 +17,53 @@
     import { Loader } from '@lucide/svelte'; // Import Loader component
     import { open } from '@tauri-apps/plugin-shell';
   
+    let cleanupScaleListener;
+
+    function applyAdaptiveScaling() {
+        if (typeof window === 'undefined') return;
+
+        const ratio = window.devicePixelRatio;
+        const isWindows = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
+        const isLinux = navigator.platform.toUpperCase().indexOf('LINUX') >= 0;
+
+        // We target Windows and Linux primarily, as high-DPI scaling there often
+        // results in oversized UI. macOS handles retina scaling more gracefully by default.
+        if (!isWindows && !isLinux) {
+            document.documentElement.style.fontSize = '';
+            return;
+        }
+
+        let baseFontSize = 16;
+        if (ratio >= 2.0) {
+            // Very high DPI (e.g. 200% zoom)
+            baseFontSize = 13;
+        } else if (ratio >= 1.4) {
+            // High DPI (e.g. 150% zoom)
+            baseFontSize = 14;
+        } else if (ratio >= 1.1) {
+            // Medium DPI (e.g. 125% zoom)
+            baseFontSize = 15;
+        }
+
+        // Apply the base font size to the root element.
+        // This scales all 'rem' units proportionally.
+        document.documentElement.style.fontSize = `${baseFontSize}px`;
+        console.debug(`[ScaleService] Applied base font size: ${baseFontSize}px for DPI ratio: ${ratio}`);
+
+        // Set up listener for DPI changes (e.g. moving window to another monitor)
+        if (cleanupScaleListener) cleanupScaleListener();
+        
+        const mqString = `(resolution: ${ratio}dppx)`;
+        const mql = window.matchMedia(mqString);
+        
+        const handleChange = () => applyAdaptiveScaling();
+        // Use a slight timeout to ensure the browser has finished the transition
+        const debouncedHandleChange = () => setTimeout(handleChange, 100);
+
+        mql.addEventListener('change', debouncedHandleChange, { once: true });
+        cleanupScaleListener = () => mql.removeEventListener('change', debouncedHandleChange);
+    }
+
     function handleGlobalClick(event) {
         const anchor = event.target.closest('a');
         if (!anchor) return;
@@ -42,6 +89,7 @@
 
     onMount(async () => {
       document.addEventListener('click', handleGlobalClick, true);
+      applyAdaptiveScaling();
 
       // Disable default browser context menu in production to prevent "Inspect Element" 
       // and other non-native browser behaviors.
@@ -113,6 +161,7 @@
         if (typeof document !== 'undefined') {
             document.removeEventListener('click', handleGlobalClick, true);
         }
+        if (cleanupScaleListener) cleanupScaleListener();
     });
   
 </script>
