@@ -48,7 +48,15 @@
         // Apply the base font size to the root element.
         // This scales all 'rem' units proportionally.
         document.documentElement.style.fontSize = `${baseFontSize}px`;
-        console.debug(`[ScaleService] Applied base font size: ${baseFontSize}px for DPI ratio: ${ratio}`);
+
+        // Add a helper class for more aggressive compaction in CSS
+        if (ratio >= 1.4) {
+            document.documentElement.classList.add('high-dpi');
+        } else {
+            document.documentElement.classList.remove('high-dpi');
+        }
+
+        console.debug(`[ScaleService] Applied base font size: ${baseFontSize}px and high-dpi class: ${ratio >= 1.4} for DPI ratio: ${ratio}`);
 
         // Set up listener for DPI changes (e.g. moving window to another monitor)
         if (cleanupScaleListener) cleanupScaleListener();

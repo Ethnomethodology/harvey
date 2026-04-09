@@ -221,6 +221,9 @@
     @apply w-px h-5 mx-1;
     border-left: 1px solid var(--separator-color);
   }
+  :global(html.high-dpi) .separator {
+    @apply mx-0.5;
+  }
 }
 
 /*---------------------------------------------------------
