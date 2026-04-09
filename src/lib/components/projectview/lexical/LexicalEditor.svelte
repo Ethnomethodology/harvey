@@ -4414,6 +4414,7 @@
               >{fontOptions.find((f) => f.value === selectedFontFamily)?.label ??
                 selectedFontFamily}</span
             >
+            <span class="toolbar-label-high-dpi hidden">Font</span>
             <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
           {#if isFontDropdownOpen}
@@ -5190,6 +5191,10 @@
 
   :global(html.high-dpi) .toolbar-label {
     display: none !important;
+  }
+
+  :global(html.high-dpi) .toolbar-label-high-dpi {
+    display: inline !important;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),

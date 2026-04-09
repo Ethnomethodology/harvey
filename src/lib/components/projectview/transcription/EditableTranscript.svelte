@@ -1061,20 +1061,21 @@
                         toolbarConfig={{
                           undo: true,
                           redo: true,
-                          blockType: true,
+                          blockType: false,
                           bold: true,
                           italic: true,
                           underline: true,
                           strikethrough: true,
-                          link: true,
+                          link: false,
+                          fontFamily: false,
                           insertMenu: false,
-                          indent: true,
-                          outdent: true,
-                          align: true,
+                          indent: false,
+                          outdent: false,
+                          align: false,
                           textColor: true,
                           highlight: true,
                           clearFormatting: true,
-                          search: true
+                          search: false
                         }}
                         on:change={handleEditorUpdate}
                         on:textcountchange={(e) =>
@@ -1113,20 +1114,21 @@
                           toolbarConfig={{
                             undo: true,
                             redo: true,
-                            blockType: true,
+                            blockType: false,
                             bold: true,
                             italic: true,
                             underline: true,
                             strikethrough: true,
-                            link: true,
+                            link: false,
+                            fontFamily: false,
                             insertMenu: false,
-                            indent: true,
-                            outdent: true,
-                            align: true,
+                            indent: false,
+                            outdent: false,
+                            align: false,
                             textColor: true,
                             highlight: true,
                             clearFormatting: true,
-                            search: true
+                            search: false
                           }}
                           on:change={handleSecondaryEditorUpdate}
                           enableFloatingToolbar={false}
