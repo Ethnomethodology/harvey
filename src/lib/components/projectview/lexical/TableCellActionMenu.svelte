@@ -115,6 +115,18 @@
     }
   }
 
+  /**
+   * Action to portal an element to the body
+   */
+  function portal(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      }
+    };
+  }
+
   // Helper to ensure the correct cell (or cells if TableSelection) is selected before an action
   function selectCell() {
     if (!editor || !cellNodeKey) return false; // Guard against missing editor/key
@@ -322,7 +334,8 @@
 
 {#if isOpen && cellNodeKey}
   <div
-    class="absolute z-40 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
+    use:portal
+    class="fixed z-[10005] min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
     bind:this={menuElement}
     style:top="{position.top}px"
     style:left="{position.left}px"
@@ -347,7 +360,7 @@
           </button>
           {#if openSubmenuLabel === item.label}
             <div
-              class="fixed z-50 min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
+              class="fixed z-[10006] min-w-[180px] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg py-1 text-sm"
               style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
               role="menu"
               aria-orientation="vertical"

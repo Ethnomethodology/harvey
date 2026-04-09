@@ -450,11 +450,40 @@
   }
 
   let isColorDropdownOpen = $state(false);
-  let colorDropdownRef = $state();
+  let dropdownStyle = $state('');
+  function updateDropdownPosition(ref) {
+    if (!ref) return;
+    const rect = ref.getBoundingClientRect();
+    // Use fixed positioning to escape overflow containers
+    dropdownStyle = `position: fixed; top: ${rect.bottom + 4}px; left: ${rect.left - 100}px; z-index: 10000;`;
+  }
+
+  function toggleColorDropdown(event) {
+    if (!tabulatorInstance) return;
+    const nextState = !isColorDropdownOpen;
+    isColorDropdownOpen = nextState;
+    if (isColorDropdownOpen && event) {
+      updateDropdownPosition(event.currentTarget);
+    }
+  }
+
+  let showOptionsMenu = $state(false);
+  function toggleOptionsMenu(event) {
+    const nextState = !showOptionsMenu;
+    showOptionsMenu = nextState;
+    if (showOptionsMenu && event) {
+      // Calculate position for options menu
+      const rect = event.currentTarget.getBoundingClientRect();
+      dropdownStyle = `position: fixed; top: ${rect.bottom + 4}px; left: ${rect.right - 180}px; z-index: 10000;`;
+    }
+  }
 
   function handleOutsideClick(event) {
-    if (isColorDropdownOpen && colorDropdownRef && !colorDropdownRef.contains(event.target)) {
+    if (isColorDropdownOpen && !event.target.closest('#style-color') && !event.target.closest('.color-dropdown-body')) {
       isColorDropdownOpen = false;
+    }
+    if (showOptionsMenu && !event.target.closest('.options-button') && !event.target.closest('.options-menu-body')) {
+      showOptionsMenu = false;
     }
 
     // Prevent immediate closing if a range was just selected (e.g. at the end of a drag)
@@ -475,9 +504,16 @@
     }
   }
 
-  function toggleColorDropdown() {
-    if (!tabulatorInstance) return;
-    isColorDropdownOpen = !isColorDropdownOpen;
+  /**
+   * Action to portal an element to the body
+   */
+  function portal(node) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      }
+    };
   }
 
   const colorOptions = [
@@ -591,7 +627,6 @@
   let tableClipboard = $state(null);
   let searchInputRef = $state(null);
 
-  let showOptionsMenu = $state(false);
   let areFiltersVisible = $state(false); // Start with the assumption that filters are hidden
 
   let showUrlPopover = $state(false);
@@ -940,6 +975,7 @@
       })
     );
     showOptionsMenu = false; // Hide menu after action
+    tick().then(updateTableDimensions);
   }
 
   const saveCurrentTableLayout = debounce(async () => {
@@ -4745,7 +4781,7 @@
 
         <div class="separator mx-0.5"></div>
 
-        <div class="relative" bind:this={colorDropdownRef}>
+        <div class="relative">
           <button
             id="style-color"
             on:click={toggleColorDropdown}
@@ -4777,15 +4813,17 @@
           </button>
           {#if isColorDropdownOpen}
             <div
-              class="absolute top-full left-0 mt-1 z-20 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg rounded-md"
+              use:portal
+              style={dropdownStyle}
+              class="color-dropdown-body w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg rounded-md overflow-hidden"
             >
               {#each colorOptions as option (option.value)}
                 <button
-                  class="w-full text-left px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+                  class="w-full text-left px-2 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs"
                   on:click={() => applyTextColor(option.value)}
                 >
                   <span
-                    class="w-4 h-4 border border-gray-400 dark:border-gray-500 rounded-full shrink-0"
+                    class="w-3.5 h-3.5 border border-gray-400 dark:border-gray-500 rounded-full shrink-0"
                     style="background-color: {option.value === 'transparent'
                       ? '#fff'
                       : option.value};"
@@ -4934,14 +4972,30 @@
           <div class="separator mx-0.5"></div>
 
           <div class="relative">
-            <button class="mini-toolbar-button" title="Options">
+            <button
+              class="mini-toolbar-button options-button"
+              on:click={toggleOptionsMenu}
+              title="Options"
+            >
               <MoreVertical size={14} />
             </button>
-            <Dropdown placement="bottom-end">
-              <DropdownItem on:click={toggleFilters} class="text-xs py-1.5 px-3">
-                {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
-              </DropdownItem>
-            </Dropdown>
+            {#if showOptionsMenu}
+              <div
+                use:portal
+                style={dropdownStyle}
+                class="options-menu-body min-w-[180px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1"
+              >
+                <button
+                  class="w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  on:click={() => {
+                    toggleFilters();
+                    showOptionsMenu = false;
+                  }}
+                >
+                  {areFiltersVisible ? 'Hide' : 'Show'} Column Filters
+                </button>
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -5256,8 +5310,16 @@
     white-space: normal !important;
     @apply text-gray-900 dark:text-gray-200 font-semibold;
   }
+  :global(.tabulator-header-filter) {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    padding: 4px 8px !important;
+    box-sizing: border-box !important;
+  }
   :global(.tabulator-header-filter input) {
-    @apply p-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
+    @apply p-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border;
+    width: 100% !important;
   }
   :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
     background-color: rgba(255, 255, 0, 0.3) !important;
@@ -5470,9 +5532,11 @@
 
   /* Ensure manual resize handle reaches the true column border */
   :global(.tabulator .tabulator-header .tabulator-col .tabulator-col-content) {
-    padding: 0 !important;
+    padding: 4px 0 !important;
     height: 100% !important;
     display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
     align-items: center !important;
   }
   :global(
@@ -5481,8 +5545,8 @@
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
-    height: 100% !important;
     display: flex !important;
+    justify-content: center !important;
     align-items: center !important;
   }
   :global(
