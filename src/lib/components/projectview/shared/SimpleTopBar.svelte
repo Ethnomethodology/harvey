@@ -21,6 +21,9 @@
       displayTitle = 'Harvey';
     }
   }
+
+  const isMac =
+    typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 </script>
 
 <div
@@ -30,7 +33,9 @@
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
   <!-- Traffic light spacer (macOS titleBarStyle Overlay) -->
-  <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {#if isMac}
+    <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {/if}
 
   <!-- Section 2: Left Panel (w-64) — Project name -->
   <div

@@ -2,6 +2,7 @@
 
 use crate::projectview::db_handler;
 use crate::projectview::shared_types::{HighlightInfo, HighlightSource};
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::welcome::config::CommandError;
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -221,11 +222,15 @@ fn determine_asset_type(
     conn: &Connection,
     project_id: &str,
 ) -> String {
+    let normalized_file_path = normalize_path_for_comparison(Path::new(file_path_str))
+        .to_string_lossy()
+        .to_string();
+
     info!(
-        "[Tags] determine_asset_type file_path_str: {}",
-        file_path_str
+        "[Tags] determine_asset_type file_path_str: {} [Normalized: {}]",
+        file_path_str, normalized_file_path
     );
-    let path = Path::new(file_path_str);
+    let path = Path::new(&normalized_file_path);
 
     // 1. Check for standalone_transcript (standalone)
     if let Some(db_type) = asset_type_opt {
@@ -511,9 +516,13 @@ pub fn manage_highlight_comment(
     file_path: String,
     doc_type: String,
 ) -> Result<(), CommandError> {
+    let normalized_file_path = normalize_path_for_comparison(Path::new(&file_path))
+        .to_string_lossy()
+        .to_string();
+
     info!(
-        "[Tags] Managing comment '{}' for highlight '{}' in file '{}' of type '{}'",
-        action, highlight_id, file_path, doc_type
+        "[Tags] Managing comment '{}' for highlight '{}' in file '{}' of type '{}' [Normalized: {}]",
+        action, highlight_id, file_path, doc_type, normalized_file_path
     );
 
     let db_path = db_handler::get_db_path()?;
@@ -546,7 +555,7 @@ pub fn manage_highlight_comment(
     ))?;
 
     let json_string_opt: Option<String> = stmt
-        .query_row(params![project_id, file_path], |row| row.get(0))
+        .query_row(params![project_id, normalized_file_path], |row| row.get(0))
         .optional()?;
 
     if let Some(json_str) = json_string_opt {
@@ -625,7 +634,7 @@ pub fn manage_highlight_comment(
                     "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
                     table_name, json_column, path_column
                 ),
-                params![new_json_string, project_id, file_path],
+                params![new_json_string, project_id, normalized_file_path],
             )?;
             info!(
                 "[Tags] Successfully updated comments for file: {}",
@@ -706,9 +715,13 @@ pub fn remove_tag_from_highlight(
     file_path: String,
     doc_type: String,
 ) -> Result<(), CommandError> {
+    let normalized_file_path = normalize_path_for_comparison(Path::new(&file_path))
+        .to_string_lossy()
+        .to_string();
+
     info!(
-        "[Tags] Removing tag '{}' from highlight '{}' in file '{}' of type '{}'",
-        tag_to_remove, highlight_id, file_path, doc_type
+        "[Tags] Removing tag '{}' from highlight '{}' in file '{}' of type '{}' [Normalized: {}]",
+        tag_to_remove, highlight_id, file_path, doc_type, normalized_file_path
     );
 
     let db_path = db_handler::get_db_path()?;
@@ -739,7 +752,7 @@ pub fn remove_tag_from_highlight(
     ))?;
 
     let json_string_opt: Option<String> = stmt
-        .query_row(params![project_id, file_path], |row| row.get(0))
+        .query_row(params![project_id, normalized_file_path], |row| row.get(0))
         .optional()?;
 
     if let Some(json_str) = json_string_opt {
@@ -801,7 +814,7 @@ pub fn remove_tag_from_highlight(
                     "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
                     table_name, json_column, path_column
                 ),
-                params![new_json_string, project_id, file_path],
+                params![new_json_string, project_id, normalized_file_path],
             )?;
             info!(
                 "[Tags] Successfully removed tag and updated annotations for file: {}",

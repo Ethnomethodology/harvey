@@ -1,7 +1,7 @@
 use super::shared_types::*;
 use super::shared_utils::{
-    ensure_base_asset_dirs, get_project_xml_path_from_item, save_project_xml,
-    truncate_filename_stem, MAX_FILENAME_STEM_LENGTH,
+    ensure_base_asset_dirs, get_project_xml_path_from_item, normalize_path_for_comparison,
+    save_project_xml, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH,
 };
 use crate::projectview::db_handler;
 use crate::welcome::config::CommandError;
@@ -49,8 +49,15 @@ pub async fn import_table_file(
         "[import_table_file] Importing table from: {}, Project XML Path: {}",
         source_path_str, project_xml_path_str
     );
-    let source_path = PathBuf::from(&source_path_str);
-    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let raw_source_path = PathBuf::from(&source_path_str);
+    let raw_project_xml_path = PathBuf::from(&project_xml_path_str);
+    let source_path = normalize_path_for_comparison(&raw_source_path);
+    let project_xml_path = normalize_path_for_comparison(&raw_project_xml_path);
+
+    info!(
+        "[import_table_file] Normalized Paths: Source={:?}, XML={:?}",
+        source_path, project_xml_path
+    );
 
     if !source_path.exists() || !source_path.is_file() {
         error!(
@@ -543,11 +550,12 @@ pub async fn set_table_headers(
     table_path_str: String,
     has_headers: bool,
 ) -> Result<(), CommandError> {
+    let raw_table_path = PathBuf::from(&table_path_str);
+    let table_path = normalize_path_for_comparison(&raw_table_path);
     info!(
-        "[set_table_headers] Setting has_headers={} for table: {}",
-        has_headers, table_path_str
+        "[set_table_headers] Setting has_headers={} for table: {} [Normalized: {:?}]",
+        has_headers, table_path_str, table_path
     );
-    let table_path = PathBuf::from(&table_path_str);
     let project_xml_path = get_project_xml_path_from_item(&table_path)?;
 
     if !table_path.exists() {
@@ -648,8 +656,12 @@ pub async fn set_table_headers(
 
 #[tauri::command]
 pub async fn load_table_data(table_path_str: String) -> Result<Value, CommandError> {
-    info!("[load_table_data] Loading data from: {}", table_path_str);
-    let table_path = PathBuf::from(&table_path_str);
+    let raw_table_path = PathBuf::from(&table_path_str);
+    let table_path = normalize_path_for_comparison(&raw_table_path);
+    info!(
+        "[load_table_data] Loading data from: {} [Normalized: {:?}]",
+        table_path_str, table_path
+    );
 
     if !table_path.exists() || !table_path.is_file() {
         error!(

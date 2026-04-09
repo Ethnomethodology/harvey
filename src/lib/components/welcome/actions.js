@@ -198,7 +198,7 @@ export async function handleOpenProject({ setRecentProjects, setIsLoading }) {
   try {
     const selected = await openDialog({
       multiple: false,
-      filters: [{ name: 'Harvey Project Files', extensions: ['harvey.xml'] }],
+      filters: [{ name: 'Harvey Project Files', extensions: ['harvey'] }],
       title: 'Open Harvey Project File'
     });
     if (selected && typeof selected === 'string' && !Array.isArray(selected)) {

@@ -62,6 +62,7 @@
     underline: true,
     strikethrough: true,
     link: true,
+    fontFamily: true,
     insertMenu: false,
     indent: true,
     outdent: true,

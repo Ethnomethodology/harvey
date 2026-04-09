@@ -1,9 +1,10 @@
-// src-tauri/src/projectview/chart_handler.rs
 use crate::projectview::db_handler::get_db_path;
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::welcome::config::CommandError;
 use log::{debug, info};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartConfig {
@@ -24,12 +25,16 @@ pub fn save_chart_config(
     chart_type: &str,
     config_json: &str,
 ) -> Result<ChartConfig, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Saving chart config '{}' for table '{}' in project '{}'",
-        chart_name, table_path, project_id
+        "[DB] Saving chart config '{}' for table '{}' [Normalized: '{}'] in project '{}'",
+        chart_name, table_path, normalized_table_path, project_id
     );
 
     // Insert or replace based on unique constraint (project_id, table_path, chart_name)
@@ -40,7 +45,7 @@ pub fn save_chart_config(
          chart_type = excluded.chart_type,
          config_json = excluded.config_json,
          updated_at = CURRENT_TIMESTAMP",
-        params![project_id, table_path, chart_name, chart_type, config_json],
+        params![project_id, normalized_table_path, chart_name, chart_type, config_json],
     )?;
 
     // Fetch the saved item to return it
@@ -50,7 +55,7 @@ pub fn save_chart_config(
          WHERE project_id = ?1 AND table_path = ?2 AND chart_name = ?3"
     )?;
 
-    let chart = stmt.query_row(params![project_id, table_path, chart_name], |row| {
+    let chart = stmt.query_row(params![project_id, normalized_table_path, chart_name], |row| {
         Ok(ChartConfig {
             id: row.get(0)?,
             project_id: row.get(1)?,
@@ -70,12 +75,16 @@ pub fn load_chart_configs(
     project_id: &str,
     table_path: &str,
 ) -> Result<Vec<ChartConfig>, CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     debug!(
-        "[DB] Loading chart configs for table '{}' in project '{}'",
-        table_path, project_id
+        "[DB] Loading chart configs for table '{}' [Normalized: '{}'] in project '{}'",
+        table_path, normalized_table_path, project_id
     );
 
     let mut stmt = conn.prepare(
@@ -85,7 +94,7 @@ pub fn load_chart_configs(
          ORDER BY updated_at DESC"
     )?;
 
-    let chart_iter = stmt.query_map(params![project_id, table_path], |row| {
+    let chart_iter = stmt.query_map(params![project_id, normalized_table_path], |row| {
         Ok(ChartConfig {
             id: row.get(0)?,
             project_id: row.get(1)?,
@@ -111,34 +120,42 @@ pub fn delete_chart_config(
     table_path: &str,
     chart_name: &str,
 ) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Deleting chart config '{}' for table '{}' in project '{}'",
-        chart_name, table_path, project_id
+        "[DB] Deleting chart config '{}' for table '{}' [Normalized: '{}'] in project '{}'",
+        chart_name, table_path, normalized_table_path, project_id
     );
 
     conn.execute(
         "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2 AND chart_name = ?3",
-        params![project_id, table_path, chart_name],
+        params![project_id, normalized_table_path, chart_name],
     )?;
 
     Ok(())
 }
 
 pub fn delete_all_charts_for_table(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    let normalized_table_path = normalize_path_for_comparison(Path::new(table_path))
+        .to_string_lossy()
+        .to_string();
+
     let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     info!(
-        "[DB] Deleting all chart configs for table '{}' in project '{}'",
-        table_path, project_id
+        "[DB] Deleting all chart configs for table '{}' [Normalized: '{}'] in project '{}'",
+        table_path, normalized_table_path, project_id
     );
 
     conn.execute(
         "DELETE FROM table_charts WHERE project_id = ?1 AND table_path = ?2",
-        params![project_id, table_path],
+        params![project_id, normalized_table_path],
     )?;
 
     Ok(())

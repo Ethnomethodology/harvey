@@ -3,7 +3,10 @@ use super::shared_types::{
     FileMetadata, ProjectXml, StandaloneTranscriptEntryXml, TranscriptSegment, DOCS_DIR,
     HARVEY_FILES_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
 };
-use super::shared_utils::{save_project_xml, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH};
+use super::shared_utils::{
+    normalize_path_for_comparison, save_project_xml, truncate_filename_stem,
+    MAX_FILENAME_STEM_LENGTH,
+};
 use crate::projectview::db_handler;
 use crate::projectview::transcription_commands::create_lexical_table_from_segments;
 use crate::utils::canonicalize_path;
@@ -278,24 +281,23 @@ pub async fn import_word_transcript<R: Runtime>(
     source_docx_path_str: String,
     project_xml_path_str: String,
 ) -> Result<String, CommandError> {
+    let raw_source_path = PathBuf::from(&source_docx_path_str);
+    let raw_project_xml_path = PathBuf::from(&project_xml_path_str);
+    let source_docx_path = normalize_path_for_comparison(&raw_source_path);
+    let project_xml_path = normalize_path_for_comparison(&raw_project_xml_path);
+    
     info!(
-        "[import_word_transcript] Source DOCX: {}, Project XML: {}",
-        source_docx_path_str, project_xml_path_str
+        "[import_word_transcript] Source DOCX: {:?}, Project XML: {:?}",
+        source_docx_path, project_xml_path
     );
 
-    if !Path::new(&source_docx_path_str).exists() {
+    if !source_docx_path.exists() {
         return Err(CommandError::from(format!(
             "Source DOCX not found: {}",
-            source_docx_path_str
+            source_docx_path.display()
         )));
     }
 
-    let source_docx_path = canonicalize_path(&source_docx_path_str).map_err(|e| {
-        CommandError::from(format!("Failed to canonicalize source DOCX path: {}", e))
-    })?;
-    let project_xml_path = canonicalize_path(&project_xml_path_str).map_err(|e| {
-        CommandError::from(format!("Failed to canonicalize project XML path: {}", e))
-    })?;
     let project_base_dir = project_xml_path
         .parent()
         .ok_or_else(|| CommandError::from("Could not get project base dir from XML"))?;

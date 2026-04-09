@@ -18,8 +18,9 @@ pub async fn save_note_json(
     json_content: String,
     highlights_json: Option<String>,
 ) -> Result<(), String> {
-    info!("Saving JSON content to: {}", target_path);
-    let path = PathBuf::from(&target_path);
+    let raw_path = PathBuf::from(&target_path);
+    let path = normalize_path_for_comparison(&raw_path);
+    info!("Saving JSON content to: {} [Normalized: {:?}]", target_path, path);
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed create parent dir: {}", e))?;
@@ -280,17 +281,25 @@ pub async fn load_document_metadata(
     project_xml_path_str: String,
     original_document_relative_path_str: String,
 ) -> Result<Option<DocumentMetadata>, CommandError> {
-    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let raw_project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_xml_path = normalize_path_for_comparison(&raw_project_xml_path);
+    
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
         serde_json::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
     let project_base_dir = project_xml_path.parent().unwrap();
-    let original_document_abs_path = project_base_dir.join(&original_document_relative_path_str);
+    
+    // Normalize the relative path for lookup
+    let normalized_rel_path = normalize_path_for_comparison(Path::new(&original_document_relative_path_str))
+        .to_string_lossy()
+        .to_string();
+
+    let original_document_abs_path = project_base_dir.join(&normalized_rel_path);
 
     let metadata =
-        db_handler::load_asset_metadata(&project_id, &original_document_relative_path_str)?;
+        db_handler::load_asset_metadata(&project_id, &normalized_rel_path)?;
 
     let highlights = db_handler::load_lexical_highlights_from_db(
         &project_id,

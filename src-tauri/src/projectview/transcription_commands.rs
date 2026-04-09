@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::transcription::faster_whisper::FasterWhisperEngine;
 use crate::transcription::whisper_cpp::WhisperCppEngine;
-use crate::transcription::{TranscriptionEngine, TranscriptionOptions};
+use crate::transcription::{merge_smaller_segments, TranscriptionEngine, TranscriptionOptions};
 use crate::welcome::python_env::{get_env_path, get_python_command};
 use dashmap::DashMap;
 use regex::Regex;
@@ -2939,7 +2939,8 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
             }
         }
     } else {
-        info!("[Exec Pass][{}] Skipping diarization.", job_id);
+        info!("[Exec Pass][{}] Skipping diarization. Merging small segments...", job_id);
+        segments = merge_smaller_segments(segments);
     }
 
     if let Some(names) = speaker_names {

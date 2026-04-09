@@ -33,6 +33,7 @@ use uuid::Uuid;
 use crate::projectview::utils::get_ffmpeg_path;
 
 // Removed old Whisper JSON structs - using Engines instead
+use crate::transcription::merge_smaller_segments;
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -432,9 +433,10 @@ pub async fn run_transcription<R: Runtime>(
         }
     } else {
         debug!(
-            "[Transcription][LocalRun][{}] No RTTM data to merge.",
+            "[Transcription][LocalRun][{}] No RTTM data to merge. Merging small segments...",
             internal_job_id
         );
+        whisper_segments_plain = merge_smaller_segments(whisper_segments_plain);
     }
 
     let _ = emit_progress(

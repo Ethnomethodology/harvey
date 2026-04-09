@@ -1,9 +1,11 @@
 // src-tauri/src/projectview/lexical_highlight_handler.rs
 use super::db_handler;
+use crate::projectview::shared_utils::normalize_path_for_comparison;
 use crate::welcome::config::CommandError;
 use log::{error, info};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
+use std::path::Path;
 
 #[derive(Deserialize)]
 pub struct SaveHighlightsArgs<'a> {
@@ -31,9 +33,13 @@ pub fn save_highlight_changes(
     doc_type: String,
     highlight: JsonValue,
 ) -> Result<(), CommandError> {
+    let normalized_file_path = normalize_path_for_comparison(Path::new(&file_path))
+        .to_string_lossy()
+        .to_string();
+
     info!(
-        "Received request to save highlight changes for project_id: {}, path: {}, doc_type: {}",
-        project_id, file_path, &doc_type
+        "Received request to save highlight changes for project_id: {}, path: {}, doc_type: {} [Normalized: {}]",
+        project_id, file_path, &doc_type, normalized_file_path
     );
 
     let normalized_doc_type = if doc_type == "audio_transcript"
@@ -50,11 +56,11 @@ pub fn save_highlight_changes(
 
     // 1. Load existing highlights, trying normalized first, then original if migration is possible
     let existing_highlights_json =
-        db_handler::load_annotations_from_db(&project_id, &file_path, &normalized_doc_type)?
+        db_handler::load_annotations_from_db(&project_id, &normalized_file_path, &normalized_doc_type)?
             .or_else(|| {
                 if was_migrated {
                     // Use a blocking Result to handle potential errors inside or_else
-                    match db_handler::load_annotations_from_db(&project_id, &file_path, &original_doc_type) {
+                    match db_handler::load_annotations_from_db(&project_id, &normalized_file_path, &original_doc_type) {
                         Ok(Some(json)) => Some(json),
                         Ok(None) => None,
                         Err(e) => {
@@ -109,7 +115,7 @@ pub fn save_highlight_changes(
     // 4. Save the updated JSON back to the database with the normalized doc_type
     db_handler::save_annotations_to_db(
         &project_id,
-        &file_path,
+        &normalized_file_path,
         &updated_highlights_json,
         &normalized_doc_type,
     )?;
@@ -118,9 +124,9 @@ pub fn save_highlight_changes(
     if was_migrated {
         info!(
             "Migrating highlights from doc_type '{}' to '{}' for file: {}",
-            &original_doc_type, &normalized_doc_type, &file_path
+            &original_doc_type, &normalized_doc_type, &normalized_file_path
         );
-        db_handler::delete_annotations_from_db(&project_id, &file_path, &original_doc_type)?;
+        db_handler::delete_annotations_from_db(&project_id, &normalized_file_path, &original_doc_type)?;
     }
 
     Ok(())

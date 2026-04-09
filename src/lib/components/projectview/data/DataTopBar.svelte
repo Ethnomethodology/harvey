@@ -650,7 +650,9 @@
   <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
   <!-- Traffic light spacer (macOS titleBarStyle Overlay) -->
-  <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {#if isMac}
+    <div class="w-20 flex-shrink-0 z-10" data-tauri-drag-region></div>
+  {/if}
 
   <!-- Section 2: Left Panel equivalent (w-64) — Project name + file name -->
   <div

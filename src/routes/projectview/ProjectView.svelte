@@ -67,8 +67,8 @@
     import {
         getCurrentWindow,
         LogicalSize,
-        currentMonitor,
     } from "@tauri-apps/api/window";
+    import { resizeToSafeWelcomeSize } from "$lib/utils/windowUtils.js";
     import { invoke } from "@tauri-apps/api/core";
     import {
         PROJECT_MIN_WIDTH,
@@ -1068,14 +1068,8 @@
         if (canProceed) {
             await clearProjectDataStore();
             const appWindow = getCurrentWindow();
-            await appWindow.setMinSize(
-                new LogicalSize(PROJECT_MIN_WIDTH, DEFAULT_MIN_HEIGHT),
-            ); // Reset min size for welcome screen
             await appWindow.unmaximize();
-            await appWindow.setSize(
-                new LogicalSize(PROJECT_MIN_WIDTH, WELCOME_HEIGHT),
-            );
-            await appWindow.center();
+            await resizeToSafeWelcomeSize();
             handlingCloseRequest = false;
             // eslint-disable-next-line svelte/no-navigation-without-resolve
             return goto("/");

@@ -131,9 +131,13 @@
           version = data.tag_name.replace('v', '');
 
           const assets = data.assets || [];
-          const winAsset = assets.find((a) => a.name.endsWith('.zip') || a.name.endsWith('.exe'));
+          const winAsset =
+            assets.find((a) => a.name.includes('x64-setup.zip')) ||
+            assets.find((a) => a.name.endsWith('.exe'));
           const macArmAsset = assets.find(
-            (a) => a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg')
+            (a) =>
+              (a.name.includes('aarch64.dmg') || a.name.includes('arm64.dmg')) &&
+              !a.name.includes('x64')
           );
           const macIntelAsset = assets.find((a) => a.name.includes('x64.dmg'));
 
@@ -201,7 +205,7 @@
 </script>
 
 <!-- Hero -->
-<section class="py-16 lg:py-28 text-center">
+<section class="pt-4 pb-16 lg:pt-8 lg:pb-28 text-center">
   <div class="max-w-4xl mx-auto px-4">
     <h1
       class="text-4xl lg:text-6xl font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.15]"

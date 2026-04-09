@@ -4332,7 +4332,7 @@
 >
   {#if editable || allowReadModeHighlights || toolbarConfig.search || $$slots.toolbar_prepend}
     <div
-      class="toolbar relative flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-gray-700 h-9 px-2 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10 overflow-x-auto"
+      class="toolbar relative flex items-center flex-nowrap border-b border-gray-300 dark:border-gray-700 h-9 flex-shrink-0 bg-white dark:bg-gray-950 shadow-md z-10 overflow-x-auto"
     >
       <slot name="toolbar_prepend"></slot>
 
@@ -4410,10 +4410,11 @@
             title="Font Family"
             disabled={!editable}
           >
-            <span class="truncate"
+            <span class="truncate toolbar-label"
               >{fontOptions.find((f) => f.value === selectedFontFamily)?.label ??
                 selectedFontFamily}</span
             >
+            <span class="toolbar-label-high-dpi hidden">Font</span>
             <ChevronDown class="ml-0.5 h-3 w-3 flex-shrink-0" />
           </button>
           {#if isFontDropdownOpen}
@@ -4609,7 +4610,7 @@
             disabled={!editable}
           >
             <Plus class="h-4 w-4" />
-            <span class="ml-1 hidden sm:inline">Insert</span>
+            <span class="ml-1 hidden sm:inline toolbar-label">Insert</span>
             <ChevronDown size={12} class="ml-1" />
           </button>
           {#if isInsertDropdownOpen}
@@ -5152,6 +5153,19 @@
 </div>
 
 <style lang="postcss">
+  .toolbar {
+    --toolbar-gap: 4px;
+    --toolbar-px: 8px;
+    gap: var(--toolbar-gap);
+    padding-left: var(--toolbar-px);
+    padding-right: var(--toolbar-px);
+  }
+
+  :global(html.high-dpi) .toolbar {
+    --toolbar-gap: 2px;
+    --toolbar-px: 4px;
+  }
+
   .toolbar button.mini-toolbar-button,
   .toolbar select.mini-toolbar-select {
     @apply p-1 rounded inline-flex items-center justify-center
@@ -5160,11 +5174,27 @@
              text-xs disabled:opacity-50 disabled:cursor-not-allowed;
     color: var(--ui-icon-color);
     border: 1px solid var(--ui-select-border);
-    background-color: transparent; /* Default for light mode, will be overridden by dark mode or specific hover */
+    background-color: transparent;
     margin-right: 2px;
     line-height: 1.2;
     min-height: 24px;
     height: 24px;
+  }
+
+  :global(html.high-dpi) .toolbar button.mini-toolbar-button,
+  :global(html.high-dpi) .toolbar select.mini-toolbar-select {
+    margin-right: 1px;
+    padding-left: 4px;
+    padding-right: 4px;
+    min-width: unset !important;
+  }
+
+  :global(html.high-dpi) .toolbar-label {
+    display: none !important;
+  }
+
+  :global(html.high-dpi) .toolbar-label-high-dpi {
+    display: inline !important;
   }
 
   .toolbar button.mini-toolbar-button:hover:not(:disabled),

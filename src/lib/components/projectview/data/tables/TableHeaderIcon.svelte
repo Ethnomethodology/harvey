@@ -72,7 +72,7 @@
   }
 </script>
 
-<div class="header-container flex items-center justify-center relative w-full h-full min-h-[36px]">
+<div class="header-container flex items-center justify-center relative w-full h-full">
   <div class="flex items-center justify-center flex-1 px-2">
     <span class="inline-flex items-center mr-1.5 text-gray-400">
       <Icon size={14} strokeWidth={2} />
