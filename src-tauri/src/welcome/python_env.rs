@@ -651,21 +651,42 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     let env_path = get_env_path()?;
     let config_dir = get_config_dir()?;
 
-    let package_name = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        "whisper.cpp=*=*mkl*"
-    } else {
-        "whisper.cpp"
-    };
+    #[allow(unused_mut)]
+    let mut packages = vec!["whisper.cpp".to_string()];
 
-    let conda_args = vec![
-        "install",
-        "-p",
-        env_path.to_str().unwrap(),
-        package_name,
-        "-c",
-        "conda-forge",
-        "-y",
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        let strategy = get_pytorch_install_strategy(shell).await;
+        if strategy == PyTorchInstallStrategy::Gpu {
+            emit_log(
+                &emitter,
+                log_event_name,
+                "NVIDIA GPU detected. Enabling CUDA acceleration for whisper.cpp...".into(),
+                model_name,
+            );
+            packages.push("cuda-version=12.9".to_string());
+        } else {
+            emit_log(
+                &emitter,
+                log_event_name,
+                "No NVIDIA GPU detected. Enabling Intel MKL acceleration for whisper.cpp...".into(),
+                model_name,
+            );
+            packages.push("libblas=*=*mkl".to_string());
+        }
+    }
+
+    let mut conda_args = vec![
+        "install".to_string(),
+        "-p".to_string(),
+        env_path.to_str().unwrap().to_string(),
     ];
+    conda_args.extend(packages);
+    conda_args.extend(vec![
+        "-c".to_string(),
+        "conda-forge".to_string(),
+        "-y".to_string(),
+    ]);
 
     emit_log(
         &emitter,
