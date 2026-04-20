@@ -28,7 +28,7 @@ flowchart LR
 ## Internal Handlers
 *   **`commands.rs`**: The primary API surface exposing Rust functions to the Svelte frontend.
 *   **`config.rs`**: Defines the global `AppConfig` struct, default fallback values, and serialization/deserialization logic for the persistent configuration file.
-*   **`python_env.rs`**: Logic to detect system Python paths, create virtual environments, and spawn `pip install` subprocesses while piping `stdout` back to the frontend's `InstallLogModal`.
+*   **`python_env.rs`**: Logic to detect system Python paths, create virtual environments, and manage **Hardware-Aware installations**. This includes automatically detecting NVIDIA GPUs to install CUDA-optimized variants of PyTorch and `whisper.cpp`, or selecting Intel MKL-optimized binaries on Windows x86_64 for maximum CPU performance.
 *   **`hf_auth.rs`**: Validates Hugging Face tokens by making a lightweight HTTP request to the HF Hub API before saving them.
 *   **`status.rs`**: Aggregates the various checks (Python, Models, FFmpeg, Config) into a unified `ConfigStatus` struct sent to the Svelte store on app launch.
 *   **`diarization.rs`**: Specific setup and validation logic for downloading and verifying the `pyannote/speaker-diarization` models.

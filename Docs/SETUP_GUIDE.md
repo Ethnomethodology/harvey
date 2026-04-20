@@ -80,6 +80,7 @@ When you launch Harvey for the first time, you will see the **Welcome Screen**. 
 2. **Step 1: Python Libraries**
    * Harvey uses a bundled version of **Micromamba** to create and manage a completely isolated, self-contained Python environment (`harvey_env`) within its configuration directory.
    * **No manual Python installation is required** on your system. Harvey will automatically install **Python 3.12** and all necessary libraries like `faster-whisper`, `torch`, `pyannote.audio`, and `transformers` within this dedicated environment.
+   * **Performance Optimization:** During this step, the installer automatically detects your hardware. On Windows, it will prioritize installing **NVIDIA CUDA** accelerated libraries if a GPU is present, or **Intel MKL** optimized libraries for CPUs, ensuring maximum transcription speed without any manual configuration.
    * You can monitor the live terminal output in the installation log modal.
 3. **Step 2: Hugging Face Token (Diarization)**
    * To identify different speakers (diarization), Harvey uses `pyannote`. This requires a free Hugging Face account and a User Access Token.
