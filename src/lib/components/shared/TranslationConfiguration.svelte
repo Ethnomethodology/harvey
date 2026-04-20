@@ -37,7 +37,6 @@
   $: translationModelCount = downloadedModels.length;
   let configError = '';
   let downloadStatus = {};
-  let ct2Installed = true;
 
   let modelName = '';
 
@@ -258,7 +257,6 @@
     try {
       // Load local models regardless of python library status so we can check what's already on disk.
       downloadedModels = await getLocalTranslationModels();
-      ct2Installed = await isCTranslate2Installed();
     } catch (e) {
       console.error('Failed to load model configuration:', e);
       configError = `Failed to load model configuration: ${typeof e === 'string' ? e : e.message || 'Unknown error'}`;
@@ -312,7 +310,6 @@
 
         try {
           downloadedModels = await getLocalTranslationModels();
-          ct2Installed = await isCTranslate2Installed();
           setTranslationModelsDownloaded(downloadedModels.length > 0);
         } catch (e) {
           console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e);
@@ -405,7 +402,7 @@
       modalLogs = [];
 
       // For Helsinki models, we might need to install CTranslate2
-      const willInstallDeps = family === 'helsinki' && !ct2Installed;
+      const willInstallDeps = family === 'helsinki' && !$configStatus.ctranslate2_installed;
 
       if (willInstallDeps) {
         isInstallingDependencies = true;
@@ -486,7 +483,6 @@
       isChecking = true;
       try {
         await updateConfigStatus(true);
-        ct2Installed = await isCTranslate2Installed();
       } finally {
         isChecking = false;
       }
@@ -649,7 +645,7 @@
         </p>
       </div>
 
-      {#if !ct2Installed && translationModelCount > 0}
+      {#if !$configStatus.ctranslate2_installed && translationModelCount > 0}
         <div
           class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between"
         >
@@ -690,7 +686,7 @@
           <strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Very heavy resource usage, large
           file size, and slower on CPUs. Best with GPU.
         </p>
-        {#if !ct2Installed && translationModelCount > 0}
+        {#if !$configStatus.ctranslate2_installed && translationModelCount > 0}
           <div
             class="mt-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded p-2 text-[11px] text-orange-800 dark:text-orange-300 flex items-center justify-between"
           >
