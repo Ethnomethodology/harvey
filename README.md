@@ -20,7 +20,8 @@ Privacy is the core of Harvey's design. All core AI functionalities, like transc
 
 ### Developed with AI
 
-Project Harvey has been developed entirely using Vibe Coding to assess the viability of AI-assisted programming in research software development. From its inception, we have developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+Project Harvey has been developed entirely using Vibe Coding to assess the viability of AI-assisted programming in research software development. From its inception, we have developed this application using AI tools such as Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods. Read about [how and why we developed Harvey](https://blogs.lse.ac.uk/impactofsocialsciences/2026/05/05/vibe-coding-for-qualitative-researchers-can-ai-really-build-our-research-tools/). (LSE Blog Post)
+
 
 
 ## Key Features
