@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use dunce;
 use log::{debug, info, warn};
 use serde::Deserialize;
-use std::fs::{self, File};
-use std::io::BufReader;
+use std::fs;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -324,10 +323,15 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
 }
 
 fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
-    let file = File::open(json_path)
+    // Read raw bytes so we can sanitize before JSON parsing.
+    // whisper.cpp's BPE tokenizer can split multi-byte CJK/Japanese characters
+    // across segment boundaries, producing invalid UTF-8 in the JSON output.
+    // `String::from_utf8_lossy` replaces those bad byte sequences with U+FFFD
+    // (the Unicode replacement character) so serde_json sees a valid UTF-8 string.
+    let raw_bytes = fs::read(json_path)
         .map_err(|e| CommandError::from(format!("Failed to open JSON: {}", e)))?;
-    let reader = BufReader::new(file);
-    let output: WhisperJsonOutput = serde_json::from_reader(reader)
+    let sanitized = String::from_utf8_lossy(&raw_bytes);
+    let output: WhisperJsonOutput = serde_json::from_str(&sanitized)
         .map_err(|e| CommandError::from(format!("Failed to parse JSON: {}", e)))?;
 
     let mut segments = Vec::new();
