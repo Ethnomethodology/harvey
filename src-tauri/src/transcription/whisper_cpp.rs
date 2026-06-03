@@ -309,14 +309,14 @@ impl<R: Runtime> TranscriptionEngine for WhisperCppEngine<R> {
             )));
         }
 
-        // Parse JSON
-        let segments = parse_whisper_json(&expected_json_path)?;
-
-        // Cleanup temp files
+        // Parse JSON — clean up temp files regardless of success or failure so
+        // orphaned files never accumulate in the transcripts directory.
+        let parse_result = parse_whisper_json(&expected_json_path);
         let _ = fs::remove_file(&expected_json_path);
         if expected_wts_path.exists() {
             let _ = fs::remove_file(&expected_wts_path);
         }
+        let segments = parse_result?;
 
         Ok(segments)
     }

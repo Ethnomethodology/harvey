@@ -1107,6 +1107,22 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     for entry in entries.filter_map(Result::ok) {
                         let path = entry.path();
                         if path.is_file() && path.extension().unwrap_or_default() == "json" {
+                            // Skip whisper.cpp intermediate temp files (whisper_<uuid>_temp.json).
+                            // These are left on disk when a transcription job fails after the
+                            // binary writes output but before cleanup runs (e.g. a JSON parse
+                            // error). The auto-heal scanner must never adopt them as real
+                            // transcripts.
+                            let file_stem = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("");
+                            if file_stem.starts_with("whisper_") && file_stem.ends_with("_temp") {
+                                warn!("[Auto-Heal] Skipping orphaned whisper temp file: {}", path.display());
+                                // Best-effort delete: clean up the orphan now so it never
+                                // re-appears.
+                                let _ = fs::remove_file(&path);
+                                continue;
+                            }
                             if let Ok(rel_path_buf) = path.strip_prefix(project_base_dir) {
                                 let rel_path_str =
                                     rel_path_buf.to_string_lossy().replace("\\", "/");
