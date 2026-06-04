@@ -2877,7 +2877,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
     };
 
     let engine: Box<dyn TranscriptionEngine> =
-        if transcription_engine.as_deref() == Some("faster-whisper") {
+        if transcription_engine.as_deref() == Some("faster-whisper") || transcription_engine.as_deref() == Some("crisper-whisper") {
             Box::new(FasterWhisperEngine::new(app_handle.clone()))
         } else {
             Box::new(WhisperCppEngine::new(app_handle.clone()))
@@ -3632,7 +3632,7 @@ pub async fn start_live_transcription(
     let model_path = resolve_model_path_cmd(&model_name, "live", engine.as_deref())
         .map_err(|e| e.to_string())?;
 
-    if engine.as_deref() == Some("faster-whisper") {
+    if engine.as_deref() == Some("faster-whisper") || engine.as_deref() == Some("crisper-whisper") {
         return crate::transcription::faster_whisper_live::start_faster_whisper_live(
             app_handle,
             model_path,
@@ -3641,6 +3641,7 @@ pub async fn start_live_transcription(
             active_document_path,
             project_uuid,
             project_base_dir,
+            engine.clone(),
             state,
         )
         .await;

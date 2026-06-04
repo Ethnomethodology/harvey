@@ -219,3 +219,22 @@ export const availableFasterWhisperModels = [
     info_url: 'https://huggingface.co/Systran/faster-whisper-large-v2'
   }
 ];
+
+export const availableCrisperWhisperModels = [
+  {
+    name: 'nyrahealth/faster_CrisperWhisper',
+    language: 'Multilingual',
+    size: '3.1 GiB',
+    description: 'Multilingual large model for verbatim transcription. Recommended.',
+    family: 'crisper-whisper',
+    info_url: 'https://huggingface.co/nyrahealth/faster_CrisperWhisper'
+  },
+  {
+    name: 'sulaimank/crisperwhisper-mhdp-english',
+    language: 'English-only',
+    size: '3.1 GiB',
+    description: 'English optimized model for verbatim transcription.',
+    family: 'crisper-whisper',
+    info_url: 'https://huggingface.co/sulaimank/crisperwhisper-mhdp-english'
+  }
+];

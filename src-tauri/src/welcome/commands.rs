@@ -488,6 +488,15 @@ pub async fn install_faster_whisper_dependencies_command<R: Runtime>(
 }
 
 #[command]
+pub async fn install_crisper_whisper_dependencies_command<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), CommandError> {
+    log::info!("CMD: install_crisper_whisper_dependencies_command");
+    python_env::install_crisper_whisper_dependencies(&app, app.shell(), "installation-log", None)
+        .await
+}
+
+#[command]
 pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<(), CommandError> {
@@ -499,6 +508,7 @@ pub async fn install_whisper_cpp_dependencies_command<R: Runtime>(
 #[command]
 pub async fn download_faster_whisper_model_command(
     app: AppHandle,
+    cancellation_state: tauri::State<'_, DownloadCancellationState>,
     model_info: ModelInfo,
     download_location: String,
 ) -> Result<(), CommandError> {
@@ -573,47 +583,86 @@ pub async fn download_faster_whisper_model_command(
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
+    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), cancel_flag);
+
     window
         .emit("transcription-download-start", &model_name)
         .unwrap();
 
     let mut success = false;
-    while let Some(event) = rx.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                log::info!("[Python] {}", &line_str);
-                window
-                    .emit(
-                        "transcription-download-log",
-                        serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
-                    )
-                    .unwrap();
-            }
-            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                log::error!("[Python] {}", &line_str);
-                window
-                    .emit(
-                        "transcription-download-log",
-                        serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
-                    )
-                    .unwrap();
-            }
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                log::info!(
-                    "Transcription download process for '{}' terminated with code: {:?}",
-                    &model_name,
-                    payload.code
-                );
-                if payload.code == Some(0) {
-                    success = true;
-                } else {
-                    window.emit("transcription-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
+    loop {
+        if let Some(flag_entry) = cancellation_state.0.get(&model_name) {
+            if flag_entry.value().load(std::sync::atomic::Ordering::Relaxed) {
+                log::info!("Cancellation detected for {}, killing process.", &model_name);
+                let _ = _child.kill();
+                
+                let model_folder_name = format!("models--{}", model_name.replace("/", "--"));
+                let model_folder_path = target_dir.join(&model_folder_name);
+                
+                if model_folder_path.exists() {
+                    log::info!("Deleting incomplete download folder: {:?}", model_folder_path);
+                    let _ = std::fs::remove_dir_all(&model_folder_path);
                 }
-                break;
+                
+                window.emit("transcription-download-finished", ()).unwrap();
+                return Err(CommandError::Message("Download cancelled by user.".to_string()));
             }
-            _ => {}
+        }
+        
+        match tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await {
+            Ok(Some(event)) => {
+                match event {
+                    tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::info!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::error!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                        
+                        if target_dir_str.contains("translation") && line_str.starts_with("PROGRESS:") {
+                            let parts: Vec<&str> = line_str.trim().split(':').collect();
+                            if parts.len() >= 3 {
+                                if let Ok(percent) = parts[1].parse::<u32>() {
+                                    let file_name = parts[2].trim();
+                                    let _ = window.emit(
+                                        "translation-download-progress",
+                                        serde_json::json!({
+                                            "model_name": &model_name,
+                                            "percent": percent,
+                                            "file_name": file_name
+                                        }),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                        log::info!("Download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                        if payload.code == Some(0) {
+                            success = true;
+                        } else {
+                            let _ = window.emit(
+                                if target_dir_str.contains("translation") { "translation-download-error" } else { "transcription-download-error" },
+                                serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })
+                            );
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(None) => break,
+            Err(_) => {}
         }
     }
 
@@ -679,10 +728,235 @@ pub async fn download_faster_whisper_model_command(
     }
 }
 
+// --- Transcription Model Download Command (Crisper-Whisper) ---
+#[command]
+pub async fn download_crisper_whisper_model_command(
+    app: AppHandle,
+    cancellation_state: tauri::State<'_, DownloadCancellationState>,
+    model_info: ModelInfo,
+    download_location: String,
+) -> Result<(), CommandError> {
+    log::info!(
+        "CMD: download_crisper_whisper_model: {} -> {}",
+        model_info.name,
+        download_location
+    );
+    let model_name = model_info.name.clone();
+
+    let sub_dir = "crisper-whisper";
+    let target_dir = PathBuf::from(&download_location)
+        .join("transcription")
+        .join(sub_dir);
+    let target_dir_str = target_dir.to_string_lossy().to_string();
+
+    if download_location.trim().is_empty() {
+        return Err(CommandError::from(format!(
+            "Download location is empty for '{}'.",
+            model_name
+        )));
+    }
+    if !target_dir.exists() {
+        log::info!(
+            "Target directory {:?} does not exist. Creating...",
+            target_dir
+        );
+        fs::create_dir_all(&target_dir)?;
+    } else if !target_dir.is_dir() {
+        return Err(CommandError::from(format!(
+            "Target path {:?} is not a directory.",
+            target_dir
+        )));
+    }
+
+    let window = app.get_webview_window("main").unwrap();
+
+    // 1. Check/Install dependencies
+    let dependencies_installed = is_faster_whisper_dependencies_installed(app.clone())
+        .await
+        .unwrap_or(false);
+    if !dependencies_installed {
+        log::info!("Crisper-Whisper dependencies not found. Installing...");
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Crisper-Whisper dependencies are missing. Installing them now..." })).unwrap();
+        python_env::install_faster_whisper_dependencies(
+            &app,
+            app.shell(),
+            "transcription-download-log",
+            Some(&model_name),
+        )
+        .await?;
+        window.emit("transcription-download-log", serde_json::json!({ "model_name": &model_name, "log_line": "Dependencies installed successfully." })).unwrap();
+    }
+
+    let python_path = python_env::get_python_path()?;
+    let script_path = app
+        .path()
+        .resource_dir()
+        .unwrap()
+        .join("scripts/download_transcription_model.py");
+
+    let (mut rx, _child) = app
+        .shell()
+        .command(python_path.to_str().unwrap())
+        .args([
+            script_path.to_str().unwrap(),
+            &model_name,
+            &target_dir_str,
+            "",
+        ])
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        .spawn()
+        .map_err(|e| format!("Failed to spawn python script: {}", e))?;
+
+    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), cancel_flag);
+
+    window
+        .emit("transcription-download-start", &model_name)
+        .unwrap();
+
+    let mut success = false;
+    loop {
+        if let Some(flag_entry) = cancellation_state.0.get(&model_name) {
+            if flag_entry.value().load(std::sync::atomic::Ordering::Relaxed) {
+                log::info!("Cancellation detected for {}, killing process.", &model_name);
+                let _ = _child.kill();
+                
+                let model_folder_name = format!("models--{}", model_name.replace("/", "--"));
+                let model_folder_path = target_dir.join(&model_folder_name);
+                
+                if model_folder_path.exists() {
+                    log::info!("Deleting incomplete download folder: {:?}", model_folder_path);
+                    let _ = std::fs::remove_dir_all(&model_folder_path);
+                }
+                
+                window.emit("transcription-download-finished", ()).unwrap();
+                return Err(CommandError::Message("Download cancelled by user.".to_string()));
+            }
+        }
+        
+        match tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await {
+            Ok(Some(event)) => {
+                match event {
+                    tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::info!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::error!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                        
+                        if target_dir_str.contains("translation") && line_str.starts_with("PROGRESS:") {
+                            let parts: Vec<&str> = line_str.trim().split(':').collect();
+                            if parts.len() >= 3 {
+                                if let Ok(percent) = parts[1].parse::<u32>() {
+                                    let file_name = parts[2].trim();
+                                    let _ = window.emit(
+                                        "translation-download-progress",
+                                        serde_json::json!({
+                                            "model_name": &model_name,
+                                            "percent": percent,
+                                            "file_name": file_name
+                                        }),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                        log::info!("Download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                        if payload.code == Some(0) {
+                            success = true;
+                        } else {
+                            let _ = window.emit(
+                                if target_dir_str.contains("translation") { "translation-download-error" } else { "transcription-download-error" },
+                                serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })
+                            );
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(None) => break,
+            Err(_) => {}
+        }
+    }
+
+    if !success {
+        window.emit("transcription-download-finished", ()).unwrap();
+        return Err(CommandError::Message(
+            "Transcription model download failed.".to_string(),
+        ));
+    }
+
+    if success {
+        log::info!(
+            "Transcription model '{}' downloaded successfully. Updating config.",
+            &model_name
+        );
+        match || -> Result<(), CommandError> {
+            let mut config = read_config()?;
+            let mut downloaded_model_info = model_info.clone();
+            downloaded_model_info.download_location = Some(download_location.clone());
+            downloaded_model_info.family = Some("crisper-whisper".to_string());
+
+            if let Some(idx) = config
+                .downloaded_models
+                .iter()
+                .position(|m| m.name == downloaded_model_info.name)
+            {
+                log::info!("Model '{}' already in config. Updating.", &model_name);
+                config.downloaded_models[idx] = downloaded_model_info;
+            } else {
+                log::info!("Adding new model '{}' to config.", &model_name);
+                config.downloaded_models.push(downloaded_model_info);
+            }
+            write_config(&config)?;
+            log::info!("Config updated successfully for '{}'.", &model_name);
+            Ok(())
+        }() {
+            Ok(_) => {
+                // Emit complete event ONLY after config is updated to avoid race conditions
+                window
+                    .emit("transcription-download-complete", &model_name)
+                    .unwrap();
+                window.emit("transcription-download-finished", ()).unwrap();
+                Ok(())
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to update config for transcription model '{}': {}",
+                    &model_name,
+                    e
+                );
+                window.emit("transcription-download-finished", ()).unwrap();
+                Err(CommandError::from(format!(
+                    "Model downloaded but failed to save configuration: {}",
+                    e
+                )))
+            }
+        }
+    } else {
+        window.emit("transcription-download-finished", ()).unwrap();
+        Err(CommandError::Message(
+            "Transcription model download failed.".to_string(),
+        ))
+    }
+}
+
 // --- Translation Model Download Command ---
 #[command]
 pub async fn download_translation_model_command(
     app: AppHandle,
+    cancellation_state: tauri::State<'_, DownloadCancellationState>,
     model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
     download_location: String,
 ) -> Result<(), CommandError> {
@@ -768,85 +1042,87 @@ pub async fn download_translation_model_command(
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
+    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), cancel_flag);
+
+
     window
         .emit("translation-download-start", &model_name)
         .unwrap();
 
     let mut success = false;
-    while let Some(event) = rx.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                if line_str.starts_with("PROGRESS:") {
-                    let parts: Vec<&str> = line_str.split(':').collect();
-                    if let Some(percent_str) = parts.get(1) {
-                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
-                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
-                            window
-                                .emit(
-                                    "translation-download-progress",
-                                    serde_json::json!({
-                                        "model_name": &model_name,
-                                        "percent": percent,
-                                        "file_name": file_name
-                                    }),
-                                )
-                                .unwrap();
+    loop {
+        if let Some(flag_entry) = cancellation_state.0.get(&model_name) {
+            if flag_entry.value().load(std::sync::atomic::Ordering::Relaxed) {
+                log::info!("Cancellation detected for {}, killing process.", &model_name);
+                let _ = _child.kill();
+                
+                let model_folder_name = format!("models--{}", model_name.replace("/", "--"));
+                let model_folder_path = target_dir.join(&model_folder_name);
+                
+                if model_folder_path.exists() {
+                    log::info!("Deleting incomplete download folder: {:?}", model_folder_path);
+                    let _ = std::fs::remove_dir_all(&model_folder_path);
+                }
+                
+                window.emit("transcription-download-finished", ()).unwrap();
+                return Err(CommandError::Message("Download cancelled by user.".to_string()));
+            }
+        }
+        
+        match tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv()).await {
+            Ok(Some(event)) => {
+                match event {
+                    tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::info!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                        let line_str = String::from_utf8_lossy(&line).to_string();
+                        log::error!("[Python] {}", &line_str);
+                        let _ = window.emit(
+                            if target_dir_str.contains("translation") { "translation-download-log" } else { "transcription-download-log" },
+                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
+                        );
+                        
+                        if target_dir_str.contains("translation") && line_str.starts_with("PROGRESS:") {
+                            let parts: Vec<&str> = line_str.trim().split(':').collect();
+                            if parts.len() >= 3 {
+                                if let Ok(percent) = parts[1].parse::<u32>() {
+                                    let file_name = parts[2].trim();
+                                    let _ = window.emit(
+                                        "translation-download-progress",
+                                        serde_json::json!({
+                                            "model_name": &model_name,
+                                            "percent": percent,
+                                            "file_name": file_name
+                                        }),
+                                    );
+                                }
+                            }
                         }
                     }
-                } else {
-                    log::info!("[Python] {}", &line_str);
-                    window
-                        .emit(
-                            "translation-download-log",
-                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
-                        )
-                        .unwrap();
-                }
-            }
-            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                if line_str.starts_with("PROGRESS:") {
-                    let parts: Vec<&str> = line_str.split(':').collect();
-                    if let Some(percent_str) = parts.get(1) {
-                        if let Ok(percent) = percent_str.trim().parse::<u32>() {
-                            let file_name = parts.get(2).map(|s| s.trim()).unwrap_or("");
-                            window
-                                .emit(
-                                    "translation-download-progress",
-                                    serde_json::json!({
-                                        "model_name": &model_name,
-                                        "percent": percent,
-                                        "file_name": file_name
-                                    }),
-                                )
-                                .unwrap();
+                    tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                        log::info!("Download process for '{}' terminated with code: {:?}", &model_name, payload.code);
+                        if payload.code == Some(0) {
+                            success = true;
+                        } else {
+                            let _ = window.emit(
+                                if target_dir_str.contains("translation") { "translation-download-error" } else { "transcription-download-error" },
+                                serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })
+                            );
                         }
+                        break;
                     }
-                } else {
-                    log::error!("[Python] {}", &line_str);
-                    window
-                        .emit(
-                            "translation-download-log",
-                            serde_json::json!({ "model_name": &model_name, "log_line": &line_str }),
-                        )
-                        .unwrap();
+                    _ => {}
                 }
             }
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                log::info!(
-                    "Translation download process for '{}' terminated with code: {:?}",
-                    &model_name,
-                    payload.code
-                );
-                if payload.code == Some(0) {
-                    success = true;
-                } else {
-                    window.emit("translation-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
-                }
-                break;
-            }
-            _ => {}
+            Ok(None) => break,
+            Err(_) => {}
         }
     }
 

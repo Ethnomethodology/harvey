@@ -12,7 +12,7 @@ except ImportError as e:
 # Configure logging to stderr to avoid polluting stdout which is used for JSON output
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
-def run_transcription(audio_path, model_path, language=None, task="transcribe", device="auto", threads=None, compute_type_arg=None, beam_size=5, prompt=None, hotwords=None):
+def run_transcription(audio_path, model_path, language=None, task="transcribe", device="auto", threads=None, compute_type_arg=None, beam_size=5, prompt=None, hotwords=None, without_timestamps=False):
     # Compute compute_type based on device or argument
     compute_type = "int8"
 
@@ -27,12 +27,14 @@ def run_transcription(audio_path, model_path, language=None, task="transcribe", 
         model = WhisperModel(model_path, device=device, compute_type=compute_type, cpu_threads=threads if threads else 4)
 
         # Transcribe
+
         transcribe_args = {
             "audio": audio_path,
             "language": language,
             "task": task,
             "beam_size": beam_size,
-            "word_timestamps": True
+            "word_timestamps": True,
+            "without_timestamps": without_timestamps
         }
 
         if prompt is not None:
@@ -81,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--beam_size", type=int, default=5)
     parser.add_argument("--prompt", type=str, default=None, help="Initial prompt to guide the model")
     parser.add_argument("--hotwords", type=str, default=None, help="Hotwords for the model")
+    parser.add_argument("--without_timestamps", action="store_true", help="Disable timestamps output for verbatim models")
 
     args = parser.parse_args()
 
@@ -89,4 +92,4 @@ if __name__ == "__main__":
     if lang == "auto":
         lang = None
 
-    run_transcription(args.audio, args.model, lang, args.task, args.device, args.threads, args.compute_type, args.beam_size, args.prompt, args.hotwords)
+    run_transcription(args.audio, args.model, lang, args.task, args.device, args.threads, args.compute_type, args.beam_size, args.prompt, args.hotwords, args.without_timestamps)

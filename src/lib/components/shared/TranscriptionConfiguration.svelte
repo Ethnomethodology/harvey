@@ -10,17 +10,21 @@
     updateConfigStatus,
     setSelectedTranscriptionEngineStore,
     setWhisperCppModelsDownloaded,
-    setFasterWhisperModelsDownloaded
+    setFasterWhisperModelsDownloaded,
+    setCrisperWhisperModelsDownloaded
   } from '$lib/stores/configStatusStore.js';
   import {
     availableWhisperCppModels,
-    availableFasterWhisperModels
+    availableFasterWhisperModels,
+    availableCrisperWhisperModels
   } from '$lib/constants/models.js';
   import {
     downloadModel,
     downloadFasterWhisperModel,
+    downloadCrisperWhisperModel,
     deleteModel,
     cancelFasterWhisperModelDownload,
+    cancelCrisperWhisperModelDownload,
     cancelDownload,
     setSelectedTranscriptionEngine,
     getSelectedTranscriptionEngine,
@@ -60,20 +64,26 @@
   $: fasterWhisperDownloadedCount = Array.isArray(downloadedModels)
     ? downloadedModels.filter((m) => m.family === 'faster-whisper').length
     : 0;
+  $: crisperWhisperDownloadedCount = Array.isArray(downloadedModels)
+    ? downloadedModels.filter((m) => m.family === 'crisper-whisper').length
+    : 0;
 
   $: {
     if ($configStatus.isInitialized) {
       setWhisperCppModelsDownloaded(whisperCppDownloadedCount > 0);
       setFasterWhisperModelsDownloaded(fasterWhisperDownloadedCount > 0);
+      setCrisperWhisperModelsDownloaded(crisperWhisperDownloadedCount > 0);
     }
   }
 
   $: hasDownloadedFasterWhisper = fasterWhisperDownloadedCount > 0;
+  $: hasDownloadedCrisperWhisper = crisperWhisperDownloadedCount > 0;
   $: hasDownloadedWhisperCpp = whisperCppDownloadedCount > 0;
   $: isMac = (platform || '').startsWith('macos');
   $: isWindows = (platform || '').startsWith('windows');
   $: recommendWhisperCpp = isMac;
   $: recommendFasterWhisper = isWindows;
+  let recommendCrisperWhisper = false;
   let unlistenStart = null;
   let unlistenStartFW = null;
   let unlistenLog = null;
@@ -88,6 +98,18 @@
   let isFetchingModels = false;
   let hasFetched = false;
   let autoFetchTriggered = false;
+  let activeDownloadModelName = null;
+
+  async function handleDownloadCancel() {
+    if (activeDownloadModelName) {
+      downloadStatus = { ...downloadStatus, [activeDownloadModelName]: 'cancelling' };
+      try {
+        await invoke('cancel_download_command', { modelName: activeDownloadModelName });
+      } catch (e) {
+        console.error('Failed to cancel download:', e);
+      }
+    }
+  }
 
   // Computed: determine display state for each model
   let modelDisplayData = {};
@@ -96,7 +118,7 @@
     const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
 
     const targetList =
-      selectedEngine === 'whisper-cpp' ? availableWhisperCppModels : availableFasterWhisperModels;
+      selectedEngine === 'whisper-cpp' ? availableWhisperCppModels : (selectedEngine === 'crisper-whisper' ? availableCrisperWhisperModels : availableFasterWhisperModels);
 
     for (const model of targetList) {
       const id = model.name;
@@ -141,7 +163,7 @@
     let baseList =
       selectedEngine === 'whisper-cpp'
         ? [...availableWhisperCppModels]
-        : [...availableFasterWhisperModels];
+        : (selectedEngine === 'crisper-whisper' ? [...availableCrisperWhisperModels] : [...availableFasterWhisperModels]);
 
     // Enrichment with local info
     return baseList
@@ -214,6 +236,7 @@
     try {
       unlistenStart = await listen('download-start', (event) => {
         const modelName = event.payload;
+        activeDownloadModelName = modelName;
         downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
         modalLogs = [
           ...modalLogs,
@@ -226,6 +249,7 @@
 
       unlistenStartFW = await listen('transcription-download-start', (event) => {
         const modelName = event.payload;
+        activeDownloadModelName = modelName;
         downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
         modalLogs = [
           ...modalLogs,
@@ -335,6 +359,10 @@
         );
         isDownloading = false;
         isInstallingDependencies = false;
+        if (activeDownloadModelName && downloadStatus[activeDownloadModelName] === 'cancelling') {
+          downloadStatus = { ...downloadStatus, [activeDownloadModelName]: 'not_downloaded' };
+          activeDownloadModelName = null;
+        }
         isChecking = true;
         try {
           await updateConfigStatus(true);
@@ -388,14 +416,19 @@
 
       if (selectedEngine === 'faster-whisper') {
         await downloadFasterWhisperModel(model, downloadLocation);
+      } else if (selectedEngine === 'crisper-whisper') {
+        await downloadCrisperWhisperModel(model, downloadLocation);
       } else {
         await downloadModel(model, downloadLocation);
       }
     } catch (err) {
-      notificationStore.add(
-        `Failed to start download for ${modelName}: ${err.message || err}`,
-        'error'
-      );
+      const errorStr = typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err);
+      if (!errorStr.toLowerCase().includes('cancel')) {
+        notificationStore.add(
+          `Failed to start download for ${modelName}: ${errorStr}`,
+          'error'
+        );
+      }
       isDownloading = false;
       isInstallingDependencies = false;
     }
@@ -435,8 +468,10 @@
     downloadStatus = { ...downloadStatus, [modelName]: 'cancelling' };
     configError = '';
     try {
-      if (model.family === 'faster-whisper') {
+      if (selectedEngine === 'faster-whisper') {
         await cancelFasterWhisperModelDownload(modelName);
+      } else if (selectedEngine === 'crisper-whisper') {
+        await cancelCrisperWhisperModelDownload(modelName);
       } else {
         await cancelDownload(modelName);
       }
@@ -545,21 +580,21 @@
         <span class="text-sm font-medium text-red-600 dark:text-red-400 uppercase"
           >WHISPER.CPP LIBRARY MISSING</span
         >
-      {:else if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : fasterWhisperDownloadedCount) > 0}
+      {:else if (selectedEngine === 'whisper-cpp' ? whisperCppDownloadedCount : (selectedEngine === 'crisper-whisper' ? crisperWhisperDownloadedCount : fasterWhisperDownloadedCount)) > 0}
         <span class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">
           {selectedEngine === 'whisper-cpp'
             ? whisperCppDownloadedCount
-            : fasterWhisperDownloadedCount}
-          {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'}
+            : (selectedEngine === 'crisper-whisper' ? crisperWhisperDownloadedCount : fasterWhisperDownloadedCount)}
+          {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : (selectedEngine === 'crisper-whisper' ? 'CRISPER-WHISPER' : 'FASTER-WHISPER')}
           {(selectedEngine === 'whisper-cpp'
             ? whisperCppDownloadedCount
-            : fasterWhisperDownloadedCount) === 1
+            : (selectedEngine === 'crisper-whisper' ? crisperWhisperDownloadedCount : fasterWhisperDownloadedCount)) === 1
             ? 'MODEL'
             : 'MODELS'} DOWNLOADED
         </span>
       {:else}
         <span class="text-sm font-medium text-yellow-600 dark:text-yellow-400 uppercase"
-          >NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : 'FASTER-WHISPER'} MODELS DOWNLOADED</span
+          >NO {selectedEngine === 'whisper-cpp' ? 'WHISPER.CPP' : (selectedEngine === 'crisper-whisper' ? 'CRISPER-WHISPER' : 'FASTER-WHISPER')} MODELS DOWNLOADED</span
         >
       {/if}
     </div>
@@ -683,6 +718,22 @@
       >
         faster-whisper
       </button>
+      <button
+        class="px-3 py-1 text-xs rounded-full border transition-all"
+        class:bg-blue-600={selectedEngine === 'crisper-whisper'}
+        class:text-white={selectedEngine === 'crisper-whisper'}
+        class:border-transparent={selectedEngine === 'crisper-whisper'}
+        class:bg-white={selectedEngine !== 'crisper-whisper'}
+        class:dark:bg-gray-800={selectedEngine !== 'crisper-whisper'}
+        class:text-gray-600={selectedEngine !== 'crisper-whisper'}
+        class:dark:text-gray-400={selectedEngine !== 'crisper-whisper'}
+        class:border-gray-200={selectedEngine !== 'crisper-whisper'}
+        class:dark:border-gray-700={selectedEngine !== 'crisper-whisper'}
+        on:click={() => handleEngineChange('crisper-whisper')}
+      >
+        crisper-whisper
+      </button>
+
     </div>
   </div>
 
@@ -726,6 +777,26 @@
       <p>
         <strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Slower on Mac (Metal) compared
         to whisper.cpp.
+      </p>
+    </div>
+  {:else if selectedEngine === 'crisper-whisper'}
+    <div class="text-[11px] text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+      <p>
+        <strong class="text-blue-800 dark:text-blue-300">Engine:</strong>
+        <button
+          class="hover:underline text-blue-600 dark:text-blue-400 font-medium"
+          on:click={() => openExternal('https://github.com/nyrahealth/CrisperWhisper')}
+          >crisper-whisper</button
+        >
+        {#if recommendCrisperWhisper}
+          <span class="text-green-600 font-bold ml-1">(Recommended)</span>
+        {/if}
+      </p>
+      <p>
+        <strong class="text-blue-800 dark:text-blue-300">Pros:</strong> Highly accurate verbatim transcription with exact timestamps.
+      </p>
+      <p>
+        <strong class="text-blue-800 dark:text-blue-300">Cons:</strong> Models are very large and require more memory.
       </p>
     </div>
   {/if}
@@ -884,6 +955,7 @@
   {isChecking}
   title={isInstallingDependencies ? 'Installing Dependencies' : 'Downloading Transcription Model'}
   inProgressText={isInstallingDependencies ? 'Installing...' : 'Downloading...'}
+  on:cancel={handleDownloadCancel}
 />
 
 <style lang="postcss">

@@ -10,12 +10,14 @@ const initialStatus = {
   transcription_models_downloaded: false,
   whisper_cpp_models_downloaded: false,
   faster_whisper_models_downloaded: false,
+  crisper_whisper_models_downloaded: false,
   diarization_model_downloaded: false,
   translation_models_downloaded: false,
   helsinki_models_downloaded: false,
   nllb_models_downloaded: false,
   ctranslate2_installed: false,
   faster_whisper_dependencies_installed: false,
+  crisper_whisper_dependencies_installed: false,
   whisper_cpp_installed: false,
   selected_transcription_engine: 'whisper-cpp',
   selected_translation_engine: 'helsinki'
@@ -62,12 +64,14 @@ export async function updateConfigStatus(force = false) {
       transcription_models_downloaded: false,
       whisper_cpp_models_downloaded: false,
       faster_whisper_models_downloaded: false,
+      crisper_whisper_models_downloaded: false,
       diarization_model_downloaded: false,
       translation_models_downloaded: false,
       helsinki_models_downloaded: false,
       nllb_models_downloaded: false,
       ctranslate2_installed: false,
       faster_whisper_dependencies_installed: false,
+      crisper_whisper_dependencies_installed: false,
       whisper_cpp_installed: false,
       selected_transcription_engine: 'whisper-cpp',
       selected_translation_engine: 'helsinki'
@@ -112,6 +116,12 @@ export const setTranslationModelsDownloaded = (status) => {
 export const setFasterWhisperDependenciesInstalled = (status) => {
   configStatus.update((s) => ({ ...s, faster_whisper_dependencies_installed: status }));
 };
+export const setCrisperWhisperDependenciesInstalled = (status) => {
+  configStatus.update((s) => ({ ...s, crisper_whisper_dependencies_installed: status }));
+};
 export const setWhisperCppInstalled = (status) => {
   configStatus.update((s) => ({ ...s, whisper_cpp_installed: status }));
+};
+export const setCrisperWhisperModelsDownloaded = (status) => {
+  configStatus.update((s) => ({ ...s, crisper_whisper_models_downloaded: status }));
 };

@@ -33,4 +33,7 @@ vite.config.ts.timestamp-*
 /harvey-sidecars/
 
 
-\n# Python\n__pycache__/\n*.py[cod]\n*$py.class
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

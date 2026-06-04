@@ -413,10 +413,13 @@
 
       await downloadTranslationModel(null, null, downloadLocation, modelToDownload, family);
     } catch (err) {
-      notificationStore.add(
-        `Failed to start download for ${modelToDownload}: ${err.message || err}`,
-        'error'
-      );
+      const errorStr = typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err);
+      if (!errorStr.toLowerCase().includes('cancel')) {
+        notificationStore.add(
+          `Failed to start download for ${modelToDownload}: ${errorStr}`,
+          'error'
+        );
+      }
       isDownloading = false;
       isInstallingDependencies = false;
     }

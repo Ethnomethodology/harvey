@@ -773,6 +773,32 @@ pub async fn install_whisper_cpp_dependencies<R: Runtime>(
     Ok(())
 }
 
+
+pub async fn install_crisper_whisper_dependencies<R: Runtime>(
+    app: &AppHandle<R>,
+    shell: &Shell<R>,
+    log_event_name: &str,
+    model_name: Option<&str>,
+) -> Result<(), CommandError> {
+    let emitter = app.clone();
+    emit_log(
+        &emitter,
+        log_event_name,
+        "Installing CrisperWhisper transcription libraries...".into(),
+        model_name,
+    );
+    let pip_packages = vec!["faster-whisper", "ctranslate2", "sounddevice"];
+    install_pip_packages(app, shell, pip_packages, log_event_name, model_name).await?;
+
+    emit_log(
+        &emitter,
+        log_event_name,
+        "CrisperWhisper libraries installed successfully.".into(),
+        model_name,
+    );
+    Ok(())
+}
+
 pub async fn install_faster_whisper_dependencies<R: Runtime>(
     app: &AppHandle<R>,
     shell: &Shell<R>,

@@ -1007,6 +1007,8 @@
     downloadedModelsList = allModels.filter((m) => {
       if (family === 'faster-whisper') {
         return m.family === 'faster-whisper';
+      } else if (family === 'crisper-whisper') {
+        return m.family === 'crisper-whisper';
       } else {
         return m.family === 'whisper-cpp' || (!m.family && !m.name.includes('/'));
       }

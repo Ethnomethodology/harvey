@@ -15,6 +15,7 @@ pub async fn start_faster_whisper_live<R: Runtime>(
     active_document_path: String,
     project_uuid: String,
     project_base_dir: String,
+    engine: Option<String>,
     state: tauri::State<'_, LiveTranscriptionState>,
 ) -> Result<bool, String> {
     let python_path = get_python_path().map_err(|e| e.to_string())?;
@@ -38,6 +39,14 @@ pub async fn start_faster_whisper_live<R: Runtime>(
         "--length".to_string(),
         "5000".to_string(),
     ];
+
+    if let Some(eng) = engine {
+        if eng == "crisper-whisper" {
+            args.push("--without_timestamps".to_string());
+            args.push("--beam_size".to_string());
+            args.push("1".to_string());
+        }
+    }
 
     if save_audio {
         let active_doc_path = std::path::PathBuf::from(&active_document_path);

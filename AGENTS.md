@@ -58,9 +58,10 @@ npm install
 
 Before submitting any changes, ensure the following checks pass:
 
-1.  **Svelte Check**:
+1.  **Svelte Check & Build (CRITICAL)**:
+    `npm run check` catches type and syntax errors, but *misses Vite module resolution errors* (like incorrect external package import paths). **You MUST always run a full build to verify frontend changes:**
     ```bash
-    npm run check
+    npm run check && npm run build
     ```
 2.  **Frontend Linting**:
     ```bash
@@ -74,7 +75,8 @@ Before submitting any changes, ensure the following checks pass:
     ```bash
     cd src-tauri && cargo clippy -- -D warnings
     ```
-5.  **Cargo Check**:
+5.  **Cargo Check (CRITICAL)**:
+    Always run this after modifying any Rust files to catch unused variables, type mismatches, and structural errors:
     ```bash
     cd src-tauri && cargo check
     ```

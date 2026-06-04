@@ -67,9 +67,10 @@ export async function getDownloadedModels() {
           const name = model.name || '';
           const isWhisperCpp = (!family && !name.includes('/')) || family === 'whisper-cpp';
           const isFasterWhisper = family === 'faster-whisper';
+          const isCrisperWhisper = family === 'crisper-whisper';
           const isParaphrase = name.includes('paraphrase');
 
-          return (isWhisperCpp || isFasterWhisper) && !isParaphrase;
+          return (isWhisperCpp || isFasterWhisper || isCrisperWhisper) && !isParaphrase;
         })
       : [];
     return transcriptionModels;
@@ -130,6 +131,30 @@ export async function deleteModel(model) {
   }
 }
 
+export async function downloadCrisperWhisperModel(model, downloadLocation) {
+  if (!model?.name) {
+    console.error('Model name is missing.');
+    throw new Error('Model name is missing.');
+  }
+  if (!downloadLocation || downloadLocation.trim() === '') {
+    const errorMsg = `Download location is not set. Cannot download model.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+  console.log(`Attempting to download crisper-whisper model: ${model.name} to ${downloadLocation}`);
+  try {
+    await invoke('download_crisper_whisper_model_command', {
+      modelInfo: model,
+      downloadLocation: downloadLocation
+    });
+  console.log(`Attempting to download crisper-whisper model: ${model.name} to ${downloadLocation}`);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking download_crisper_whisper_model_command for ${model.name}:`, error);
+    throw new Error(`Failed to start crisper-whisper model download: ${error?.message || error}`);
+  }
+}
+
 export async function downloadFasterWhisperModel(model, downloadLocation) {
   if (!model?.name) {
     console.error('Model name is missing.');
@@ -152,6 +177,10 @@ export async function downloadFasterWhisperModel(model, downloadLocation) {
     console.error(`Error invoking download_faster_whisper_model_command for ${model.name}:`, error);
     throw new Error(`Failed to start faster-whisper model download: ${error?.message || error}`);
   }
+}
+
+export async function cancelCrisperWhisperModelDownload(modelName) {
+  return await cancelFasterWhisperModelDownload(modelName);
 }
 
 export async function cancelFasterWhisperModelDownload(modelName) {
@@ -258,6 +287,10 @@ export async function isFasterWhisperDependenciesInstalled() {
 
 export async function installFasterWhisperDependencies() {
   return await invoke('install_faster_whisper_dependencies_command');
+}
+
+export async function installCrisperWhisperDependencies() {
+  return await invoke('install_crisper_whisper_dependencies_command');
 }
 
 export async function getDependencyCheckErrors() {

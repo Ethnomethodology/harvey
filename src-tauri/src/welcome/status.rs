@@ -19,12 +19,14 @@ pub struct ConfigStatus {
     pub transcription_models_downloaded: bool,
     pub whisper_cpp_models_downloaded: bool,
     pub faster_whisper_models_downloaded: bool,
+    pub crisper_whisper_models_downloaded: bool,
     pub diarization_model_downloaded: bool,
     pub translation_models_downloaded: bool,
     pub helsinki_models_downloaded: bool,
     pub nllb_models_downloaded: bool,
     pub ctranslate2_installed: bool,
     pub faster_whisper_dependencies_installed: bool,
+    pub crisper_whisper_dependencies_installed: bool,
     pub whisper_cpp_installed: bool,
 }
 
@@ -49,6 +51,9 @@ pub async fn check_config_status<R: Runtime>(
     let mut fw_deps_installed = config
         .verification_status
         .faster_whisper_dependencies_verified;
+    let mut cw_deps_installed = config
+        .verification_status
+        .crisper_whisper_dependencies_verified;
     let mut whisper_cpp_installed = config.verification_status.whisper_cpp_verified;
 
     // --- Lightweight Checks ---
@@ -62,6 +67,10 @@ pub async fn check_config_status<R: Runtime>(
         config
             .verification_status
             .faster_whisper_dependencies_verified = false;
+        cw_deps_installed = false;
+        config
+            .verification_status
+            .crisper_whisper_dependencies_verified = false;
         whisper_cpp_installed = false;
         config.verification_status.whisper_cpp_verified = false;
         config_changed = true;
@@ -78,7 +87,12 @@ pub async fn check_config_status<R: Runtime>(
         let family = m.family.as_deref().unwrap_or("");
         family == "faster-whisper" && !m.name.contains("paraphrase")
     });
-    let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded;
+    
+    let crisper_whisper_models_downloaded = models.iter().any(|m| {
+        let family = m.family.as_deref().unwrap_or("");
+        family == "crisper-whisper" && !m.name.contains("paraphrase")
+    });
+    let has_transcription = whisper_cpp_models_downloaded || faster_whisper_models_downloaded || crisper_whisper_models_downloaded;
 
     let translation_models = get_local_translation_models().await?;
     let helsinki_models_downloaded = translation_models
@@ -137,6 +151,16 @@ pub async fn check_config_status<R: Runtime>(
                 config_changed = true;
             }
         }
+        if !cw_deps_installed {
+            cw_deps_installed = fw_deps_installed; // Since they share the same backend, if FW is installed, CW is installed.
+            if cw_deps_installed {
+                config
+                    .verification_status
+                    .crisper_whisper_dependencies_verified = true;
+                config_changed = true;
+            }
+        }
+
         if !fw_deps_installed {
             fw_deps_installed =
                 super::commands::is_faster_whisper_dependencies_installed(app_handle.clone())
@@ -149,6 +173,16 @@ pub async fn check_config_status<R: Runtime>(
                 config_changed = true;
             }
         }
+        if !cw_deps_installed {
+            cw_deps_installed = fw_deps_installed; // Since they share the same backend, if FW is installed, CW is installed.
+            if cw_deps_installed {
+                config
+                    .verification_status
+                    .crisper_whisper_dependencies_verified = true;
+                config_changed = true;
+            }
+        }
+
     }
 
     if !whisper_cpp_installed {
@@ -191,12 +225,14 @@ pub async fn check_config_status<R: Runtime>(
         transcription_models_downloaded,
         whisper_cpp_models_downloaded,
         faster_whisper_models_downloaded,
+        crisper_whisper_models_downloaded,
         diarization_model_downloaded,
         translation_models_downloaded,
         helsinki_models_downloaded,
         nllb_models_downloaded,
         ctranslate2_installed: ct2_installed,
         faster_whisper_dependencies_installed: fw_deps_installed,
+        crisper_whisper_dependencies_installed: cw_deps_installed,
         whisper_cpp_installed,
     })
 }

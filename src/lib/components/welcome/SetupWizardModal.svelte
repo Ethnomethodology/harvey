@@ -28,11 +28,13 @@
   import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import {
     availableWhisperCppModels,
-    availableFasterWhisperModels
+    availableFasterWhisperModels,
+    availableCrisperWhisperModels
   } from '$lib/constants/models.js';
   import {
     downloadModel,
     downloadFasterWhisperModel,
+    downloadCrisperWhisperModel,
     downloadTranslationModel,
     fetchAvailableModels,
     getDownloadLocation,
@@ -52,7 +54,7 @@
   let downloadLocation = $state('');
 
   // Step 1: Selections
-  let transcriptionEngines = $state({ whisperCpp: false, fasterWhisper: false });
+  let transcriptionEngines = $state({ whisperCpp: false, fasterWhisper: false, crisperWhisper: false });
   let translationEngines = $state({ helsinki: false, nllb: false });
 
   // Step 2: Core Installation
@@ -71,6 +73,7 @@
   // Step 3 & 4: Model Selections
   let selectedWhisperCppModels = $state(['ggml-base']);
   let selectedFasterWhisperModels = $state(['Systran/faster-whisper-base']);
+  let selectedCrisperWhisperModels = $state(['nyrahealth/faster_CrisperWhisper']);
 
   // Step 5 & 6: Translation Model Selections
   let helsinkiModels = $state([]);
@@ -98,6 +101,7 @@
     showMoreInfo = false;
     transcriptionEngines.whisperCpp = recommendWhisperCpp;
     transcriptionEngines.fasterWhisper = recommendFasterWhisper;
+    transcriptionEngines.crisperWhisper = false;
     translationEngines.helsinki = true;
     translationEngines.nllb = false;
     installLogs = [];
@@ -106,6 +110,7 @@
     downloadProgressData = {};
     selectedWhisperCppModels = ['ggml-base'];
     selectedFasterWhisperModels = ['Systran/faster-whisper-base'];
+    selectedCrisperWhisperModels = ['nyrahealth/faster_CrisperWhisper'];
     helsinkiModels = [];
     nllbModels = [];
     helsinkiSearchQuery = '';
@@ -145,6 +150,9 @@
         }
       });
     }
+
+
+
     if (transcriptionEngines.fasterWhisper) {
       selectedFasterWhisperModels.forEach((name) => {
         const m = availableFasterWhisperModels.find((am) => am.name === name);
@@ -197,10 +205,10 @@
 
   // Trigger actions when reaching specific steps
   $effect(() => {
-    if ((currentStep === 5 || currentStep === 6) && allAvailableTranslationModels.length === 0) {
+    if ((currentStep === 6 || currentStep === 7) && allAvailableTranslationModels.length === 0) {
       loadTranslationModels();
     }
-    if (currentStep === 8) {
+    if (currentStep === 9) {
       checkDiarizationStatus();
     }
   });
@@ -235,6 +243,7 @@
 
       transcriptionEngines.whisperCpp = recommendWhisperCpp;
       transcriptionEngines.fasterWhisper = recommendFasterWhisper;
+      transcriptionEngines.crisperWhisper = false;
       translationEngines.helsinki = true;
 
       await updateConfigStatus(true);
@@ -275,7 +284,7 @@
     });
 
     unlistenDiarizationDownloadLog = await listen('diarization-installation-log', (event) => {
-      if (currentStep === 8) {
+      if (currentStep === 9) {
         diarizationLogs.push({ id: diarizationLogs.length, message: event.payload.message });
       }
     });
@@ -305,7 +314,7 @@
       (installProgress.phase !== 'complete' &&
         installProgress.phase !== 'idle' &&
         installProgress.phase !== 'models');
-    const needsConfirm = isActivelyInstalling || currentStep < 8;
+    const needsConfirm = isActivelyInstalling || currentStep < 9;
 
     if (needsConfirm) {
       const confirmed = await ask(
@@ -332,6 +341,12 @@
         } finally {
           isCleaningUp = false;
         }
+      } else if (isInstalling && installProgress.phase === 'models') {
+        try {
+          await invoke('cancel_download_command', { modelName: installProgress.currentItem });
+        } catch (e) {
+          console.error('Failed to cancel download:', e);
+        }
       }
     }
 
@@ -352,25 +367,32 @@
 
       if (transcriptionEngines.whisperCpp) currentStep = 3;
       else if (transcriptionEngines.fasterWhisper) currentStep = 4;
-      else if (translationEngines.helsinki) currentStep = 5;
-      else if (translationEngines.nllb) currentStep = 6;
-      else currentStep = 7;
+      else if (transcriptionEngines.crisperWhisper) currentStep = 5;
+      else if (translationEngines.helsinki) currentStep = 6;
+      else if (translationEngines.nllb) currentStep = 7;
+      else currentStep = 8;
     } else if (currentStep === 3) {
       if (transcriptionEngines.fasterWhisper) currentStep = 4;
-      else if (translationEngines.helsinki) currentStep = 5;
-      else if (translationEngines.nllb) currentStep = 6;
-      else currentStep = 7;
+      else if (transcriptionEngines.crisperWhisper) currentStep = 5;
+      else if (translationEngines.helsinki) currentStep = 6;
+      else if (translationEngines.nllb) currentStep = 7;
+      else currentStep = 8;
     } else if (currentStep === 4) {
-      if (translationEngines.helsinki) currentStep = 5;
-      else if (translationEngines.nllb) currentStep = 6;
-      else currentStep = 7;
+      if (transcriptionEngines.crisperWhisper) currentStep = 5;
+      else if (translationEngines.helsinki) currentStep = 6;
+      else if (translationEngines.nllb) currentStep = 7;
+      else currentStep = 8;
     } else if (currentStep === 5) {
-      if (translationEngines.nllb) currentStep = 6;
-      else currentStep = 7;
+      if (translationEngines.helsinki) currentStep = 6;
+      else if (translationEngines.nllb) currentStep = 7;
+      else currentStep = 8;
     } else if (currentStep === 6) {
-      currentStep = 7;
+      if (translationEngines.nllb) currentStep = 7;
+      else currentStep = 8;
     } else if (currentStep === 7) {
       currentStep = 8;
+    } else if (currentStep === 8) {
+      currentStep = 9;
     }
   }
 
@@ -386,20 +408,28 @@
       else if (transcriptionEngines.whisperCpp) currentStep = 3;
       else currentStep = 2;
     } else if (currentStep === 6) {
-      if (translationEngines.helsinki) currentStep = 5;
+      if (transcriptionEngines.crisperWhisper) currentStep = 5;
       else if (transcriptionEngines.fasterWhisper) currentStep = 4;
       else if (transcriptionEngines.whisperCpp) currentStep = 3;
       else currentStep = 2;
     } else if (currentStep === 7) {
-      if (translationEngines.nllb) currentStep = 6;
-      else if (translationEngines.helsinki) currentStep = 5;
+      if (translationEngines.helsinki) currentStep = 6;
+      else if (transcriptionEngines.crisperWhisper) currentStep = 5;
       else if (transcriptionEngines.fasterWhisper) currentStep = 4;
       else if (transcriptionEngines.whisperCpp) currentStep = 3;
       else currentStep = 2;
     } else if (currentStep === 8) {
-      currentStep = 7;
+      if (translationEngines.nllb) currentStep = 7;
+      else if (translationEngines.helsinki) currentStep = 6;
+      else if (transcriptionEngines.crisperWhisper) currentStep = 5;
+      else if (transcriptionEngines.fasterWhisper) currentStep = 4;
+      else if (transcriptionEngines.whisperCpp) currentStep = 3;
+      else currentStep = 2;
+    } else if (currentStep === 9) {
+      currentStep = 8;
     }
   }
+
 
   async function loadTranslationModels() {
     if (allAvailableTranslationModels.length > 0) return;
@@ -497,7 +527,14 @@
         installProgress.currentItem = 'whisper.cpp dependencies';
         await invoke('install_whisper_cpp_dependencies_command');
       }
-      if (transcriptionEngines.fasterWhisper) {
+  
+
+
+    if (transcriptionEngines.crisperWhisper) {
+        installProgress.currentItem = 'crisper-whisper dependencies';
+        await invoke('install_crisper_whisper_dependencies_command');
+      }
+    if (transcriptionEngines.fasterWhisper) {
         installProgress.currentItem = 'faster-whisper dependencies';
         await invoke('install_faster_whisper_dependencies_command');
       }
@@ -536,7 +573,18 @@
           if (m) modelsToDownload.push({ ...m, type: 'whisper-cpp' });
         });
       }
-      if (transcriptionEngines.fasterWhisper) {
+  
+    if (transcriptionEngines.crisperWhisper) {
+      selectedCrisperWhisperModels.forEach((name) => {
+        const m = availableCrisperWhisperModels.find((am) => am.name === name);
+        if (m) {
+          modelsToDownload.push({ ...m, type: 'crisper-whisper' });
+        }
+      });
+    }
+
+
+    if (transcriptionEngines.fasterWhisper) {
         selectedFasterWhisperModels.forEach((name) => {
           const m = availableFasterWhisperModels.find((am) => am.name === name);
           if (m) modelsToDownload.push({ ...m, type: 'faster-whisper' });
@@ -572,6 +620,8 @@
             await downloadModel(model, downloadLocation);
           } else if (model.type === 'faster-whisper') {
             await downloadFasterWhisperModel(model, downloadLocation);
+          } else if (model.type === 'crisper-whisper') {
+            await downloadCrisperWhisperModel(model, downloadLocation);
           } else if (model.type === 'translation') {
             const idParts = model.name.split('opus-mt-')[1]?.split('-') || ['en', 'de'];
             await downloadTranslationModel(
@@ -658,7 +708,7 @@
       </div>
       <div>
         <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">Setup Wizard</h2>
-        <p class="text-xs text-gray-500 dark:text-gray-400">Step {currentStep} of 8</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Step {currentStep} of 9</p>
       </div>
     </div>
   </svelte:fragment>
@@ -667,7 +717,7 @@
   <div class="h-1 bg-gray-100 dark:bg-gray-800 w-full relative">
     <div
       class="h-full bg-blue-500 transition-all duration-500 ease-out"
-      style="width: {(currentStep / 8) * 100}%"
+      style="width: {(currentStep / 9) * 100}%"
     ></div>
   </div>
 
@@ -804,6 +854,35 @@
                 </div>
                 <p class="text-xs text-gray-600">
                   Lightweight, fast on Mac (Metal).
+                </p>
+              </div>
+
+              <div
+                role="button"
+                tabindex="0"
+                on:click={() =>
+                  (transcriptionEngines.crisperWhisper = !transcriptionEngines.crisperWhisper)}
+                on:keydown={(e) =>
+                  e.key === 'Enter' &&
+                  (transcriptionEngines.crisperWhisper = !transcriptionEngines.crisperWhisper)}
+                class="flex flex-col p-4 rounded-xl border-2 text-left cursor-pointer transition-all {transcriptionEngines.crisperWhisper
+                  ? 'border-blue-600 bg-blue-50/30'
+                  : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'}"
+              >
+                <div class="flex justify-between items-start">
+                  <div class="flex items-center">
+                    <span class="font-bold text-gray-900 dark:text-gray-100">crisper-whisper</span>
+                  </div>
+                  <button
+                    class="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors text-blue-600"
+                    on:click|stopPropagation={() =>
+                      openLink('https://github.com/nyrahealth/CrisperWhisper')}
+                  >
+                    <ExternalLink class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p class="text-xs text-gray-600">
+                  Advanced verbatim transcription with accurate timestamps.
                 </p>
               </div>
               <div
@@ -1108,6 +1187,72 @@
       </div>
     {:else if currentStep === 5}
       <div in:fade>
+        <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+          Crisper-Whisper Models
+        </h3>
+        <p class="text-[11px] text-gray-500 mb-4 italic">
+          High accuracy verbatim transcription models powered by Faster-Whisper.
+        </p>
+
+        <div class="space-y-3">
+          {#each availableCrisperWhisperModels as model (model.name)}
+            <div
+              class="relative flex items-center justify-between p-3 rounded-xl border-2 transition-all duration-200 {selectedCrisperWhisperModels.includes(
+                model.name
+              )
+                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'}"
+            >
+              <div
+                class="flex items-center flex-1 cursor-pointer"
+                on:click={() => toggleCrisperWhisperModel(model.name)}
+              >
+                <div class="mr-4 text-blue-500 flex-shrink-0">
+                  {#if selectedCrisperWhisperModels.includes(model.name)}
+                    <CheckCircle2 class="w-6 h-6" />
+                  {:else}
+                    <Circle class="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                  {/if}
+                </div>
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                    {formatModelDisplayName(model.name)}
+                    {#if model.language === 'multilingual'}
+                      <span
+                        class="ml-2 px-1.5 py-0.5 text-[9px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded"
+                      >
+                        MULTILINGUAL
+                      </span>
+                    {:else if model.language === 'en'}
+                      <span
+                        class="ml-2 px-1.5 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded"
+                      >
+                        ENGLISH
+                      </span>
+                    {/if}
+                  </div>
+                  <div class="text-[10px] font-mono text-gray-500 mt-0.5">{model.name}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                    {model.description}
+                  </div>
+                </div>
+              </div>
+
+              {#if model.download_url}
+                <button
+                  class="ml-3 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors flex-shrink-0"
+                  title="View on Hugging Face"
+                  on:click|stopPropagation={() => openLink(model.download_url)}
+                >
+                  <ExternalLink class="w-4 h-4" />
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+    {:else if currentStep === 6}
+      <div in:fade>
         <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Helsinki-NLP Models</h3>
         <p class="text-[11px] text-gray-500 mb-4 italic">
           Lightweight, very fast on CPU, requires separate models for every language pair.
@@ -1171,7 +1316,7 @@
           {/if}
         </div>
       </div>
-    {:else if currentStep === 6}
+    {:else if currentStep === 7}
       <div in:fade>
         <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">NLLB Models</h3>
         <p class="text-[11px] text-gray-500 mb-4 italic">
@@ -1235,7 +1380,7 @@
           {/if}
         </div>
       </div>
-    {:else if currentStep === 7}
+    {:else if currentStep === 9}
       <div in:fade>
         <h3 class="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Download Models</h3>
         {#if installProgress.phase !== 'models' && installProgress.phase !== 'complete'}
@@ -1629,7 +1774,7 @@
         >
           Next <ChevronRight class="w-4 h-4 ml-1" />
         </button>
-      {:else if currentStep === 7}
+      {:else if currentStep === 9}
         <button
           on:click={nextStep}
           disabled={installProgress.phase !== 'complete' || isCleaningUp}

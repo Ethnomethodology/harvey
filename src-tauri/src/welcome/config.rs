@@ -66,6 +66,8 @@ pub struct VerificationStatus {
     #[serde(default)]
     pub faster_whisper_dependencies_verified: bool,
     #[serde(default)]
+    pub crisper_whisper_dependencies_verified: bool,
+    #[serde(default)]
     pub whisper_cpp_verified: bool,
 }
 
