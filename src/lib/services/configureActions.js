@@ -41,7 +41,7 @@ export async function saveDownloadLocation(downloadLocation) {
     return true;
   } catch (error) {
     console.error('Error invoking save_download_location:', error);
-    throw new Error(`Failed to save download location directly: ${error?.message || error}`);
+    throw new Error(`Failed to save download location directly: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 export async function getDownloadLocation() {
@@ -111,7 +111,7 @@ export async function downloadModel(model, downloadLocation) {
     return true; // Signifies invocation success
   } catch (error) {
     console.error(`Error invoking download_model_command for ${model.name}:`, error);
-    throw new Error(`Failed to start model download: ${error?.message || error}`);
+    throw new Error(`Failed to start model download: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 export async function deleteModel(model) {
@@ -127,7 +127,7 @@ export async function deleteModel(model) {
     return true;
   } catch (error) {
     console.error(`Error invoking delete_model for ${model.name}:`, error);
-    throw new Error(`Failed to delete model: ${error?.message || error}`);
+    throw new Error(`Failed to delete model: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -151,7 +151,7 @@ export async function downloadCrisperWhisperModel(model, downloadLocation) {
     return true;
   } catch (error) {
     console.error(`Error invoking download_crisper_whisper_model_command for ${model.name}:`, error);
-    throw new Error(`Failed to start crisper-whisper model download: ${error?.message || error}`);
+    throw new Error(`Failed to start crisper-whisper model download: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -175,7 +175,7 @@ export async function downloadFasterWhisperModel(model, downloadLocation) {
     return true;
   } catch (error) {
     console.error(`Error invoking download_faster_whisper_model_command for ${model.name}:`, error);
-    throw new Error(`Failed to start faster-whisper model download: ${error?.message || error}`);
+    throw new Error(`Failed to start faster-whisper model download: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -194,7 +194,7 @@ export async function cancelFasterWhisperModelDownload(modelName) {
     console.log(`Cancellation command invoked for ${modelName}.`);
   } catch (error) {
     console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
-    throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+    throw new Error(`Failed to request download cancellation: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -209,7 +209,7 @@ export async function cancelDownload(modelName) {
     console.log(`Cancellation command invoked for ${modelName}.`);
   } catch (error) {
     console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
-    throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+    throw new Error(`Failed to request download cancellation: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 export async function moveModelsAndUpdateLocation(newLocation) {
@@ -230,7 +230,7 @@ export async function moveModelsAndUpdateLocation(newLocation) {
       `Error invoking change_download_location_and_move_models to ${newLocation}:`,
       error
     );
-    throw new Error(`Failed to move models/update location: ${error?.message || error}`);
+    throw new Error(`Failed to move models/update location: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -269,7 +269,7 @@ export async function downloadTranslationModel(
     return true;
   } catch (error) {
     console.error(`Error invoking download_translation_model_command for ${model_name}:`, error);
-    throw new Error(`Failed to start translation model download: ${error?.message || error}`);
+    throw new Error(`Failed to start translation model download: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -333,7 +333,7 @@ export async function deleteTranslationModel(model) {
       `Error invoking delete_model for translation model ${model.name || model.id}:`,
       error
     );
-    throw new Error(`Failed to delete translation model: ${error?.message || error}`);
+    throw new Error(`Failed to delete translation model: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -349,7 +349,7 @@ export async function cancelTranslationModelDownload(modelName) {
     console.log(`Cancellation command invoked for ${modelName}.`);
   } catch (error) {
     console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
-    throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+    throw new Error(`Failed to request download cancellation: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
   }
 }
 
@@ -456,7 +456,7 @@ export async function exportTranscript(
       return; // done
     } catch (err) {
       console.error('[ConfigureActions] Error during DOCX export:', err);
-      throw new Error(`Failed to export DOCX: ${err?.message || err}`);
+      throw new Error(`Failed to export DOCX: ${typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err)}`);
     }
   } else if (format === 'srt') {
     if (!segments || segments.length === 0) {
@@ -474,7 +474,7 @@ export async function exportTranscript(
       return; // done
     } catch (err) {
       console.error('[ConfigureActions] Error during SRT export:', err);
-      throw new Error(`Failed to export SRT: ${err?.message || err}`);
+      throw new Error(`Failed to export SRT: ${typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err)}`);
     }
   } else if (format === 'vtt') {
     if (!segments || segments.length === 0) {
@@ -492,7 +492,7 @@ export async function exportTranscript(
       return; // done
     } catch (err) {
       console.error('[ConfigureActions] Error during VTT export:', err);
-      throw new Error(`Failed to export VTT: ${err?.message || err}`);
+      throw new Error(`Failed to export VTT: ${typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err)}`);
     }
   } else if (format === 'md') {
     if (!segments || segments.length === 0) {
@@ -514,7 +514,7 @@ export async function exportTranscript(
       return; // done
     } catch (err) {
       console.error('[ConfigureActions] Error during Markdown export:', err);
-      throw new Error(`Failed to export Markdown: ${err?.message || err}`);
+      throw new Error(`Failed to export Markdown: ${typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err)}`);
     }
   } else if (format === 'ass') {
     if (!segments || segments.length === 0) {
@@ -533,7 +533,7 @@ export async function exportTranscript(
       return; // done
     } catch (err) {
       console.error('[ConfigureActions] Error during ASS export:', err);
-      throw new Error(`Failed to export ASS: ${err?.message || err}`);
+      throw new Error(`Failed to export ASS: ${typeof err === 'string' ? err : err?.payload || err?.message || JSON.stringify(err)}`);
     }
   } else if (format === 'csv') {
     // --- Frontend CSV Generation ---
@@ -688,7 +688,7 @@ export async function exportTranscript(
         }
       } else {
         // Rethrow original error if it wasn't a TypeError about writeTextFile
-        throw new Error(`Failed to export CSV: ${error?.message || error}`);
+        throw new Error(`Failed to export CSV: ${typeof error === 'string' ? error : error?.payload || error?.message || JSON.stringify(error)}`);
       }
     }
   } else {
