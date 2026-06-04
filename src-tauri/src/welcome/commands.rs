@@ -48,12 +48,14 @@ use walkdir::WalkDir;
 fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool) {
     let family = model.family.as_deref().unwrap_or("");
     let is_faster_whisper = family == "faster-whisper";
+    let is_crisper_whisper = family == "crisper-whisper";
     let is_whisper_cpp = family == "whisper-cpp";
     let is_translation = (model.name.contains('/') || model.family.is_some())
         && !is_faster_whisper
+        && !is_crisper_whisper
         && !is_whisper_cpp;
 
-    let folder_name = if (is_translation || is_faster_whisper) && model.name.contains('/') {
+    let folder_name = if (is_translation || is_faster_whisper || is_crisper_whisper) && model.name.contains('/') {
         format!("models--{}", model.name.replace('/', "--"))
     } else {
         model.name.clone()
@@ -61,6 +63,8 @@ fn resolve_model_path(base_location: &str, model: &ModelInfo) -> (PathBuf, bool)
 
     let sub_dir = if is_faster_whisper {
         PathBuf::from("transcription").join("faster-whisper")
+    } else if is_crisper_whisper {
+        PathBuf::from("transcription").join("crisper-whisper")
     } else if is_translation {
         let family = model.family.as_deref().unwrap_or("helsinki");
         let org_dir = if family == "nllb" {
