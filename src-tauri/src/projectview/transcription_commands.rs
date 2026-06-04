@@ -2414,6 +2414,27 @@ pub(crate) fn resolve_model_path_cmd(
         }
         // faster-whisper takes the directory path
         Ok(model_dir_path.to_string_lossy().to_string())
+    } else if engine == Some("crisper-whisper") {
+        let sub_dir = PathBuf::from("transcription").join("crisper-whisper");
+        // Matches the folder name constructed in python script
+        let folder_name = format!("models--{}", model_name.replace('/', "--"));
+        let model_dir_path = PathBuf::from(&base_model_dir_str)
+            .join(sub_dir)
+            .join(&folder_name);
+
+        if !model_dir_path.exists() || !model_dir_path.is_dir() {
+            let e_msg = format!(
+                "Crisper-whisper model directory not found: '{}'. Please download the model first.",
+                model_dir_path.display()
+            );
+            error!(
+                "[Transcription CMD][{}] Error resolving model path: {}",
+                job_id, e_msg
+            );
+            return Err(CommandError::from(e_msg));
+        }
+        // crisper-whisper takes the directory path
+        Ok(model_dir_path.to_string_lossy().to_string())
     } else {
         // New directory structure: transcription/whisper-cpp/model_name
         let sub_dir = PathBuf::from("transcription").join("whisper-cpp");
