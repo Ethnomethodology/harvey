@@ -153,21 +153,7 @@ impl<R: Runtime> TranscriptionEngine for FasterWhisperEngine<R> {
             }
             
             if let Some(engine) = config.selected_transcription_engine {
-                if engine == "crisper-whisper" {
-                    python_args.push("--without_timestamps".to_string());
-                    // Also replace beam_size if set or append if not
-                    if !python_args.contains(&"--beam_size".to_string()) {
-                        python_args.push("--beam_size".to_string());
-                        python_args.push("1".to_string());
-                    } else {
-                        // find and replace
-                        if let Some(idx) = python_args.iter().position(|x| x == "--beam_size") {
-                            if idx + 1 < python_args.len() {
-                                python_args[idx + 1] = "1".to_string();
-                            }
-                        }
-                    }
-                }
+                // No engine-specific flags needed. crisper-whisper will use standard faster-whisper defaults.
             }
         }
 
