@@ -153,3 +153,7 @@ You are not finished with a feature or bug fix until the documentation is update
 * Use **Flowbite-Svelte** components for interactive UI elements (Modals, Inputs, Buttons) where possible.
 * Support Dark Mode by explicitly defining `dark:` variant classes alongside light mode classes (e.g., `bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100`).
 * Refer to `Docs/STYLE_GUIDE.md` for the core color palette mapping.
+
+## 10. AI Agent Rules
+* **No Temporary/Scratch Files in Project**: AI agents must never create temporary or scratch files (e.g., test scripts, debug logs, `temp.md`) in the project repository. Use the user's specific ephemeral storage path like `$HOME/.gemini/antigravity-ide/brain/<conversation-id>/scratch/` or standard OS temp directories instead.
+* **Cleanup on Exit**: If you absolutely must create a file in the workspace to test a feature (e.g., testing local path resolutions), it must be removed or reverted immediately after testing and should never be committed.

@@ -38,7 +38,8 @@ def run_transcription(audio_path, model_path, language=None, task="transcribe", 
             "task": task,
             "beam_size": beam_size,
             "word_timestamps": True,
-            "without_timestamps": without_timestamps
+            "without_timestamps": without_timestamps,
+            "condition_on_previous_text": False
         }
 
         if prompt is not None:

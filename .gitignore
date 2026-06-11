@@ -37,3 +37,9 @@ vite.config.ts.timestamp-*
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
